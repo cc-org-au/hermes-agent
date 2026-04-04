@@ -38,23 +38,37 @@ _BREAKER_COOLDOWN_SECS = 120
 # ---------------------------------------------------------------------------
 
 def _load_config() -> dict:
-    """Load config from $HERMES_HOME/mem0.json or env vars."""
+    """Load config from $HERMES_HOME/mem0.json merged with env vars.
+
+    File values win when set; env fills missing ``api_key`` / ``user_id`` /
+    ``agent_id`` so ``MEM0_API_KEY`` in ``~/.hermes/.env`` still works when
+    ``mem0.json`` only contains non-secret options (rerank, etc.).
+    """
     from hermes_constants import get_hermes_home
-    config_path = get_hermes_home() / "mem0.json"
-
-    if config_path.exists():
-        try:
-            return json.loads(config_path.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-
-    return {
+    defaults = {
         "api_key": os.environ.get("MEM0_API_KEY", ""),
         "user_id": os.environ.get("MEM0_USER_ID", "hermes-user"),
         "agent_id": os.environ.get("MEM0_AGENT_ID", "hermes"),
         "rerank": True,
         "keyword_search": False,
     }
+    config_path = get_hermes_home() / "mem0.json"
+    if config_path.exists():
+        try:
+            file_cfg = json.loads(config_path.read_text(encoding="utf-8"))
+            if isinstance(file_cfg, dict):
+                merged = {**defaults, **file_cfg}
+                if not (merged.get("api_key") or "").strip():
+                    merged["api_key"] = defaults["api_key"]
+                if not (merged.get("user_id") or "").strip():
+                    merged["user_id"] = defaults["user_id"]
+                if not (merged.get("agent_id") or "").strip():
+                    merged["agent_id"] = defaults["agent_id"]
+                return merged
+        except Exception:
+            pass
+
+    return defaults
 
 
 # ---------------------------------------------------------------------------
