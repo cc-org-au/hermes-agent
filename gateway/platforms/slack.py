@@ -180,7 +180,9 @@ class SlackAdapter(BasePlatformAdapter):
 
             # First token is the primary — used for AsyncApp / Socket Mode
             primary_token = bot_tokens[0]
-            self._app = AsyncApp(token=primary_token)
+            # Pass our module logger so Bolt unhandled-request WARNINGs and client
+            # logs land in gateway.log alongside gateway.platforms.slack messages.
+            self._app = AsyncApp(token=primary_token, logger=logger)
 
             # Register each bot token and map team_id → client
             for token in bot_tokens:
@@ -203,25 +205,31 @@ class SlackAdapter(BasePlatformAdapter):
                     bot_name, team_name, team_id,
                 )
 
-            # Primary: Bolt's app.message path (keyword "" = match all text) wires the
-            # same subtype handling Slack documents for message events (file_share,
-            # thread_broadcast, etc.). Fallback: raw event("message") so uncommon
-            # subtypes still reach Hermes. Duplicate deliveries dedupe on team/channel/ts.
+            # Use event("message") only. app.message("") relies on Bolt's text matcher,
+            # which skips when event.text is empty — that can drop valid Socket Mode
+            # payloads (blocks-only, some subtypes). event("message") still receives
+            # those; dedupe remains on team/channel/ts.
             async def _route_incoming_slack_message(body, event, say):
-                normalized = _normalize_slack_socket_event(body, event)
-                if not normalized:
-                    logger.warning(
-                        "[Slack] Empty message event (body type=%s keys=%s event=%s)",
-                        type(body).__name__,
-                        list(body.keys()) if isinstance(body, dict) else None,
-                        type(event).__name__,
-                    )
-                    return
-                await self._handle_slack_message(normalized)
+                try:
+                    normalized = _normalize_slack_socket_event(body, event)
+                    if not normalized:
+                        logger.warning(
+                            "[Slack] Empty message event (body type=%s keys=%s event=%s)",
+                            type(body).__name__,
+                            list(body.keys()) if isinstance(body, dict) else None,
+                            type(event).__name__,
+                        )
+                        return
+                    await self._handle_slack_message(normalized)
+                except Exception:
+                    logger.exception("[Slack] Failed while routing message event")
+
+            @self._app.error
+            async def _slack_bolt_error_handler(error, logger):
+                logger.exception("[Slack] Bolt listener error: %s", error)
 
             # Statement registration (not @-decorators): a @ line would attach to the
             # next function definition (e.g. app_mention), breaking Bolt wiring.
-            self._app.message("")(_route_incoming_slack_message)
             self._app.event("message")(_route_incoming_slack_message)
 
             # Slack often delivers app_mention for @bot in channels. Some workspaces
@@ -246,6 +254,11 @@ class SlackAdapter(BasePlatformAdapter):
 
             # Start Socket Mode handler in background
             self._handler = AsyncSocketModeHandler(self._app, app_token)
+            if os.getenv("SLACK_SOCKET_TRACE", "").lower() in ("1", "true", "yes"):
+                try:
+                    self._handler.client.trace_enabled = True
+                except Exception:
+                    logger.debug("[Slack] Could not enable SLACK_SOCKET_TRACE on client", exc_info=True)
             self._socket_mode_task = asyncio.create_task(self._handler.start_async())
 
             self._mark_connected()
