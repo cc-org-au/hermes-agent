@@ -150,6 +150,8 @@ class SlackAdapter(BasePlatformAdapter):
         self._channel_team: Dict[str, str] = {}                # channel_id → team_id
         # When Slack sends both message + app_mention for one @mention, process once.
         self._slack_duplicate_ts: Dict[str, float] = {}
+        # team_id:channel_id -> True if conversations.info says im or mpim (Slack sometimes omits channel_type).
+        self._channel_dm_flags_cache: Dict[str, bool] = {}
 
     def _slack_is_duplicate_delivery(self, dedup_key: str) -> bool:
         """Return True if this team/channel/ts was handled moments ago."""
@@ -243,6 +245,19 @@ class SlackAdapter(BasePlatformAdapter):
             # those; dedupe remains on team/channel/ts.
             async def _route_incoming_slack_message(body, event, say):
                 try:
+                    if os.getenv("SLACK_LOG_INBOUND", "").lower() in ("1", "true", "yes"):
+                        raw_ev = event if isinstance(event, dict) else None
+                        if not raw_ev and isinstance(body, dict):
+                            raw_ev = body.get("event")
+                        if isinstance(raw_ev, dict):
+                            ch = raw_ev.get("channel") or ""
+                            tail = ch[-4:] if len(ch) >= 4 else ch
+                            logger.info(
+                                "[Slack] inbound evt type=%s subtype=%s channel=…%s",
+                                raw_ev.get("type"),
+                                raw_ev.get("subtype") or "",
+                                tail,
+                            )
                     normalized = _normalize_slack_socket_event(body, event)
                     if not normalized:
                         logger.warning(
@@ -827,6 +842,36 @@ class SlackAdapter(BasePlatformAdapter):
 
     # ----- Internal handlers -----
 
+    async def _conversation_is_dm_like(self, channel_id: str, team_id: str) -> bool:
+        """True if channel is a 1:1 or group DM (not a normal public/private channel).
+
+        When ``channel_type`` is omitted, ``G…`` ids are ambiguous (private channel vs
+        mpim); ``conversations.info`` distinguishes them. Results are cached.
+        """
+        cache_key = f"{team_id}:{channel_id}"
+        if cache_key in self._channel_dm_flags_cache:
+            return self._channel_dm_flags_cache[cache_key]
+        if not self._app:
+            self._channel_dm_flags_cache[cache_key] = False
+            return False
+        try:
+            client = self._team_clients.get(team_id) if team_id else None
+            if client is None:
+                client = self._app.client
+            resp = await client.conversations_info(channel=channel_id)
+            ch = resp.get("channel") or {}
+            is_dm_like = bool(ch.get("is_im") or ch.get("is_mpim"))
+            self._channel_dm_flags_cache[cache_key] = is_dm_like
+            return is_dm_like
+        except Exception as e:
+            logger.warning(
+                "[Slack] conversations.info failed for channel=%s: %s",
+                channel_id,
+                e,
+            )
+            self._channel_dm_flags_cache[cache_key] = False
+            return False
+
     async def _handle_slack_message(self, event: dict) -> None:
         """Handle an incoming Slack message event."""
         # Ignore bot messages (including our own)
@@ -870,6 +915,7 @@ class SlackAdapter(BasePlatformAdapter):
 
         # Determine if this is a DM or channel message
         channel_type = (event.get("channel_type") or "").strip().lower()
+        cid_u = str(channel_id).upper()
         # "im" = 1:1 DM, "mpim" = multi-person DM (channel id is usually G…).
         # Some Socket Mode payloads omit channel_type; 1:1 DM ids start with "D".
         # Without treating these as conversation-DMs, we'd require an @mention
@@ -877,8 +923,12 @@ class SlackAdapter(BasePlatformAdapter):
         is_dm = channel_type in ("im", "mpim") or (
             not channel_type
             and channel_id
-            and str(channel_id).upper().startswith("D")
+            and cid_u.startswith("D")
         )
+        # G… can be a private channel or a group DM (mpim). If channel_type is
+        # missing, resolve via API once per channel (cached).
+        if not is_dm and not channel_type and channel_id and cid_u.startswith("G"):
+            is_dm = await self._conversation_is_dm_like(channel_id, team_id)
 
         # Build thread_ts for session keying.
         # In channels: fall back to ts so each top-level @mention starts a

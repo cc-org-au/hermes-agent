@@ -187,6 +187,33 @@ class TestSlackAggregateVisibleText:
         adapter.handle_message.assert_awaited_once()
 
 
+class TestSlackDmRouting:
+    @pytest.mark.asyncio
+    async def test_g_prefix_without_channel_type_resolves_mpim_via_api(self, adapter):
+        """G… without channel_type must not be treated as a public channel (needs mention)."""
+        adapter._team_bot_user_ids = {"T1": "U0BOT"}
+        adapter._add_reaction = AsyncMock(return_value=True)
+        adapter._remove_reaction = AsyncMock(return_value=True)
+        adapter._resolve_user_name = AsyncMock(return_value="alice")
+        mock_client = AsyncMock()
+        mock_client.conversations_info = AsyncMock(
+            return_value={"channel": {"is_mpim": True, "is_im": False}}
+        )
+        adapter._app = MagicMock()
+        adapter._app.client = mock_client
+        adapter._team_clients = {"T1": mock_client}
+        event = {
+            "user": "U1",
+            "channel": "G0GROUPDM1",
+            "ts": "1.0",
+            "team": "T1",
+            "text": "hello in group dm",
+        }
+        await adapter._handle_slack_message(event)
+        mock_client.conversations_info.assert_awaited_once_with(channel="G0GROUPDM1")
+        adapter.handle_message.assert_awaited_once()
+
+
 # ---------------------------------------------------------------------------
 # TestAppMentionHandler
 # ---------------------------------------------------------------------------
