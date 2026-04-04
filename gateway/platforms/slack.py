@@ -241,7 +241,7 @@ class SlackAdapter(BasePlatformAdapter):
             self._handler = AsyncSocketModeHandler(self._app, app_token)
             self._socket_mode_task = asyncio.create_task(self._handler.start_async())
 
-            self._running = True
+            self._mark_connected()
             logger.info(
                 "[Slack] Socket Mode connected (%d workspace(s))",
                 len(self._team_clients),
@@ -259,7 +259,7 @@ class SlackAdapter(BasePlatformAdapter):
                 await self._handler.close_async()
             except Exception as e:  # pragma: no cover - defensive logging
                 logger.warning("[Slack] Error while closing Socket Mode handler: %s", e, exc_info=True)
-        self._running = False
+        self._mark_disconnected()
 
         # Release the token lock (use stored identity, not re-read env)
         try:
@@ -832,9 +832,18 @@ class SlackAdapter(BasePlatformAdapter):
         else:
             thread_ts = event.get("thread_ts") or ts  # ts fallback for channels
 
-        # In channels, only respond if bot is mentioned
+        # In channels, only respond if the bot is @mentioned on top-level posts.
+        # Thread replies use thread_ts != ts (Slack uses thread_ts == ts only for the
+        # thread root); requiring a mention on every reply breaks normal conversations.
         bot_uid = self._team_bot_user_ids.get(team_id, self._bot_user_id)
-        if not is_dm and bot_uid:
+        thread_ts_val = event.get("thread_ts")
+        event_ts = event.get("ts")
+        in_thread_reply = (
+            thread_ts_val is not None
+            and event_ts is not None
+            and str(thread_ts_val) != str(event_ts)
+        )
+        if not is_dm and bot_uid and not in_thread_reply:
             if f"<@{bot_uid}>" not in text:
                 return
             # Strip the bot mention from the text

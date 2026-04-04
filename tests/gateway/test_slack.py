@@ -617,6 +617,36 @@ class TestMessageRouting:
         adapter.handle_message.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_channel_thread_reply_without_mention_processed(self, adapter):
+        """Replies inside a channel thread should not require repeating @bot."""
+        event = {
+            "text": "follow-up without mention",
+            "user": "U_USER",
+            "channel": "C123",
+            "channel_type": "channel",
+            "thread_ts": "1234567890.000001",
+            "ts": "1234567890.000002",
+        }
+        await adapter._handle_slack_message(event)
+        adapter.handle_message.assert_called_once()
+        msg = adapter.handle_message.call_args[0][0]
+        assert msg.text == "follow-up without mention"
+
+    @pytest.mark.asyncio
+    async def test_channel_thread_root_still_requires_mention(self, adapter):
+        """Thread root in channel has thread_ts == ts — still needs @mention."""
+        event = {
+            "text": "no mention",
+            "user": "U_USER",
+            "channel": "C123",
+            "channel_type": "channel",
+            "thread_ts": "1234567890.000001",
+            "ts": "1234567890.000001",
+        }
+        await adapter._handle_slack_message(event)
+        adapter.handle_message.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_channel_mention_strips_bot_id(self, adapter):
         """When mentioned in a channel, the bot mention should be stripped."""
         event = {
