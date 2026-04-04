@@ -1040,33 +1040,42 @@ Run periodic pruning and periodic security reviews so the system does not bloat 
 
 ---
 
-## Step 15 — VPS path only: one-line `agent-droplet` alias on the workstation
+## Step 15 — VPS path only: `<cli> … droplet` on the workstation
 
-**When to apply:** You use a **remote VPS runtime** and want the same operator CLI on the server without typing SSH options, remote paths, or profile env vars each time.
+**When to apply:** You use a **remote VPS runtime** and want the **same** operator CLI on the server, with **no** extra SSH arguments, paths, or env vars on each invocation.
 
-**When to skip:** Local-only setups — use the CLI normally.
+**When to skip:** Local-only setups — use the CLI normally (no trailing `droplet`).
 
-**Workstation prerequisites:** The same credential file your SSH helper already uses (e.g. key, passphrase, port, host, sudo password for the runtime user) must exist; see `scripts/ssh_droplet.sh`.
-
-**Exact setup (one line):** add this alias. The name ends with `-droplet`; replace `agent` with whatever your installed CLI is called if you prefer (e.g. `hermes-droplet`).
-
-```bash
-alias agent-droplet='$PWD/scripts/agent-droplet'
-```
-
-- This repository’s **`.envrc`** already contains **only** that line after `use flake`. Run **`direnv allow`** once in the clone.
-- **Without** direnv, add the same line to `~/.zshrc` / `~/.bashrc` **from inside the repository** the first time, **or** use one fixed path, e.g. `alias agent-droplet='/Users/you/hermes-agent/scripts/agent-droplet'`.
-- If your shell does not pick up an alias from `.envrc`, put that **same** one line in `~/.zshrc` / `~/.bashrc` with the **absolute** path to `scripts/agent-droplet` (no `$PWD`).
-
-**Usage:** pass the same subcommands and flags you would run locally; nothing else is required.
+**Meaning of “agent” here:** the **operator CLI name** — the short command you run in a terminal (this repository’s default is `hermes`). There is **no** separate `agent-droplet` / `hermes-droplet` user command: you always run the normal CLI and append **`droplet`**. The pattern is always:
 
 ```text
-agent-droplet tui
-agent-droplet setup
-agent-droplet gateway watchdog-check
+<cli> <normal subcommands and flags …> droplet
 ```
 
-**Policy materialization:** run **`policies/core/scripts/start_pipeline.py`** (or your materialize helper) on the server before expecting updated policy trees; the alias only changes **where** the CLI runs.
+The literal word **`droplet` must be the final argument** (after all flags). **Every** subcommand tree works the same way as locally — only the execution host changes. Examples for this product:
+
+```text
+hermes tui droplet
+hermes doctor --fix droplet
+hermes gateway watchdog-check droplet
+hermes setup droplet
+```
+
+**Workstation prerequisites:** The same credential file your SSH helper already uses (encrypted private key, port, host, admin user, **`SSH_SUDO_PASSWORD`** for **`ssh_droplet.sh --sudo-user`** / **`hermes … droplet`** remote `sudo -S`). **SSH key passphrase is never read from the env file** — **`ssh_droplet.sh`** uses **`IdentityAgent=none`** and strips **`ssh-agent`** / **`SSH_ASKPASS`**. **`agent-droplet`** sets **`HERMES_DROPLET_INTERACTIVE=1`** only so the TTY gate passes under IDEs; it does not skip the key passphrase. **`scripts/ssh_droplet_user.sh`** uses **interactive** **`sudo`** (type sudo password on the remote TTY; no **`sudo -S`** pipe, which would drop the shell).
+
+**Exact setup (this repository):** `.envrc` runs **`use flake`**, then records the real CLI path, then prepends **`scripts/`** to `PATH` so the shipped **`scripts/hermes`** shim runs first:
+
+```bash
+use flake
+export HERMES_REAL_BIN="$(command -v hermes)"
+PATH_add scripts
+```
+
+Run **`direnv allow`** once in the clone. Do **not** reorder those lines: `HERMES_REAL_BIN` must be captured **before** `PATH_add scripts`.
+
+**Without direnv:** export **`HERMES_REAL_BIN`** to the absolute path of your real `hermes` (or other CLI) binary, then **`export PATH="/path/to/this/clone/scripts:$PATH"`** so the same shim name (`hermes` in this repo) shadows the real binary.
+
+**Policy materialization:** run **`policies/core/scripts/start_pipeline.py`** (or your materialize helper) on the server before expecting updated policy trees; the `droplet` suffix only changes **where** the CLI runs.
 
 ---
 

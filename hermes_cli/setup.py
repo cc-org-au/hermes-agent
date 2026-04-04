@@ -1035,6 +1035,7 @@ def setup_model_provider(config: dict):
             "minimax-cn": "MiniMax CN",
             "anthropic": "Anthropic",
             "ai-gateway": "AI Gateway",
+            "gemini": "Google Gemini (AI Studio)",
             "custom": "your custom endpoint",
         }
         _prov_display = _prov_names.get(selected_provider, selected_provider or "your provider")

@@ -180,6 +180,14 @@ PROVIDER_REGISTRY: Dict[str, ProviderConfig] = {
         api_key_env_vars=("DEEPSEEK_API_KEY",),
         base_url_env_var="DEEPSEEK_BASE_URL",
     ),
+    "gemini": ProviderConfig(
+        id="gemini",
+        name="Google Gemini (AI Studio)",
+        auth_type="api_key",
+        inference_base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+        api_key_env_vars=("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+        base_url_env_var="GEMINI_BASE_URL",
+    ),
     "ai-gateway": ProviderConfig(
         id="ai-gateway",
         name="AI Gateway",
@@ -743,6 +751,10 @@ def resolve_provider(
         "hf": "huggingface", "hugging-face": "huggingface", "huggingface-hub": "huggingface",
         "go": "opencode-go", "opencode-go-sub": "opencode-go",
         "kilo": "kilocode", "kilo-code": "kilocode", "kilo-gateway": "kilocode",
+        "google": "gemini",
+        "google-ai": "gemini",
+        "google-gemini": "gemini",
+        "ai-studio": "gemini",
         # Local server aliases — route through the generic custom provider
         "lmstudio": "custom", "lm-studio": "custom", "lm_studio": "custom",
         "ollama": "custom", "vllm": "custom", "llamacpp": "custom",
@@ -796,7 +808,7 @@ def resolve_provider(
     raise AuthError(
         "No inference provider configured. Run 'hermes model' to choose a "
         "provider and model, or set an API key (OPENROUTER_API_KEY, "
-        "OPENAI_API_KEY, etc.) in ~/.hermes/.env.",
+        "GEMINI_API_KEY, OPENAI_API_KEY, etc.) in ~/.hermes/.env.",
         code="no_provider_configured",
     )
 

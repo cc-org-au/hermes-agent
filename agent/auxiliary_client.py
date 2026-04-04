@@ -60,6 +60,7 @@ _API_KEY_PROVIDER_AUX_MODELS: Dict[str, str] = {
     "minimax": "MiniMax-M2.7-highspeed",
     "minimax-cn": "MiniMax-M2.7-highspeed",
     "anthropic": "claude-haiku-4-5-20251001",
+    "gemini": "gemini-2.5-flash",
     "ai-gateway": "google/gemini-3-flash",
     "opencode-zen": "gemini-3-flash",
     "opencode-go": "glm-5",
@@ -1162,6 +1163,7 @@ _VISION_AUTO_PROVIDER_ORDER = (
     "nous",
     "openai-codex",
     "anthropic",
+    "gemini",
     "custom",
 )
 
@@ -1185,6 +1187,12 @@ def _resolve_strict_vision_backend(provider: str) -> Tuple[Optional[Any], Option
         return _try_codex()
     if provider == "anthropic":
         return _try_anthropic()
+    if provider == "gemini":
+        return resolve_provider_client(
+            "gemini",
+            model="gemini-2.5-flash",
+            async_mode=False,
+        )
     if provider == "custom":
         return _try_custom_endpoint()
     return None, None

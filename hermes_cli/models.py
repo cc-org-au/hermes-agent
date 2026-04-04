@@ -158,6 +158,14 @@ _PROVIDER_MODELS: dict[str, list[str]] = {
         "deepseek-chat",
         "deepseek-reasoner",
     ],
+    # Google AI Studio — OpenAI-compatible endpoint (native IDs, no openrouter/ prefix)
+    "gemini": [
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite",
+        "gemini-1.5-flash",
+    ],
     "opencode-zen": [
         "gpt-5.4-pro",
         "gpt-5.4",
@@ -262,6 +270,7 @@ _PROVIDER_LABELS = {
     "minimax-cn": "MiniMax (China)",
     "anthropic": "Anthropic",
     "deepseek": "DeepSeek",
+    "gemini": "Google Gemini (AI Studio)",
     "opencode-zen": "OpenCode Zen",
     "opencode-go": "OpenCode Go",
     "ai-gateway": "AI Gateway",
@@ -289,6 +298,10 @@ _PROVIDER_ALIASES = {
     "claude": "anthropic",
     "claude-code": "anthropic",
     "deep-seek": "deepseek",
+    "google": "gemini",
+    "google-ai": "gemini",
+    "google-gemini": "gemini",
+    "ai-studio": "gemini",
     "opencode": "opencode-zen",
     "zen": "opencode-zen",
     "go": "opencode-go",
@@ -341,7 +354,7 @@ def list_available_providers() -> list[dict[str, str]]:
         "openrouter", "nous", "openai-codex", "copilot", "copilot-acp",
         "huggingface", "zai", "kimi-coding", "minimax", "minimax-cn", "kilocode", "anthropic", "alibaba",
         "opencode-zen", "opencode-go",
-        "ai-gateway", "deepseek", "custom",
+        "ai-gateway", "deepseek", "gemini", "custom",
     ]
     # Build reverse alias map
     aliases_for: dict[str, list[str]] = {}

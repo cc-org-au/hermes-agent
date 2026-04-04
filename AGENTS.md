@@ -335,6 +335,14 @@ Activate with `/skin cyberpunk` or `display.skin: cyberpunk` in config.yaml.
 
 ---
 
+## Remote VPS CLI (`hermes … droplet`)
+
+For a **remote VPS runtime**, run the operator CLI exactly as you would locally, then append **`droplet` as the final token** (after all flags). Examples: `hermes tui droplet`, `hermes doctor droplet`, `hermes gateway watchdog-check droplet`. **Any** `hermes` subcommand works this way.
+
+In deployment policy text, **“agent”** means this **operator CLI** (`hermes`), not a separate wrapper command.
+
+Workstation setup: `.envrc` exports **`HERMES_REAL_BIN`** (real binary path) **before** **`PATH_add scripts`**, so `scripts/hermes` runs first and delegates to `scripts/agent-droplet` when the last argument is `droplet`. Droplet SSH **never** unlocks the key from a file — **`ssh-agent`** / **`SSH_ASKPASS`** are stripped; OpenSSH uses **`IdentityAgent=none`**, **`AddKeysToAgent=no`**, **`PreferredAuthentications=publickey`**, and on **macOS** **`UseKeychain=no`** so the login keychain cannot substitute for typing the **key passphrase**. **`agent-droplet`** sets **`HERMES_DROPLET_INTERACTIVE=1`** only so the TTY check passes when an IDE has no tty on stdin; it does not skip the passphrase. **`ssh_droplet_user.sh`** uses **interactive** **`sudo`** (you type the **sudo** password on the remote TTY; no pipe — piped **`sudo -S`** was closing the session). **`scripts/agent-droplet`** defaults to **`HERMES_HOME=.../profiles/chief-orchestrator`** on the server — create and select that profile once with **`./scripts/droplet_bootstrap_chief_orchestrator.sh`** (or **`./venv/bin/hermes profile create chief-orchestrator`** then **`./venv/bin/hermes profile use chief-orchestrator`**; **`profile switch`** is an alias for **`profile use`**). Put **`GEMINI_API_KEY`** (Google AI Studio) in that profile’s **`.env`** and set **`model.provider: gemini`** / **`model.default: gemini-2.5-flash`** (see `scripts/templates/chief-orchestrator-profile.example.yaml`). Canonical write-up: `policies/core/unified-deployment-and-security.md` Step 15.
+
 ## Important Policies
 ### Prompt Caching Must Not Break
 

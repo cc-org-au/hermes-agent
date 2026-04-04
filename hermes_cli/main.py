@@ -931,6 +931,7 @@ def select_provider_and_model(args=None):
         "kilocode": "Kilo Code",
         "alibaba": "Alibaba Cloud (DashScope)",
         "huggingface": "Hugging Face",
+        "gemini": "Google Gemini (AI Studio — free tier API key)",
         "custom": "Custom endpoint",
     }
     active_label = provider_labels.get(active, active)
@@ -958,6 +959,7 @@ def select_provider_and_model(args=None):
         ("ai-gateway", "AI Gateway (Vercel — 200+ models, pay-per-use)"),
         ("alibaba", "Alibaba Cloud / DashScope Coding (Qwen + multi-provider)"),
         ("huggingface", "Hugging Face Inference Providers (20+ open models)"),
+        ("gemini", "Google Gemini (AI Studio API key — free tier)"),
     ]
 
     # Add user-defined custom providers from config.yaml
@@ -1030,7 +1032,18 @@ def select_provider_and_model(args=None):
         _model_flow_anthropic(config, current_model)
     elif selected_provider == "kimi-coding":
         _model_flow_kimi(config, current_model)
-    elif selected_provider in ("zai", "minimax", "minimax-cn", "kilocode", "opencode-zen", "opencode-go", "ai-gateway", "alibaba", "huggingface"):
+    elif selected_provider in (
+        "zai",
+        "minimax",
+        "minimax-cn",
+        "kilocode",
+        "opencode-zen",
+        "opencode-go",
+        "ai-gateway",
+        "alibaba",
+        "huggingface",
+        "gemini",
+    ):
         _model_flow_api_key_provider(config, selected_provider, current_model)
 
 
@@ -3525,7 +3538,7 @@ def cmd_profile(args):
             print(f"{marker}{name:<15} {model:<28} {gw:<12} {alias}")
         print()
 
-    elif action == "use":
+    elif action in ("use", "switch"):
         name = args.profile_name
         try:
             set_active_profile(name)
@@ -5187,6 +5200,12 @@ For more help on a command:
     profile_list = profile_subparsers.add_parser("list", help="List all profiles")
     profile_use = profile_subparsers.add_parser("use", help="Set sticky default profile")
     profile_use.add_argument("profile_name", help="Profile name (or 'default')")
+
+    profile_switch = profile_subparsers.add_parser(
+        "switch",
+        help="Same as: profile use — set sticky default profile",
+    )
+    profile_switch.add_argument("profile_name", help="Profile name (or 'default')")
 
     profile_create = profile_subparsers.add_parser("create", help="Create a new profile")
     profile_create.add_argument("profile_name", help="Profile name (lowercase, alphanumeric)")

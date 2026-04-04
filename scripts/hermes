@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# If the last argument is "droplet", run the same CLI on the VPS (see scripts/agent-droplet).
+# Otherwise delegate to the real CLI binary recorded in HERMES_REAL_BIN (set before PATH_add scripts).
+set -euo pipefail
+_root="$(cd "$(dirname "$0")" && pwd)"
+_last=
+for _last in "$@"; do :; done
+if [[ $# -ge 1 && "$_last" == "droplet" ]]; then
+  if [[ $# -eq 1 ]]; then
+    exec "$_root/agent-droplet"
+  fi
+  set -- "${@:1:$(($# - 1))}"
+  exec "$_root/agent-droplet" "$@"
+fi
+_real="${HERMES_REAL_BIN:-}"
+if [[ -z "$_real" ]]; then
+  echo "hermes: HERMES_REAL_BIN is unset. Use direnv in this repo (see .envrc) or export it to your real hermes executable." >&2
+  exit 127
+fi
+if [[ "$_real" == "$_root/hermes" ]]; then
+  echo "hermes: HERMES_REAL_BIN points at this wrapper; fix .envrc order (capture command -v before PATH_add scripts)." >&2
+  exit 1
+fi
+exec "$_real" "$@"

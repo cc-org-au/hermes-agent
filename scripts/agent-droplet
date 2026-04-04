@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
-# Run the same CLI entrypoint as on the VPS (venv + HERMES_HOME on server). All args forwarded.
-# Requires ~/.env/.env with SSH_* and SSH_SUDO_PASSWORD (see scripts/ssh_droplet.sh).
+# Backend for workstation `hermes … droplet` (see scripts/hermes shim + Step 15 in
+# policies/core/unified-deployment-and-security.md). Runs the same CLI on the VPS (venv + HERMES_HOME). All args forwarded.
+# Requires ~/.env/.env with SSH_* (host, port, user) and SSH_SUDO_PASSWORD for remote sudo;
+# SSH key passphrase is entered interactively (see scripts/ssh_droplet.sh).
 # Optional env: AGENT_DROPLET_RUNTIME_USER, AGENT_DROPLET_RUNTIME_HOME, AGENT_DROPLET_REPO
+# HERMES_DROPLET_INTERACTIVE=1 lets ssh_droplet pass its TTY check when stdin is not a TTY (IDE);
+# the SSH key still needs its passphrase because ssh uses IdentityAgent=none (see ssh_droplet.sh).
+# Default HERMES_HOME is the chief-orchestrator profile (TUI prompt shows profile name).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$ROOT/.." && pwd)"
 RUNTIME_USER="${AGENT_DROPLET_RUNTIME_USER:-hermesuser}"
-HH=$(printf '%q' "${AGENT_DROPLET_RUNTIME_HOME:-/home/hermesuser/.hermes}")
+HH=$(printf '%q' "${AGENT_DROPLET_RUNTIME_HOME:-/home/hermesuser/.hermes/profiles/chief-orchestrator}")
 REPO_Q=$(printf '%q' "${AGENT_DROPLET_REPO:-/home/hermesuser/hermes-agent}")
+export HERMES_DROPLET_INTERACTIVE=1
 cmd="export HERMES_HOME=${HH}; cd ${REPO_Q} && exec ./venv/bin/python -m hermes_cli.main"
 for a in "$@"; do
   cmd+=" $(printf '%q' "$a")"

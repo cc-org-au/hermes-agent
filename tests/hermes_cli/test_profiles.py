@@ -8,6 +8,8 @@ and shell completion generation.
 import json
 import io
 import os
+import subprocess
+import sys
 import tarfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -798,3 +800,16 @@ class TestEdgeCases:
             delete_profile("coder", yes=True)
 
         assert get_active_profile() == "default"
+
+
+class TestProfileCliSwitchAlias:
+    """`hermes profile switch` is an alias for `hermes profile use`."""
+
+    def test_switch_default_profile(self, profile_env):
+        r = subprocess.run(
+            [sys.executable, "-m", "hermes_cli.main", "profile", "switch", "default"],
+            capture_output=True,
+            text=True,
+        )
+        assert r.returncode == 0
+        assert "Switched" in r.stdout
