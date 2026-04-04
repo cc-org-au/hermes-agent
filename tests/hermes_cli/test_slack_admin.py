@@ -46,3 +46,36 @@ def test_slack_command_dispatches_whoami(monkeypatch):
     args = MagicMock(slack_command="whoami")
     sa.slack_command(args)
     assert called.get("ok") is True
+
+
+def test_hermes_slack_manifest_dict_shape():
+    import hermes_cli.slack_admin as sa
+
+    m = sa.hermes_slack_manifest_dict()
+    assert m["_metadata"]["major_version"] == 2
+    assert len(m["display_information"]["long_description"]) >= 174
+    assert m["settings"]["socket_mode_enabled"] is True
+    assert "message.channels" in m["settings"]["event_subscriptions"]["bot_events"]
+
+
+def test_slack_command_manifest_validate_dispatch(monkeypatch):
+    import hermes_cli.slack_admin as sa
+
+    called = {}
+
+    def fake_validate(*, app_id=None):
+        called["app_id"] = app_id
+
+    monkeypatch.setattr(sa, "slack_manifest_validate", fake_validate)
+    args = MagicMock(slack_command="manifest-validate", app_id="A0123")
+    sa.slack_command(args)
+    assert called["app_id"] == "A0123"
+
+
+def test_slack_command_manifest_update_requires_confirm(monkeypatch):
+    import hermes_cli.slack_admin as sa
+
+    monkeypatch.setattr(sa, "slack_manifest_update", lambda **kw: None)
+    args = MagicMock(slack_command="manifest-update", app_id="A1", confirm=False)
+    with pytest.raises(SystemExit):
+        sa.slack_command(args)

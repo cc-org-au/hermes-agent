@@ -939,6 +939,15 @@ OPTIONAL_ENV_VARS = {
         "password": True,
         "category": "messaging",
     },
+    "SLACK_CONFIG_TOKEN": {
+        "description": "Slack app configuration token (xoxe...) for manifest APIs only — generate at "
+                       "api.slack.com/apps under Your App Configuration Tokens. Used by "
+                       "`hermes slack config-test` / `manifest-validate`; does not run the gateway.",
+        "prompt": "Slack app configuration token (xoxe...)",
+        "url": "https://api.slack.com/apps",
+        "password": True,
+        "category": "messaging",
+    },
     "MATTERMOST_URL": {
         "description": "Mattermost server URL (e.g. https://mm.example.com)",
         "prompt": "Mattermost server URL",

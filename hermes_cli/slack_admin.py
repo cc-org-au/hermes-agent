@@ -1,16 +1,230 @@
 """
 Slack maintenance helpers (CLI). Uses the Slack Web API with SLACK_BOT_TOKEN —
 separate from the gateway Socket Mode adapter.
+
+App configuration tokens (SLACK_CONFIG_TOKEN, xoxe...) are only for Slack's
+manifest/tooling APIs (validate/export/update). They do not replace xoxb/xapp
+for the live gateway.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 import time
-from typing import List
+import urllib.error
+import urllib.parse
+import urllib.request
+from typing import Any, Dict, List, Optional
 
 from hermes_constants import display_hermes_home
+
+
+def hermes_slack_manifest_dict() -> Dict[str, Any]:
+    """Hermes-recommended Slack app manifest (v2 JSON) for Socket Mode + Bolt.
+
+    Use with ``apps.manifest.validate`` / ``update`` and a configuration token.
+    After changing the manifest, reinstall the app to the workspace and refresh
+    ``SLACK_BOT_TOKEN`` / ``SLACK_APP_TOKEN`` in Hermes.
+    """
+    long_description = (
+        "Hermes Agent connects Slack to the Hermes AI gateway using Bolt Socket Mode, "
+        "so no public HTTP endpoint is required. Install this app to your workspace, "
+        "then copy the Bot User OAuth Token (xoxb) and an App-Level Token with "
+        "connections:write (xapp) into your Hermes ~/.hermes/.env. Subscribe to the "
+        "documented bot events and bot token scopes so channel DMs and @mentions work."
+    )
+    if len(long_description) < 174:
+        long_description = (long_description + " ") * 6
+
+    return {
+        "_metadata": {"major_version": 2, "minor_version": 1},
+        "display_information": {
+            "name": "Hermes Agent",
+            "description": "AI agent gateway (Hermes) via Socket Mode",
+            "background_color": "#2c2d30",
+            "long_description": long_description,
+        },
+        "features": {
+            "app_home": {
+                "home_tab_enabled": True,
+                "messages_tab_enabled": True,
+                "messages_tab_read_only_enabled": False,
+            },
+            "bot_user": {
+                "display_name": "hermes",
+                "always_online": True,
+            },
+            "slash_commands": [
+                {
+                    "command": "/hermes",
+                    "description": "Hermes gateway commands (help, session, tools)",
+                    "should_escape": False,
+                }
+            ],
+        },
+        "oauth_config": {
+            "scopes": {
+                "bot": [
+                    "app_mentions:read",
+                    "channels:history",
+                    "channels:join",
+                    "channels:read",
+                    "chat:write",
+                    "commands",
+                    "files:read",
+                    "files:write",
+                    "groups:history",
+                    "groups:read",
+                    "im:history",
+                    "im:read",
+                    "im:write",
+                    "mpim:history",
+                    "mpim:read",
+                    "reactions:read",
+                    "reactions:write",
+                    "users:read",
+                ]
+            }
+        },
+        "settings": {
+            "org_deploy_enabled": False,
+            "socket_mode_enabled": True,
+            "token_rotation_enabled": False,
+            "is_hosted": False,
+            "event_subscriptions": {
+                "bot_events": [
+                    "app_mention",
+                    "message.channels",
+                    "message.groups",
+                    "message.im",
+                    "message.mpim",
+                ]
+            },
+            "interactivity": {"is_enabled": True},
+        },
+    }
+
+
+def _config_token_from_env() -> str:
+    raw = (
+        os.getenv("SLACK_CONFIG_TOKEN") or os.getenv("SLACK_APP_CONFIG_TOKEN") or ""
+    ).strip()
+    if not raw:
+        print(
+            "Error: SLACK_CONFIG_TOKEN is not set.\n"
+            "Generate an app configuration token at https://api.slack.com/apps "
+            "(Your App Configuration Tokens → Generate Token). "
+            "It starts with xoxe. This is NOT your bot token (xoxb) or app token (xapp).",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return raw
+
+
+def _slack_tooling_api(method: str, **fields: Optional[str]) -> Dict[str, Any]:
+    """POST to Slack Web API using an app configuration token (form body)."""
+    token = _config_token_from_env()
+    payload: Dict[str, str] = {"token": token}
+    for k, v in fields.items():
+        if v is not None:
+            payload[k] = v
+    data = urllib.parse.urlencode(payload).encode()
+    req = urllib.request.Request(
+        f"https://slack.com/api/{method}",
+        data=data,
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded; charset=utf-8"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=90) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors="replace")
+        try:
+            return json.loads(body)
+        except json.JSONDecodeError:
+            print(f"HTTP {e.code}: {body[:800]}", file=sys.stderr)
+            sys.exit(1)
+
+
+def slack_config_test() -> None:
+    """Verify SLACK_CONFIG_TOKEN with auth.test (tooling token, not xoxb/xapp)."""
+    j = _slack_tooling_api("auth.test")
+    if not j.get("ok"):
+        print(f"auth.test failed: {j.get('error')}", file=sys.stderr)
+        sys.exit(1)
+    print(
+        f"ok=true team={j.get('team')} team_id={j.get('team_id')} "
+        f"user={j.get('user')} user_id={j.get('user_id')}"
+    )
+    print(
+        "This is an app configuration token — use it only for manifest validate/export/update."
+    )
+    print(
+        "The Hermes gateway still requires SLACK_BOT_TOKEN (xoxb) and "
+        "SLACK_APP_TOKEN (xapp) after you install/reinstall the app."
+    )
+
+
+def slack_manifest_validate(*, app_id: Optional[str] = None) -> None:
+    """Validate the built-in Hermes manifest via apps.manifest.validate."""
+    manifest = hermes_slack_manifest_dict()
+    kwargs: Dict[str, Optional[str]] = {
+        "manifest": json.dumps(manifest, separators=(",", ":")),
+    }
+    if app_id:
+        kwargs["app_id"] = app_id.strip()
+    j = _slack_tooling_api("apps.manifest.validate", **kwargs)
+    if not j.get("ok"):
+        print(f"validate failed: {j.get('error')}", file=sys.stderr)
+        for err in j.get("errors") or []:
+            if isinstance(err, dict):
+                print(f"  - {err.get('pointer')}: {err.get('message')}", file=sys.stderr)
+            else:
+                print(f"  - {err}", file=sys.stderr)
+        sys.exit(1)
+    print("ok=true Hermes Slack manifest validates against Slack's schema.")
+    if app_id:
+        print("(Validated in context of existing app_id — safe to consider manifest.update.)")
+
+
+def slack_manifest_export(*, app_id: str) -> None:
+    """Export the current Slack app manifest (JSON) for inspection."""
+    aid = app_id.strip()
+    if not aid:
+        print("Error: --app-id is required", file=sys.stderr)
+        sys.exit(1)
+    j = _slack_tooling_api("apps.manifest.export", app_id=aid)
+    if not j.get("ok"):
+        print(f"export failed: {j.get('error')}", file=sys.stderr)
+        sys.exit(1)
+    print(json.dumps(j.get("manifest"), indent=2, sort_keys=True))
+
+
+def slack_manifest_update(*, app_id: str) -> None:
+    """Replace the Slack app configuration with the built-in Hermes manifest."""
+    aid = app_id.strip()
+    if not aid:
+        print("Error: --app-id is required", file=sys.stderr)
+        sys.exit(1)
+    manifest = hermes_slack_manifest_dict()
+    j = _slack_tooling_api(
+        "apps.manifest.update",
+        app_id=aid,
+        manifest=json.dumps(manifest, separators=(",", ":")),
+    )
+    if not j.get("ok"):
+        print(f"update failed: {j.get('error')}", file=sys.stderr)
+        for err in j.get("errors") or []:
+            if isinstance(err, dict):
+                print(f"  - {err.get('pointer')}: {err.get('message')}", file=sys.stderr)
+            else:
+                print(f"  - {err}", file=sys.stderr)
+        sys.exit(1)
+    print(f"ok=true app_id={j.get('app_id')} permissions_updated={j.get('permissions_updated')}")
+    print("Reinstall the app to the workspace, then update SLACK_BOT_TOKEN and SLACK_APP_TOKEN in Hermes.")
 
 
 def _tokens_from_env() -> List[str]:
@@ -148,6 +362,21 @@ def slack_command(args) -> None:
         slack_join_public_channels(dry_run=bool(getattr(args, "dry_run", False)))
     elif sub == "whoami":
         slack_whoami()
+    elif sub == "config-test":
+        slack_config_test()
+    elif sub == "manifest-validate":
+        slack_manifest_validate(app_id=getattr(args, "app_id", None) or None)
+    elif sub == "manifest-export":
+        slack_manifest_export(app_id=getattr(args, "app_id", "") or "")
+    elif sub == "manifest-update":
+        if not getattr(args, "confirm", False):
+            print(
+                "Refusing to rewrite your Slack app without --confirm.\n"
+                "This replaces the app configuration; reinstall the app afterward.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        slack_manifest_update(app_id=getattr(args, "app_id", "") or "")
     else:
         print(f"Unknown slack subcommand: {sub!r}", file=sys.stderr)
         sys.exit(1)

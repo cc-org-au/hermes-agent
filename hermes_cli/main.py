@@ -4046,8 +4046,12 @@ For more help on a command:
     # =========================================================================
     slack_parser = subparsers.add_parser(
         "slack",
-        help="Slack workspace maintenance (join channels, bot identity)",
-        description="Uses SLACK_BOT_TOKEN from your Hermes .env — run on the same machine as the gateway.",
+        help="Slack workspace maintenance (join channels, bot identity, manifest tooling)",
+        description=(
+            "Uses SLACK_BOT_TOKEN from your Hermes .env for join-public and whoami. "
+            "Subcommands config-test / manifest-* use SLACK_CONFIG_TOKEN (xoxe app configuration token "
+            "from api.slack.com/apps) — not xoxb/xapp."
+        ),
     )
     slack_sub = slack_parser.add_subparsers(dest="slack_command", required=True)
     slack_join = slack_sub.add_parser(
@@ -4062,6 +4066,42 @@ For more help on a command:
     slack_whoami_p = slack_sub.add_parser(
         "whoami",
         help="Print bot user id and @username (auth.test) for debugging mentions and allowlists",
+    )
+    slack_sub.add_parser(
+        "config-test",
+        help="auth.test using SLACK_CONFIG_TOKEN (manifest/tooling token — not xoxb/xapp)",
+    )
+    slack_mv = slack_sub.add_parser(
+        "manifest-validate",
+        help="Validate the built-in Hermes Socket Mode manifest (apps.manifest.validate)",
+    )
+    slack_mv.add_argument(
+        "--app-id",
+        default=None,
+        help="Optional Slack App ID (A…) to validate an update against an existing app",
+    )
+    slack_me = slack_sub.add_parser(
+        "manifest-export",
+        help="Export current manifest JSON for an app (requires --app-id)",
+    )
+    slack_me.add_argument(
+        "--app-id",
+        required=True,
+        help="Slack App ID from the app's Basic Information page",
+    )
+    slack_mu = slack_sub.add_parser(
+        "manifest-update",
+        help="Replace app config with the built-in Hermes manifest (dangerous — reinstall after)",
+    )
+    slack_mu.add_argument(
+        "--app-id",
+        required=True,
+        help="Slack App ID to update",
+    )
+    slack_mu.add_argument(
+        "--confirm",
+        action="store_true",
+        help="Required acknowledgement — overwrites Slack app configuration",
     )
     slack_parser.set_defaults(func=cmd_slack)
 

@@ -186,6 +186,19 @@ Or run the interactive setup:
 hermes gateway setup    # Select Slack when prompted
 ```
 
+### Optional: App configuration token (`xoxe`)
+
+Slack [app configuration tokens](https://api.slack.com/authentication/config-tokens) are **developer** tokens for manifest APIs — they are **not** your bot token (`xoxb`) or Socket Mode app token (`xapp`). Generate one under [api.slack.com/apps](https://api.slack.com/apps) → **Your App Configuration Tokens** → **Generate Token**, then set `SLACK_CONFIG_TOKEN` in the environment (or `.env`).
+
+```bash
+hermes slack config-test              # auth.test for the configuration token
+hermes slack manifest-validate        # validate Hermes' built-in Socket Mode manifest
+hermes slack manifest-export --app-id A0123456789   # export your app's current manifest (JSON)
+hermes slack manifest-update --app-id A0123456789 --confirm   # apply Hermes manifest (reinstall app after)
+```
+
+Configuration tokens **expire** (about 12 hours); rotate with Slack’s refresh flow. After `manifest-update`, **reinstall** the app to the workspace and refresh `SLACK_BOT_TOKEN` / `SLACK_APP_TOKEN` in Hermes.
+
 Then start the gateway:
 
 ```bash
