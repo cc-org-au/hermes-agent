@@ -60,9 +60,11 @@ HOST="${SSH_TAILSCALE_IP:-${SSH_IP:?}}"
 
 # IdentityAgent=none — disable ssh-agent. UseKeychain=no (macOS only) — do not pull key passphrase
 # from the login keychain. AddKeysToAgent=no — never add this key to an agent mid-session.
+# Do not set PreferredAuthentications=publickey only: some sshd configs require publickey then
+# keyboard-interactive (PAM); restricting to publickey leaves auth stuck at "partial success".
 REMOTE_BASE=(
   ssh -o BatchMode=no -o IdentitiesOnly=yes -o IdentityAgent=none
-  -o AddKeysToAgent=no -o PreferredAuthentications=publickey
+  -o AddKeysToAgent=no
   -o StrictHostKeyChecking=accept-new
   -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=4
   -i "$KEY_FILE" -p "${SSH_PORT:?}"
