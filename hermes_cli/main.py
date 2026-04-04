@@ -4067,6 +4067,23 @@ For more help on a command:
         "whoami",
         help="Print bot user id and @username (auth.test) for debugging mentions and allowlists",
     )
+    slack_resolve = slack_sub.add_parser(
+        "resolve-user",
+        help="Look up a human member id (U…) for SLACK_ALLOWED_USERS (uses SLACK_BOT_TOKEN)",
+    )
+    _ru = slack_resolve.add_mutually_exclusive_group(required=True)
+    _ru.add_argument(
+        "--email",
+        dest="resolve_user_email",
+        metavar="ADDR",
+        help="Workspace sign-in email (needs users:read.email on the bot; reinstall after adding)",
+    )
+    _ru.add_argument(
+        "--search",
+        dest="resolve_user_search",
+        metavar="TEXT",
+        help="Case-insensitive substring on Slack name, display name, real name, or email (needs users:read)",
+    )
     slack_sub.add_parser(
         "config-test",
         help="auth.test using SLACK_CONFIG_TOKEN (manifest/tooling token — not xoxb/xapp)",

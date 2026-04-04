@@ -239,6 +239,111 @@ def _tokens_from_env() -> List[str]:
     return [t.strip() for t in raw.split(",") if t.strip()]
 
 
+def slack_resolve_user(*, email: Optional[str] = None, search: Optional[str] = None) -> None:
+    """Resolve a human member id (U…) via Slack Web API for allowlists."""
+    if (email and search) or (not email and not search):
+        print("Error: specify exactly one of --email or --search", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        from slack_sdk import WebClient
+        from slack_sdk.errors import SlackApiError
+    except ImportError:
+        print(
+            "Error: slack_sdk is not installed. Run: pip install 'hermes-agent[slack]'",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    token = _tokens_from_env()[0]
+    client = WebClient(token=token)
+
+    if email:
+        em = email.strip()
+        try:
+            resp = client.users_lookupByEmail(email=em)
+        except SlackApiError as e:
+            err = e.response.get("error", "")
+            if err == "missing_scope":
+                print(
+                    "users.lookupByEmail failed: missing **users:read.email** bot scope.\n"
+                    "Add it under OAuth & Permissions → Bot Token Scopes, reinstall the app, "
+                    "or use: hermes slack resolve-user --search \"your name\"",
+                    file=sys.stderr,
+                )
+            elif err == "users_not_found":
+                print(f"No user found for email {em!r}", file=sys.stderr)
+            else:
+                print(f"users.lookupByEmail failed: {err}", file=sys.stderr)
+            sys.exit(1)
+        u = resp.get("user") or {}
+        prof = u.get("profile") or {}
+        print(
+            f"member_id={u.get('id', '?')}\t"
+            f"name={u.get('name', '')}\t"
+            f"display_name={prof.get('display_name', '')}\t"
+            f"real_name={prof.get('real_name', '')}\t"
+            f"email={prof.get('email', '')}"
+        )
+        return
+
+    q = (search or "").strip().lower()
+    if len(q) < 2:
+        print("Error: --search must be at least 2 characters", file=sys.stderr)
+        sys.exit(1)
+
+    matches: List[dict] = []
+    cursor = None
+    try:
+        while True:
+            resp = client.users_list(limit=200, cursor=cursor)
+            for m in resp.get("members") or []:
+                if m.get("is_bot") or m.get("deleted"):
+                    continue
+                prof = m.get("profile") or {}
+                hay = " ".join(
+                    [
+                        str(m.get("name") or ""),
+                        str(prof.get("display_name") or ""),
+                        str(prof.get("real_name") or ""),
+                        str(prof.get("email") or ""),
+                    ]
+                ).lower()
+                if q in hay:
+                    matches.append(m)
+            cursor = (resp.get("response_metadata") or {}).get("next_cursor")
+            if not cursor:
+                break
+    except SlackApiError as e:
+        err = e.response.get("error", "")
+        if err == "missing_scope":
+            print(
+                "users.list failed: missing **users:read** bot scope.\n"
+                "Add it under OAuth & Permissions → Bot Token Scopes, then reinstall the app.",
+                file=sys.stderr,
+            )
+        else:
+            print(f"users.list failed: {err}", file=sys.stderr)
+        sys.exit(1)
+
+    if not matches:
+        print(f"No members matched --search {search!r}", file=sys.stderr)
+        sys.exit(1)
+
+    max_show = 30
+    for m in matches[:max_show]:
+        prof = m.get("profile") or {}
+        print(
+            f"member_id={m.get('id', '?')}\t"
+            f"name={m.get('name', '')}\t"
+            f"display_name={prof.get('display_name', '')}\t"
+            f"real_name={prof.get('real_name', '')}\t"
+            f"email={prof.get('email', '')}"
+        )
+    if len(matches) > max_show:
+        print(f"(… {len(matches) - max_show} more matches not shown; narrow --search)", file=sys.stderr)
+
+
 def slack_whoami() -> None:
     """Print bot identity from auth.test (no tokens printed)."""
     try:
@@ -360,6 +465,11 @@ def slack_command(args) -> None:
     sub = getattr(args, "slack_command", None) or ""
     if sub == "join-public":
         slack_join_public_channels(dry_run=bool(getattr(args, "dry_run", False)))
+    elif sub == "resolve-user":
+        slack_resolve_user(
+            email=getattr(args, "resolve_user_email", None) or None,
+            search=getattr(args, "resolve_user_search", None) or None,
+        )
     elif sub == "whoami":
         slack_whoami()
     elif sub == "config-test":

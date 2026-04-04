@@ -48,6 +48,26 @@ def test_slack_command_dispatches_whoami(monkeypatch):
     assert called.get("ok") is True
 
 
+def test_slack_command_dispatches_resolve_user(monkeypatch):
+    import hermes_cli.slack_admin as sa
+
+    called = {}
+
+    def fake_resolve(*, email=None, search=None):
+        called["email"] = email
+        called["search"] = search
+
+    monkeypatch.setattr(sa, "slack_resolve_user", fake_resolve)
+    args = MagicMock(
+        slack_command="resolve-user",
+        resolve_user_email="a@b.co",
+        resolve_user_search=None,
+    )
+    sa.slack_command(args)
+    assert called["email"] == "a@b.co"
+    assert called["search"] is None
+
+
 def test_hermes_slack_manifest_dict_shape():
     import hermes_cli.slack_admin as sa
 
