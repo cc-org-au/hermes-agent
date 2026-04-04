@@ -48,7 +48,10 @@ export SSH_ASKPASS="$ASK"
 export SSH_ASKPASS_REQUIRE=force
 export DISPLAY="${DISPLAY:-:0}"
 
+# Keepalive + connect timeout so a hung remote shell does not leave a local ssh
+# stuck forever (and Cursor from backgrounding a long-running terminal job).
 REMOTE=(ssh -o BatchMode=no -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
+  -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 \
   -i "$KEY_FILE" -p "${SSH_PORT:?}" \
   "${SSH_USER:?}@${HOST}")
 
