@@ -56,6 +56,8 @@ def verify_activation_cues(strict: bool) -> list[str]:
         return [f"missing directory: {std.relative_to(REPO_ROOT)}"]
     errors: list[str] = []
     for path in sorted(std.glob("*.md")):
+        if path.name.startswith("._"):
+            continue  # AppleDouble sidecar files must not masquerade as policies
         text = path.read_text(encoding="utf-8")
         if not any(m in text for m in ACTIVATION_MARKERS):
             errors.append(

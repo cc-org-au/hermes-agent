@@ -187,7 +187,11 @@ def apply_to_file(rel: str, sequence: list[str], total: int) -> str | None:
 
 def main() -> int:
     md_files = sorted(
-        (p.relative_to(POLICIES_ROOT).as_posix() for p in POLICIES_ROOT.rglob("*.md")),
+        (
+            p.relative_to(POLICIES_ROOT).as_posix()
+            for p in POLICIES_ROOT.rglob("*.md")
+            if not p.name.startswith("._")
+        ),
         key=lambda s: s.lower(),
     )
     seq = list(READ_ORDER_SEQUENCE)

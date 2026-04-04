@@ -686,6 +686,8 @@ The watchdog log should include at least:
 4. backoff/cooldown decisions with computed wait durations
 5. recovery confirmation events
 
+**Hermes Agent (messaging gateway):** Mandated health semantics (`watchdog-check`, live `gateway.pid`, recovery ladder, logging) are specified in [`gateway-watchdog.md`](gateway-watchdog.md). Governance read order places that file after [`deployment-handoff.md`](deployment-handoff.md).
+
 6. **Run package operations from the correct working directory**
    - Perform dependency audit/fix commands from the project root where lockfiles exist.
    - If audit tools fail due to missing lockfiles or context mismatch, correct directory state first, then rerun.

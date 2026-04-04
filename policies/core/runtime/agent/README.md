@@ -13,11 +13,12 @@ This is the human-facing index for the attached agent markdown pack.
 Use this order:
 
 1. `policies/core/security-first-setup.md`
-2. `policies/core/deployment-handoff.md`
-3. `python policies/core/scripts/start_pipeline.py` — see `policies/core/pipeline-runbook.md`
-4. `policies/core/runtime/agent/BOOTSTRAP.md`
-5. `policies/core/runtime/agent/AGENTS.md`
-6. the remaining attached agent markdown files
+2. `policies/core/unified-deployment-and-security.md`
+3. `policies/core/deployment-handoff.md`
+4. `python policies/core/scripts/start_pipeline.py` — see `policies/core/pipeline-runbook.md`
+5. `policies/core/runtime/agent/BOOTSTRAP.md`
+6. `policies/core/runtime/agent/AGENTS.md`
+7. the remaining attached agent markdown files
 
 The attached markdown pack is the workspace operating layer and is subordinate to:
 - `policies/README.md`

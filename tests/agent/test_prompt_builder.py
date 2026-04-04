@@ -663,6 +663,27 @@ class TestBuildContextFilesPrompt:
         assert "Claude loses" not in result
         assert "Cursor loses" not in result
 
+    def test_hermes_home_governance_loads_alongside_cwd_hermes_md(self, tmp_path, monkeypatch):
+        """HERMES_HOME/.hermes.md is injected in addition to cwd .hermes.md."""
+        hh = tmp_path / "hermes_profile"
+        hh.mkdir()
+        monkeypatch.setenv("HERMES_HOME", str(hh))
+        (hh / ".hermes.md").write_text("Governance under HERMES_HOME.")
+        (tmp_path / ".hermes.md").write_text("Project cwd hermes.")
+        result = build_context_files_prompt(cwd=str(tmp_path))
+        assert "Governance under HERMES_HOME" in result
+        assert "Project cwd hermes" in result
+
+    def test_hermes_home_governance_without_cwd_project_file(self, tmp_path, monkeypatch):
+        hh = tmp_path / "hh"
+        hh.mkdir()
+        monkeypatch.setenv("HERMES_HOME", str(hh))
+        (hh / ".hermes.md").write_text("Gov only.")
+        proj = tmp_path / "proj"
+        proj.mkdir()
+        result = build_context_files_prompt(cwd=str(proj))
+        assert "Gov only." in result
+
     def test_cursorrules_loads_when_only_option(self, tmp_path):
         """Cursorrules still loads when no higher-priority files exist."""
         (tmp_path / ".cursorrules").write_text("Use ESLint.")

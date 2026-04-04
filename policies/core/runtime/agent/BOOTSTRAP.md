@@ -15,13 +15,14 @@ It is not the first file in the total deployment order.
 The total order is:
 
 1. `policies/core/security-first-setup.md`
-2. `policies/core/deployment-handoff.md`
-3. `python policies/core/scripts/start_pipeline.py` (see `policies/core/pipeline-runbook.md`)
-4. `BOOTSTRAP.md`
-5. `AGENTS.md`
-6. the remaining attached agent markdown files
+2. `policies/core/unified-deployment-and-security.md`
+3. `policies/core/deployment-handoff.md`
+4. `python policies/core/scripts/start_pipeline.py` (see `policies/core/pipeline-runbook.md`)
+5. `BOOTSTRAP.md`
+6. `AGENTS.md`
+7. the remaining attached agent markdown files
 
-This file should be used only after the security-first setup and the deployment-handoff document have already been followed.
+This file should be used only after the security-first setup, the unified deployment and security runbook, and the deployment-handoff document have already been followed.
 
 ---
 
@@ -49,6 +50,7 @@ Its purpose is to:
 Before using this file, the following must already have happened:
 
 - the workstation and runtime (VPS) setup from `policies/core/security-first-setup.md`
+- the unified operational runbook `policies/core/unified-deployment-and-security.md`
 - the deployment handoff from `policies/core/deployment-handoff.md`
 - canonical policy and prompt verification
 - runtime records initialized or prepared
@@ -106,6 +108,7 @@ Do this in order.
 ### 1. Confirm the top-level deployment files were already followed
 Confirm:
 - `policies/core/security-first-setup.md` completed
+- `policies/core/unified-deployment-and-security.md` completed
 - `policies/core/deployment-handoff.md` completed or being followed
 - canonical policies exist
 - runbook exists
@@ -181,6 +184,7 @@ The attached agent markdown files should reference the broader system as follows
   - `policies/core/unified-deployment-and-security.md`
 - deployment entry layer:
   - `policies/core/security-first-setup.md`
+  - `policies/core/unified-deployment-and-security.md`
   - `policies/core/deployment-handoff.md`
 - workspace bootstrap layer:
   - `policies/core/runtime/agent/BOOTSTRAP.md`

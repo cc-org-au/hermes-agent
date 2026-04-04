@@ -14,11 +14,12 @@ It is **not** the first file in the total system order.
 
 Total deployment order:
 1. `policies/core/security-first-setup.md`
-2. `policies/core/deployment-handoff.md`
-3. Run `python policies/core/scripts/start_pipeline.py` (or `./policies/start_pipeline.sh`) so `INDEX.md` and verification match the tree — see `policies/core/pipeline-runbook.md`
-4. `policies/core/runtime/agent/BOOTSTRAP.md`
-5. `policies/core/runtime/agent/AGENTS.md`
-6. the remaining attached agent markdown files under `policies/core/runtime/agent/` (or the same filenames at workspace root if the pack was copied there)
+2. `policies/core/unified-deployment-and-security.md`
+3. `policies/core/deployment-handoff.md`
+4. Run `python policies/core/scripts/start_pipeline.py` (or `./policies/start_pipeline.sh`) so `INDEX.md` and verification match the tree — see `policies/core/pipeline-runbook.md`
+5. `policies/core/runtime/agent/BOOTSTRAP.md`
+6. `policies/core/runtime/agent/AGENTS.md`
+7. the remaining attached agent markdown files under `policies/core/runtime/agent/` (or the same filenames at workspace root if the pack was copied there)
 
 This file is subordinate to:
 - `policies/README.md` (policies tree index and pipeline)

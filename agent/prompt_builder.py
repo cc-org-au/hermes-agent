@@ -785,6 +785,31 @@ def load_soul_md() -> Optional[str]:
         return None
 
 
+def _load_hermes_home_governance_md() -> str:
+    """Optional governance context at ``HERMES_HOME/.hermes.md``.
+
+    Loaded *in addition to* cwd-based project context (``.hermes.md`` / ``AGENTS.md``
+    chain) so policy packs materialized under ``HERMES_HOME/policies/`` remain
+    discoverable when the working directory is not the policy tree (e.g. gateway
+    with ``MESSAGING_CWD`` = home).
+    """
+    path = get_hermes_home() / ".hermes.md"
+    if not path.is_file():
+        return ""
+    try:
+        content = path.read_text(encoding="utf-8").strip()
+        if not content:
+            return ""
+        content = _strip_yaml_frontmatter(content)
+        content = _scan_context_content(content, path.name)
+        label = f"{path.name} (HERMES_HOME governance)"
+        result = f"## {label}\n\n{content}"
+        return _truncate_content(result, path.name)
+    except Exception as e:
+        logger.debug("Could not read HERMES_HOME governance file %s: %s", path, e)
+        return ""
+
+
 def _load_hermes_md(cwd_path: Path) -> str:
     """.hermes.md / HERMES.md — walk to git root."""
     hermes_md_path = _find_hermes_md(cwd_path)
@@ -873,7 +898,10 @@ def _load_cursorrules(cwd_path: Path) -> str:
 def build_context_files_prompt(cwd: Optional[str] = None, skip_soul: bool = False) -> str:
     """Discover and load context files for the system prompt.
 
-    Priority (first found wins — only ONE project context type is loaded):
+    ``HERMES_HOME/.hermes.md`` (if present) is loaded first as governance context,
+    in addition to cwd-based project files below.
+
+    Priority for *project* context (first found wins — only ONE type loaded):
       1. .hermes.md / HERMES.md  (walk to git root)
       2. AGENTS.md / agents.md   (cwd only)
       3. CLAUDE.md / claude.md   (cwd only)
@@ -890,6 +918,10 @@ def build_context_files_prompt(cwd: Optional[str] = None, skip_soul: bool = Fals
 
     cwd_path = Path(cwd).resolve()
     sections = []
+
+    governance = _load_hermes_home_governance_md()
+    if governance:
+        sections.append(governance)
 
     # Priority-based project context: first match wins
     project_context = (

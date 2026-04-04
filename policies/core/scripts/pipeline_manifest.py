@@ -22,6 +22,8 @@ def _iter_tracked_files() -> list[Path]:
         for p in root.rglob("*"):
             if not p.is_file():
                 continue
+            if p.name.startswith("._"):
+                continue
             rel = p.relative_to(POLICIES_ROOT)
             if any(part in SKIP_PARTS for part in rel.parts):
                 continue

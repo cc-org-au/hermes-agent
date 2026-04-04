@@ -12,6 +12,7 @@ This file is part of the attached workspace agent markdown pack.
 
 Use it only after:
 - `policies/core/security-first-setup.md`
+- `policies/core/unified-deployment-and-security.md`
 - `policies/core/deployment-handoff.md`
 - `policies/core/runtime/agent/BOOTSTRAP.md`
 - `policies/core/runtime/agent/AGENTS.md`

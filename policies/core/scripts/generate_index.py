@@ -21,7 +21,10 @@ INDEX = POLICIES_ROOT / "INDEX.md"
 
 def run_generate_index() -> tuple[int, str | None]:
     try:
-        md_files = sorted(POLICIES_ROOT.rglob("*.md"), key=lambda p: str(p.relative_to(POLICIES_ROOT)).lower())
+        md_files = sorted(
+            (p for p in POLICIES_ROOT.rglob("*.md") if not p.name.startswith("._")),
+            key=lambda p: str(p.relative_to(POLICIES_ROOT)).lower(),
+        )
         lines = [
             "# Policies — file index (generated)",
             "",
@@ -51,7 +54,12 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true", help="Print count only; do not write INDEX.md")
     args = ap.parse_args()
     if args.dry_run:
-        md_files = [p for p in POLICIES_ROOT.rglob("*.md") if not (p.name == "INDEX.md" and p.parent == POLICIES_ROOT)]
+        md_files = [
+            p
+            for p in POLICIES_ROOT.rglob("*.md")
+            if not p.name.startswith("._")
+            and not (p.name == "INDEX.md" and p.parent == POLICIES_ROOT)
+        ]
         print(f"generate_index: dry-run — would index {len(md_files)} files")
         return 0
     code, msg = run_generate_index()
