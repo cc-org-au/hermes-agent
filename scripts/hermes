@@ -5,6 +5,7 @@ set -euo pipefail
 _root="$(cd "$(dirname "$0")" && pwd)"
 _repo="$(cd "$_root/.." && pwd)"
 _venv_hermes="$_repo/venv/bin/hermes"
+_venv_py="$_repo/venv/bin/python"
 _last=
 for _last in "$@"; do :; done
 if [[ $# -ge 1 && "$_last" == "droplet" ]]; then
@@ -14,16 +15,15 @@ if [[ $# -ge 1 && "$_last" == "droplet" ]]; then
   set -- "${@:1:$(($# - 1))}"
   exec "$_root/agent-droplet" "$@"
 fi
+# Prefer venv python -m hermes_cli.main: venv/bin/hermes may have a stale shebang if the repo moved.
+if [[ -x "$_venv_py" ]]; then
+  exec "$_venv_py" -m hermes_cli.main "$@"
+fi
 if [[ -x "$_venv_hermes" ]]; then
-  _real="$_venv_hermes"
-elif [[ -n "${HERMES_REAL_BIN:-}" ]]; then
-  _real="${HERMES_REAL_BIN}"
-else
-  echo "hermes: no venv at ${_venv_hermes} and HERMES_REAL_BIN is unset. Create the venv (see README) or set HERMES_REAL_BIN." >&2
-  exit 127
+  exec "$_venv_hermes" "$@"
 fi
-if [[ "$_real" == "$_root/hermes" ]]; then
-  echo "hermes: HERMES_REAL_BIN points at this wrapper; fix .envrc (see comment about venv vs command -v)." >&2
-  exit 1
+if [[ -n "${HERMES_REAL_BIN:-}" && "${HERMES_REAL_BIN}" != "$_root/hermes" ]]; then
+  exec "${HERMES_REAL_BIN}" "$@"
 fi
-exec "$_real" "$@"
+echo "hermes: no venv at ${_venv_hermes} or ${_venv_py}; install the repo venv (pip install -e .) or set HERMES_REAL_BIN." >&2
+exit 127

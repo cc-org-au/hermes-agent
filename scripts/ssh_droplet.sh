@@ -9,8 +9,9 @@
 # SSH key passphrase — default: entered interactively (or via /dev/tty). ssh-agent and inherited
 # SSH_ASKPASS are stripped unless you opt in below.
 #
-# Opt-in automation (CI / headless): set HERMES_DROPLET_ALLOW_ENV_PASSPHRASE=1 and put SSH_PASSPHRASE
-# in the env file. The script uses a short-lived SSH_ASKPASS helper (never exports SSH_PASSPHRASE to ssh).
+# Opt-in automation (CI / headless): add a line HERMES_DROPLET_ALLOW_ENV_PASSPHRASE=1 to the SAME
+# env file as SSH_PASSPHRASE (shell-export alone cannot enable this — avoids accidental bypass).
+# The script uses a short-lived SSH_ASKPASS helper (never exports SSH_PASSPHRASE to ssh).
 # Non-interactive use without that opt-in fails unless HERMES_DROPLET_INTERACTIVE=1.
 #
 # Usage:
@@ -32,6 +33,8 @@ trap _drop_cleanup EXIT
 ENV_FILE="${HERMES_DROPLET_ENV:-${HOME}/.env/.env}"
 KEY_FILE="${SSH_KEY_FILE:-${HOME}/.env/.ssh_key}"
 _DROPLET_KEY_PASS=""
+_ALLOW_ENV_PASS_FROM_FILE=0
+_RAW_SSH_PASSPHRASE=""
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "ssh_droplet.sh: missing env file ${ENV_FILE} (set HERMES_DROPLET_ENV)" >&2
@@ -48,13 +51,16 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   val="${line#*=}"
   case "$key" in
     SSH_PORT|SSH_USER|SSH_TAILSCALE_IP|SSH_IP|SSH_SUDO_PASSWORD) export "${key}=${val}" ;;
-    SSH_PASSPHRASE)
-      if [[ "${HERMES_DROPLET_ALLOW_ENV_PASSPHRASE:-}" == "1" ]]; then
-        _DROPLET_KEY_PASS="${val}"
-      fi
+    HERMES_DROPLET_ALLOW_ENV_PASSPHRASE)
+      case "$val" in 1|true|TRUE|True|yes|YES) _ALLOW_ENV_PASS_FROM_FILE=1 ;; esac
       ;;
+    SSH_PASSPHRASE) _RAW_SSH_PASSPHRASE="${val}" ;;
   esac
 done < "$ENV_FILE"
+
+if [[ "$_ALLOW_ENV_PASS_FROM_FILE" == "1" && -n "${_RAW_SSH_PASSPHRASE}" ]]; then
+  _DROPLET_KEY_PASS="${_RAW_SSH_PASSPHRASE}"
+fi
 
 HOST="${SSH_TAILSCALE_IP:-${SSH_IP:?}}"
 
@@ -81,9 +87,9 @@ REMOTE=("${REMOTE_BASE[@]}")
 unset SSH_PASSPHRASE 2>/dev/null || true
 _DROPLET_ENV=(env -u SSH_AUTH_SOCK -u SSH_AUTH_SOCK_PRIVATE -u SSH_ASKPASS -u SSH_ASKPASS_REQUIRE)
 
-if [[ "${HERMES_DROPLET_ALLOW_ENV_PASSPHRASE:-}" == "1" ]]; then
+if [[ "$_ALLOW_ENV_PASS_FROM_FILE" == "1" ]]; then
   if [[ -z "${_DROPLET_KEY_PASS}" ]]; then
-    echo "ssh_droplet.sh: HERMES_DROPLET_ALLOW_ENV_PASSPHRASE=1 but SSH_PASSPHRASE is missing in ${ENV_FILE}" >&2
+    echo "ssh_droplet.sh: HERMES_DROPLET_ALLOW_ENV_PASSPHRASE=1 in ${ENV_FILE} but SSH_PASSPHRASE is missing or empty" >&2
     exit 1
   fi
   _DROPLET_PASSFILE=$(mktemp)
@@ -98,7 +104,7 @@ if [[ "${HERMES_DROPLET_ALLOW_ENV_PASSPHRASE:-}" == "1" ]]; then
   _DROPLET_ENV=(env -u SSH_AUTH_SOCK -u SSH_AUTH_SOCK_PRIVATE)
 fi
 
-if [[ ! -t 0 && "${HERMES_DROPLET_INTERACTIVE:-}" != "1" && "${HERMES_DROPLET_ALLOW_ENV_PASSPHRASE:-}" != "1" ]]; then
+if [[ ! -t 0 && "${HERMES_DROPLET_INTERACTIVE:-}" != "1" && "$_ALLOW_ENV_PASS_FROM_FILE" != "1" ]]; then
   echo "ssh_droplet.sh: droplet SSH requires an interactive terminal (or set HERMES_DROPLET_INTERACTIVE=1 if your client exposes /dev/tty for the key passphrase)." >&2
   exit 1
 fi
