@@ -10,6 +10,9 @@
 #   ./scripts/ssh_droplet.sh 'hostname'
 #   ./scripts/ssh_droplet.sh --sudo-user hermesuser 'cd ~/hermes-agent && git pull'
 #     (requires SSH_SUDO_PASSWORD in the env file for sudo -S)
+#
+# For zero-argument local wrappers around the remote CLI, see scripts/source_droplet_agent_cli.sh
+# and policies/core/unified-deployment-and-security.md (Step 15).
 
 set -euo pipefail
 

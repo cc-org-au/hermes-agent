@@ -1040,6 +1040,32 @@ Run periodic pruning and periodic security reviews so the system does not bloat 
 
 ---
 
+## Step 15 — VPS path only: droplet-suffixed operator CLI on the workstation
+
+**When to apply:** You are operating a **remote VPS runtime** (SSH to a dedicated account, policy materialization under that account’s profile directory, long-lived gateway under that account) **and** you want **one-command access from your laptop** without typing SSH flags, remote paths, or `HERMES_HOME` each time.
+
+**When to skip:** Single-machine or local-only setups — keep using the CLI normally with no suffix.
+
+### What to install
+
+1. On the **workstation**, keep the same SSH credential bundle you already use for the VPS (key, passphrase, port, host, sudo password for stepping down to the runtime user) in a **single env file** the automation can read line-by-line (do not rely on `source` if values contain unquoted spaces).
+
+2. From the **agent repository checkout** on the workstation, **source** `scripts/source_droplet_agent_cli.sh` after setting **`AGENT_DROPLET_ENABLE=1`** or **`AGENT_VPS_PATH=1`**.
+
+   - Optional: set **`AGENT_CLI_NAME`** to match the name of your installed CLI binary (default assumes the common short name). The script then defines:
+     - **`<name>-droplet`** — forwards **all** trailing arguments to the **same** CLI entrypoint on the VPS (under the runtime user, correct repo `venv`, and `HERMES_HOME` on the server). No extra SSH arguments are required at invocation time.
+     - **`<name>-tui-droplet`**, **`<name>-setup-droplet`**, **`<name>-gateway-droplet`**, **`<name>-doctor-droplet`**, **`<name>-watchdog-check-droplet`** — convenience aliases so the **`-droplet` suffix is at the end of the command name** (equivalent to `<name>-droplet tui`, `<name>-droplet setup`, etc.).
+
+3. Override server paths only if your layout differs: **`AGENT_DROPLET_RUNTIME_USER`**, **`AGENT_DROPLET_RUNTIME_HOME`**, **`AGENT_DROPLET_REPO`**.
+
+4. **Disable** this layer when not on the VPS path: unset the enable flags or set **`AGENT_DROPLET_DISABLE=1`** before sourcing (see repository `.envrc` pattern).
+
+### Relation to policy materialization
+
+Run **`policies/core/scripts/start_pipeline.py`** (or the repository materialize helper) **before** relying on remote sessions to pick up new policy trees. The droplet-suffixed commands only change **where** the CLI runs; they do not replace pipeline materialization on the server.
+
+---
+
 # 16. Key Principle
 
 The quality of this system will be determined by one ordering rule:
