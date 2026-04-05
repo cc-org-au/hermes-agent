@@ -569,6 +569,16 @@ class AIAgent:
         if self.api_mode == "chat_completions" and self._is_direct_openai_url():
             self.api_mode = "codex_responses"
 
+        # Optional workspace token governance (activation Session 6+):
+        # ``workspace/operations/hermes_token_governance.runtime.yaml`` may cap
+        # model choice, max iterations, delegation iterations, and context injection.
+        try:
+            from agent.token_governance_runtime import apply_token_governance_runtime
+
+            apply_token_governance_runtime(self)
+        except Exception:
+            logger.debug("token_governance_runtime apply failed", exc_info=True)
+
         # Pre-warm OpenRouter model metadata cache in a background thread.
         # fetch_model_metadata() is cached for 1 hour; this avoids a blocking
         # HTTP request on the first API response when pricing is estimated.

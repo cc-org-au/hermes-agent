@@ -11,8 +11,9 @@ Rules for you:
 - Keep Hermes default context injection as-is (`skip_context_files` off).
 - When this pack tells you to stand up **another agent as a separate Hermes runtime**, use **`hermes profile create <slug>`** (flat slug under `~/.hermes/profiles/`); encode org level in the name and register slug ↔ role in `workspace/operations/ORG_REGISTRY.md` / `AGENT_LIFECYCLE_REGISTER.md` (see `POLICY_ROOT/core/deployment-handoff.md` — Hermes profiles).
 - After each session, give a brief summary and what the next session number will cover.
-- When I send only a numbered line, treat it as the **entire** task for that chat.
-- **Every reply** must end with a **Verification** section per `scripts/templates/activation_verification_suffix.txt` (path wiring, context files read with verbatim first line/heading, session policy list, three pack topics — no full system prompt dump).
+- **Handoff (mandatory for Sessions 1–20):** Before **Verification**, output a top-level **Handoff** with **A. Outstanding tasks** (numbered list; `1. None.` if empty) and **B.** numbered **executable** steps for the **next** session’s agent (concrete `POLICY_ROOT/...` / `WORKSPACE/...` paths — they have no chat history). For Session 20, **B** is **Post-activation** instead of “next session.” A vague summary is **not** a substitute; omitting **Handoff** is an incomplete session. (Full wording: `scripts/templates/activation_sessions_cumulative_cover_2_20.txt` and Session 1: `runtime_activation_session1_operator_message.txt`.)
+- When I send only a numbered line, treat it as the **entire** task for that chat — still include **Handoff** then **Verification** for that session’s work.
+- **Every reply that completes work for Sessions 1–20** must end with **Handoff** (as above) **then** a **Verification** section per `scripts/templates/activation_verification_suffix.txt` (path wiring, context files read with verbatim first line/heading, session policy list, three pack topics — no full system prompt dump). (Your one short acknowledgment before Session 1 is exempt.)
 
 Acknowledge in one short paragraph, then wait for **Session 1**.
 ---END INITIAL PROMPT---
@@ -36,7 +37,7 @@ Acknowledge in one short paragraph, then wait for **Session 1**.
 
 5  Read POLICY_ROOT/core/governance/standards/token-model-tool-and-channel-governance-policy.md via tools; summarize binding rules for this deployment.
 
-6  Read POLICY_ROOT/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md via tools; implement required registries/templates under WORKSPACE/ and WORKSPACE/operations/ only.
+6  Read POLICY_ROOT/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md via tools; implement required registries/templates under WORKSPACE/ and WORKSPACE/operations/ only; copy scripts/templates/hermes_token_governance.runtime.example.yaml to WORKSPACE/operations/hermes_token_governance.runtime.yaml, set enabled: true, tune model/blocklist/caps (Hermes enforces this file on every AIAgent start).
 
 7  Read POLICY_ROOT/core/governance/role-prompts/minimal-default-deployment-order.md via tools; align ORG_REGISTRY/ORG_CHART with Session 4.
 

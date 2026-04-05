@@ -1,0 +1,29 @@
+# Machine-readable token governance for Hermes (copy to workspace/operations/).
+# Path: HERMES_HOME/workspace/operations/hermes_token_governance.runtime.yaml
+#
+# Created by activation Session 6 alongside markdown registries. When present and
+# enabled, Hermes applies these caps on every AIAgent start (CLI, gateway, delegate).
+#
+# Disable enforcement: HERMES_TOKEN_GOVERNANCE_DISABLE=1
+# Allow premium/blocked models despite blocklist: HERMES_GOVERNANCE_ALLOW_PREMIUM=1
+
+version: 1
+enabled: true
+
+# If the configured model ID contains any of these substrings, replace with default_model.
+blocked_model_substrings:
+  - opus
+  - o1-preview
+  - o3-
+
+# Must be non-empty for downgrade to apply (OpenRouter-style IDs work).
+default_model: "anthropic/claude-sonnet-4.5"
+
+# Hard cap on tool-calling iterations per user turn (same family as agent.max_turns).
+max_agent_turns: 60
+
+# Cap delegate_task child iterations (in addition to config delegation.max_iterations).
+delegation_max_iterations: 30
+
+# When true, omit .hermes.md / workspace BOOTSTRAP+AGENTS / SOUL from system prompt (saves tokens).
+skip_context_files: false

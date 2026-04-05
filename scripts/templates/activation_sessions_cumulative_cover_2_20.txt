@@ -4,7 +4,10 @@
 # Resolve POLICY_ROOT and WORKSPACE from HERMES_HOME/.hermes.md (absolute paths in real use).
 #
 # Operator: before sending each block, paste under **Operator carry-in** the previous session’s
-# closing **Outstanding tasks** + **Next session** (or **Post-activation**) lists so the new agent sees todos.
+# closing **Handoff** block — **A. Outstanding tasks** and **B. Next session** (or **B. Post-activation**) —
+# so the new agent sees copy-paste continuity.
+#
+# Agent (in pasted blocks): **Handoff** (A + B, numbered) before **Verification** is mandatory; skipping it is an incomplete session.
 #
 # Paste each block below as a single user message (cover + carry-in + task + handoff rules + verification).
 
@@ -16,6 +19,9 @@ We are continuing a **20-step procedural activation** of the agentic-company pol
 
 **This session = Session 2.** It **builds on** Session 1 by locking in **artifacts, archival memory, and the deployment pack constitution** so later sessions (security, token governance, org roles) have stable file/register contracts.
 
+
+**Activation protocol (non-optional):** After your main work, you **must** output **Handoff** *before* **Verification**. Inside **Handoff**, use **two** bold subsection titles on their own lines — **A. Outstanding tasks** and **B.** as specified below — each immediately followed by a **numbered** list (`1.`, `2.`, …). Do **not** fold A/B into a narrative summary or into **Verification**. The operator copies **Handoff** into the next chat’s **Operator carry-in**; write A and B so a **fresh-context** agent can execute B without reading this thread.
+
 **Operator carry-in (paste from Session 1 closing handoff — or write “None.”)**  
 
 (paste here: prior agent’s **A. Outstanding tasks**, **B. Next session** / summary bullets, and any critical notes)
@@ -24,11 +30,14 @@ We are continuing a **20-step procedural activation** of the agentic-company pol
 
 Read `POLICY_ROOT/core/governance/artifacts-and-archival-memory.md` and `POLICY_ROOT/core/agentic-company-deployment-pack.md` via tools; confirm `workspace/operations/` and archival layout; patch registers only if missing.
 
-**Handoff (required)** — After your main work, **before** Verification, include:
+**Handoff + Verification (mandatory order)**  
+**Incomplete session** if you skip a top-level **Handoff** heading, omit **A** or **B**, or replace numbered lists with a vague summary. Reply order: substantive work → **Handoff** (below) → **Verification**.
 
-**A. Outstanding tasks** — Numbered list of items still open (blockers, human-only steps, deferred work). If none: `1. None.`
+**Handoff**
 
-**B. Next session (Session 3)** — Numbered list of **executable** tasks for the **next** activation chat (specific `POLICY_ROOT/...` paths, `WORKSPACE/...` files to read or edit). Write so a fresh-context agent can run the list **without** reading this thread. Planned focus for Session 3: **security prompts + Chief Security Governor / audit posture** (`security-prompts.md`).
+**A. Outstanding tasks** — Numbered list (`1.`, `2.`, …): blockers, deferred work, human-only steps, risks, open register/policy gaps. If nothing remains: `1. None.`
+
+**B. Next session (Session 3)** — Numbered list of **executable** tasks for the **next** activation chat: concrete `POLICY_ROOT/...` and `WORKSPACE/...` paths, files to read or patch, register updates. The next agent has **no** thread history. Planned focus: **security prompts + Chief Security Governor / audit posture** (`POLICY_ROOT/core/security-prompts.md`).
 
 **Verification** — Then add **"Verification"** with: (1) absolute `HERMES_HOME` + profile name; (2) read `.hermes.md` and print policy root + workspace paths (one line each); (3) confirm `skip_context_files` is not disabling injection; list context files you read this session (`.hermes.md`, `WORKSPACE/BOOTSTRAP.md`, `WORKSPACE/AGENTS.md`, `SOUL.md`) with **verbatim first line or first heading** from disk for each read; (4) bullet list this session’s policy paths + one-line purpose; (5) three topic phrases from the handoff/workspace rules you are following (no full system prompt dump).
 
@@ -42,6 +51,9 @@ Read `POLICY_ROOT/core/governance/artifacts-and-archival-memory.md` and `POLICY_
 
 **This session = Session 3.** It **builds on** 1–2 by activating the **security layer** (Chief Security Governor posture, audit framing) using `security-prompts.md`, so token governance and org sessions later inherit a classified security baseline.
 
+
+**Activation protocol (non-optional):** After your main work, you **must** output **Handoff** *before* **Verification**. Inside **Handoff**, use **two** bold subsection titles on their own lines — **A. Outstanding tasks** and **B.** as specified below — each immediately followed by a **numbered** list (`1.`, `2.`, …). Do **not** fold A/B into a narrative summary or into **Verification**. The operator copies **Handoff** into the next chat’s **Operator carry-in**; write A and B so a **fresh-context** agent can execute B without reading this thread.
+
 **Operator carry-in (paste from Session 2 closing handoff — or write “None.”)**  
 
 (paste here)
@@ -50,13 +62,16 @@ Read `POLICY_ROOT/core/governance/artifacts-and-archival-memory.md` and `POLICY_
 
 Read `POLICY_ROOT/core/security-prompts.md` in chunks; run Chief Security Governor + audit posture for this runtime; summarize findings.
 
-**Handoff (required)** — After main work, **before** Verification:
+**Handoff + Verification (mandatory order)**  
+**Incomplete session** if you skip a top-level **Handoff** heading, omit **A** or **B**, or replace numbered lists with a vague summary. Reply order: substantive work → **Handoff** (below) → **Verification**.
 
-**A. Outstanding tasks** — Numbered; `1. None.` if nothing open.
+**Handoff**
 
-**B. Next session (Session 4)** — Numbered **executable** tasks for the next chat; planned focus: **chief orchestrator directive** (`chief-orchestrator-directive.md`).
+**A. Outstanding tasks** — Numbered list (`1.`, `2.`, …): blockers, deferred work, human-only steps, risks, open register/policy gaps. If nothing remains: `1. None.`
 
-**Verification** — Same five parts as Session 2 (HERMES_HOME, `.hermes.md` paths, context files + verbatim first lines, policy reads list, three pack topics — no full system prompt dump).
+**B. Next session (Session 4)** — Numbered **executable** tasks for the next chat (paths, register filenames, commands). Planned focus: **chief orchestrator directive** (`POLICY_ROOT/core/chief-orchestrator-directive.md`).
+
+**Verification** — Same five parts as Session 2: absolute `HERMES_HOME` + profile name; read `.hermes.md` and print policy root + workspace paths (one line each); confirm `skip_context_files` is not disabling injection; list context files you read this session (`.hermes.md`, `WORKSPACE/BOOTSTRAP.md`, `WORKSPACE/AGENTS.md`, `SOUL.md`) with **verbatim first line or first heading** from disk for each read; bullet this session’s policy paths + one-line purpose; three topic phrases from handoff/workspace rules (no full system prompt dump).
 
 ---END SESSION 3---
 
@@ -68,6 +83,9 @@ Read `POLICY_ROOT/core/security-prompts.md` in chunks; run Chief Security Govern
 
 **This session = Session 4.** It **builds on** prior work by fixing **orchestrator doctrine** (chief directive): org stance, which roles to register next, and how later “lean org” and token sessions will align.
 
+
+**Activation protocol (non-optional):** After your main work, you **must** output **Handoff** *before* **Verification**. Inside **Handoff**, use **two** bold subsection titles on their own lines — **A. Outstanding tasks** and **B.** as specified below — each immediately followed by a **numbered** list (`1.`, `2.`, …). Do **not** fold A/B into a narrative summary or into **Verification**. The operator copies **Handoff** into the next chat’s **Operator carry-in**; write A and B so a **fresh-context** agent can execute B without reading this thread.
+
 **Operator carry-in (paste from Session 3 closing handoff — or write “None.”)**  
 
 (paste here)
@@ -76,9 +94,16 @@ Read `POLICY_ROOT/core/security-prompts.md` in chunks; run Chief Security Govern
 
 Read `POLICY_ROOT/core/chief-orchestrator-directive.md` via tools; state org stance, initial roles to register, next step.
 
-**Handoff (required)** — **A. Outstanding tasks** — Numbered. **B. Next session (Session 5)** — Numbered executable tasks; planned focus: **token/model/tool/channel governance policy** (read-only summary).
+**Handoff + Verification (mandatory order)**  
+**Incomplete session** if you skip a top-level **Handoff** heading, omit **A** or **B**, or replace numbered lists with a vague summary. Reply order: substantive work → **Handoff** (below) → **Verification**.
 
-**Verification** — Same five parts as Session 2.
+**Handoff**
+
+**A. Outstanding tasks** — Numbered list (`1.`, `2.`, …): blockers, deferred work, human-only steps, risks, open register/policy gaps. If nothing remains: `1. None.`
+
+**B. Next session (Session 5)** — Numbered **executable** tasks; planned focus: **token/model/tool/channel governance policy** (read-only summary) — `POLICY_ROOT/core/governance/standards/token-model-tool-and-channel-governance-policy.md`.
+
+**Verification** — Same five parts as Session 2: absolute `HERMES_HOME` + profile name; read `.hermes.md` and print policy root + workspace paths (one line each); confirm `skip_context_files` is not disabling injection; list context files you read this session (`.hermes.md`, `WORKSPACE/BOOTSTRAP.md`, `WORKSPACE/AGENTS.md`, `SOUL.md`) with **verbatim first line or first heading** from disk for each read; bullet this session’s policy paths + one-line purpose; three topic phrases from handoff/workspace rules (no full system prompt dump).
 
 ---END SESSION 4---
 
@@ -90,6 +115,9 @@ Read `POLICY_ROOT/core/chief-orchestrator-directive.md` via tools; state org sta
 
 **This session = Session 5.** It **builds on** Session 4 by loading **token / model / tool / channel governance policy** (read-only summary of binding rules) before implementation in Session 6.
 
+
+**Activation protocol (non-optional):** After your main work, you **must** output **Handoff** *before* **Verification**. Inside **Handoff**, use **two** bold subsection titles on their own lines — **A. Outstanding tasks** and **B.** as specified below — each immediately followed by a **numbered** list (`1.`, `2.`, …). Do **not** fold A/B into a narrative summary or into **Verification**. The operator copies **Handoff** into the next chat’s **Operator carry-in**; write A and B so a **fresh-context** agent can execute B without reading this thread.
+
 **Operator carry-in (paste from Session 4 closing handoff — or write “None.”)**  
 
 (paste here)
@@ -98,9 +126,16 @@ Read `POLICY_ROOT/core/chief-orchestrator-directive.md` via tools; state org sta
 
 Read `POLICY_ROOT/core/governance/standards/token-model-tool-and-channel-governance-policy.md` via tools; summarize binding rules for this deployment.
 
-**Handoff (required)** — **A. Outstanding tasks** — Numbered. **B. Next session (Session 6)** — Numbered executable tasks; planned focus: **implement token governance** (`implement-token-model-and-tool-and-channel-governance-prompt.md`).
+**Handoff + Verification (mandatory order)**  
+**Incomplete session** if you skip a top-level **Handoff** heading, omit **A** or **B**, or replace numbered lists with a vague summary. Reply order: substantive work → **Handoff** (below) → **Verification**.
 
-**Verification** — Same five parts as Session 2.
+**Handoff**
+
+**A. Outstanding tasks** — Numbered list (`1.`, `2.`, …): blockers, deferred work, human-only steps, risks, open register/policy gaps. If nothing remains: `1. None.`
+
+**B. Next session (Session 6)** — Numbered **executable** tasks; planned focus: **implement token governance** — `POLICY_ROOT/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md` plus required `WORKSPACE/` / `WORKSPACE/operations/` artifacts.
+
+**Verification** — Same five parts as Session 2: absolute `HERMES_HOME` + profile name; read `.hermes.md` and print policy root + workspace paths (one line each); confirm `skip_context_files` is not disabling injection; list context files you read this session (`.hermes.md`, `WORKSPACE/BOOTSTRAP.md`, `WORKSPACE/AGENTS.md`, `SOUL.md`) with **verbatim first line or first heading** from disk for each read; bullet this session’s policy paths + one-line purpose; three topic phrases from handoff/workspace rules (no full system prompt dump).
 
 ---END SESSION 5---
 
@@ -110,7 +145,10 @@ Read `POLICY_ROOT/core/governance/standards/token-model-tool-and-channel-governa
 **Cover — phased activation (fresh context)**  
 **Sessions 1–5 complete:** including token governance **policy** summary. Empty thread — use disk and carry-in.
 
-**This session = Session 6.** It **builds on** Session 5 by **implementing** what that policy requires: registries/templates under `WORKSPACE/` and `WORKSPACE/operations/` only (per implement prompt).
+**This session = Session 6.** It **builds on** Session 5 by **implementing** what that policy requires: registries/templates under `WORKSPACE/` and `WORKSPACE/operations/` only (per implement prompt). You also **wire Hermes itself** to enforce caps: copy `scripts/templates/hermes_token_governance.runtime.example.yaml` to **`WORKSPACE/operations/hermes_token_governance.runtime.yaml`**, set `enabled: true`, and tune `default_model`, `blocked_model_substrings`, `max_agent_turns`, `delegation_max_iterations`, and (optionally) `skip_context_files`. From this file onward, every `AIAgent` start loads that YAML and applies it (unless `HERMES_TOKEN_GOVERNANCE_DISABLE=1`).
+
+
+**Activation protocol (non-optional):** After your main work, you **must** output **Handoff** *before* **Verification**. Inside **Handoff**, use **two** bold subsection titles on their own lines — **A. Outstanding tasks** and **B.** as specified below — each immediately followed by a **numbered** list (`1.`, `2.`, …). Do **not** fold A/B into a narrative summary or into **Verification**. The operator copies **Handoff** into the next chat’s **Operator carry-in**; write A and B so a **fresh-context** agent can execute B without reading this thread.
 
 **Operator carry-in (paste from Session 5 closing handoff — or write “None.”)**  
 
@@ -118,11 +156,20 @@ Read `POLICY_ROOT/core/governance/standards/token-model-tool-and-channel-governa
 
 **Session task**
 
-Read `POLICY_ROOT/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md` via tools; implement required registries/templates under `WORKSPACE/` and `WORKSPACE/operations/` only.
+1. Read `POLICY_ROOT/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md` via tools; implement required registries/templates under `WORKSPACE/` and `WORKSPACE/operations/` only.  
+2. **Runtime enforcement (required):** Install **`WORKSPACE/operations/hermes_token_governance.runtime.yaml`** from `scripts/templates/hermes_token_governance.runtime.example.yaml` in this repo checkout (adjust `default_model` / blocklist / caps to match your deployment and Session 5 summary). Set `enabled: true`. Confirm the file exists on disk at the path Hermes resolves under **`HERMES_HOME`** (profile-aware). After this, Hermes applies these caps on every agent run until disabled — this is how token governance stops being “paper only.”  
+3. Optionally restart gateway / CLI session so the next message uses the new caps; note any operator env overrides (`HERMES_GOVERNANCE_ALLOW_PREMIUM`, `HERMES_TOKEN_GOVERNANCE_DISABLE`) in **Handoff A** if used.
 
-**Handoff (required)** — **A. Outstanding tasks** — Numbered. **B. Next session (Session 7)** — Numbered executable tasks; planned focus: **minimal default deployment order** + ORG_REGISTRY / ORG_CHART vs Session 4.
+**Handoff + Verification (mandatory order)**  
+**Incomplete session** if you skip a top-level **Handoff** heading, omit **A** or **B**, or replace numbered lists with a vague summary. Reply order: substantive work → **Handoff** (below) → **Verification**.
 
-**Verification** — Same five parts as Session 2.
+**Handoff**
+
+**A. Outstanding tasks** — Numbered list (`1.`, `2.`, …): blockers, deferred work, human-only steps, risks, open register/policy gaps. If nothing remains: `1. None.`
+
+**B. Next session (Session 7)** — Numbered **executable** tasks; planned focus: **minimal default deployment order** and reconciling `ORG_REGISTRY` / `ORG_CHART` with Session 4 — `POLICY_ROOT/core/governance/role-prompts/minimal-default-deployment-order.md`. Assume **`WORKSPACE/operations/hermes_token_governance.runtime.yaml`** is present and `enabled: true` unless **Handoff A** says otherwise.
+
+**Verification** — Same five parts as Session 2: absolute `HERMES_HOME` + profile name; read `.hermes.md` and print policy root + workspace paths (one line each); confirm `skip_context_files` is not disabling injection; list context files you read this session (`.hermes.md`, `WORKSPACE/BOOTSTRAP.md`, `WORKSPACE/AGENTS.md`, `SOUL.md`) with **verbatim first line or first heading** from disk for each read; bullet this session’s policy paths + one-line purpose; three topic phrases from handoff/workspace rules (no full system prompt dump). **Also:** state the absolute path to `hermes_token_governance.runtime.yaml` and confirm `enabled:` / key caps (`max_agent_turns`, `default_model`) match what you deployed.
 
 ---END SESSION 6---
 
@@ -130,9 +177,12 @@ Read `POLICY_ROOT/core/governance/role-prompts/implement-token-model-and-tool-an
 ---BEGIN SESSION 7---
 
 **Cover — phased activation (fresh context)**  
-**Sessions 1–6 complete:** token governance implemented on disk. Fresh chat.
+**Sessions 1–6 complete:** token governance artifacts on disk **and** Hermes runtime enforcement via `workspace/operations/hermes_token_governance.runtime.yaml` (if Session 6 completed that step). Fresh chat.
 
 **This session = Session 7.** It **builds on** Sessions 4 and 6 by reconciling **minimal default deployment order** with orchestrator stance and **ORG_REGISTRY / ORG_CHART**.
+
+
+**Activation protocol (non-optional):** After your main work, you **must** output **Handoff** *before* **Verification**. Inside **Handoff**, use **two** bold subsection titles on their own lines — **A. Outstanding tasks** and **B.** as specified below — each immediately followed by a **numbered** list (`1.`, `2.`, …). Do **not** fold A/B into a narrative summary or into **Verification**. The operator copies **Handoff** into the next chat’s **Operator carry-in**; write A and B so a **fresh-context** agent can execute B without reading this thread.
 
 **Operator carry-in (paste from Session 6 closing handoff — or write “None.”)**  
 
@@ -142,9 +192,16 @@ Read `POLICY_ROOT/core/governance/role-prompts/implement-token-model-and-tool-an
 
 Read `POLICY_ROOT/core/governance/role-prompts/minimal-default-deployment-order.md` via tools; align `ORG_REGISTRY` / `ORG_CHART` with Session 4.
 
-**Handoff (required)** — **A. Outstanding tasks** — Numbered. **B. Next session (Session 8)** — Numbered executable tasks; planned focus: **org-mapper / HR** standard + controller.
+**Handoff + Verification (mandatory order)**  
+**Incomplete session** if you skip a top-level **Handoff** heading, omit **A** or **B**, or replace numbered lists with a vague summary. Reply order: substantive work → **Handoff** (below) → **Verification**.
 
-**Verification** — Same five parts as Session 2.
+**Handoff**
+
+**A. Outstanding tasks** — Numbered list (`1.`, `2.`, …): blockers, deferred work, human-only steps, risks, open register/policy gaps. If nothing remains: `1. None.`
+
+**B. Next session (Session 8)** — Numbered **executable** tasks; planned focus: **org-mapper / HR** standard + controller (`POLICY_ROOT/core/governance/standards/org-mapper-hr-policy.md` + role prompt).
+
+**Verification** — Same five parts as Session 2: absolute `HERMES_HOME` + profile name; read `.hermes.md` and print policy root + workspace paths (one line each); confirm `skip_context_files` is not disabling injection; list context files you read this session (`.hermes.md`, `WORKSPACE/BOOTSTRAP.md`, `WORKSPACE/AGENTS.md`, `SOUL.md`) with **verbatim first line or first heading** from disk for each read; bullet this session’s policy paths + one-line purpose; three topic phrases from handoff/workspace rules (no full system prompt dump).
 
 ---END SESSION 7---
 
@@ -156,6 +213,9 @@ Read `POLICY_ROOT/core/governance/role-prompts/minimal-default-deployment-order.
 
 **This session = Session 8.** It **builds on** org registers by applying **org-mapper / HR** standard + controller to operations files.
 
+
+**Activation protocol (non-optional):** After your main work, you **must** output **Handoff** *before* **Verification**. Inside **Handoff**, use **two** bold subsection titles on their own lines — **A. Outstanding tasks** and **B.** as specified below — each immediately followed by a **numbered** list (`1.`, `2.`, …). Do **not** fold A/B into a narrative summary or into **Verification**. The operator copies **Handoff** into the next chat’s **Operator carry-in**; write A and B so a **fresh-context** agent can execute B without reading this thread.
+
 **Operator carry-in (paste from Session 7 closing handoff — or write “None.”)**  
 
 (paste here)
@@ -164,9 +224,16 @@ Read `POLICY_ROOT/core/governance/role-prompts/minimal-default-deployment-order.
 
 Read `POLICY_ROOT/core/governance/standards/org-mapper-hr-policy.md` then `POLICY_ROOT/core/governance/role-prompts/org-mapper-hr-controller.md` via tools; apply to registers.
 
-**Handoff (required)** — **A. Outstanding tasks** — Numbered. **B. Next session (Session 9)** — Numbered executable tasks; planned focus: **agent lifecycle / org hygiene**.
+**Handoff + Verification (mandatory order)**  
+**Incomplete session** if you skip a top-level **Handoff** heading, omit **A** or **B**, or replace numbered lists with a vague summary. Reply order: substantive work → **Handoff** (below) → **Verification**.
 
-**Verification** — Same five parts as Session 2.
+**Handoff**
+
+**A. Outstanding tasks** — Numbered list (`1.`, `2.`, …): blockers, deferred work, human-only steps, risks, open register/policy gaps. If nothing remains: `1. None.`
+
+**B. Next session (Session 9)** — Numbered **executable** tasks; planned focus: **agent lifecycle / org hygiene** (standard + controller prompts).
+
+**Verification** — Same five parts as Session 2: absolute `HERMES_HOME` + profile name; read `.hermes.md` and print policy root + workspace paths (one line each); confirm `skip_context_files` is not disabling injection; list context files you read this session (`.hermes.md`, `WORKSPACE/BOOTSTRAP.md`, `WORKSPACE/AGENTS.md`, `SOUL.md`) with **verbatim first line or first heading** from disk for each read; bullet this session’s policy paths + one-line purpose; three topic phrases from handoff/workspace rules (no full system prompt dump).
 
 ---END SESSION 8---
 
@@ -178,6 +245,9 @@ Read `POLICY_ROOT/core/governance/standards/org-mapper-hr-policy.md` then `POLIC
 
 **This session = Session 9.** It **builds on** org structure by enforcing **agent lifecycle and org hygiene** (standards + controller).
 
+
+**Activation protocol (non-optional):** After your main work, you **must** output **Handoff** *before* **Verification**. Inside **Handoff**, use **two** bold subsection titles on their own lines — **A. Outstanding tasks** and **B.** as specified below — each immediately followed by a **numbered** list (`1.`, `2.`, …). Do **not** fold A/B into a narrative summary or into **Verification**. The operator copies **Handoff** into the next chat’s **Operator carry-in**; write A and B so a **fresh-context** agent can execute B without reading this thread.
+
 **Operator carry-in (paste from Session 8 closing handoff — or write “None.”)**  
 
 (paste here)
@@ -186,9 +256,16 @@ Read `POLICY_ROOT/core/governance/standards/org-mapper-hr-policy.md` then `POLIC
 
 Read `POLICY_ROOT/core/governance/standards/agent-lifecycle-org-hygiene-policy.md` then `POLICY_ROOT/core/governance/role-prompts/agent-lifecycle-org-hygiene-controller.md` via tools; apply.
 
-**Handoff (required)** — **A. Outstanding tasks** — Numbered. **B. Next session (Session 10)** — Numbered executable tasks; planned focus: **task state and evidence**.
+**Handoff + Verification (mandatory order)**  
+**Incomplete session** if you skip a top-level **Handoff** heading, omit **A** or **B**, or replace numbered lists with a vague summary. Reply order: substantive work → **Handoff** (below) → **Verification**.
 
-**Verification** — Same five parts as Session 2.
+**Handoff**
+
+**A. Outstanding tasks** — Numbered list (`1.`, `2.`, …): blockers, deferred work, human-only steps, risks, open register/policy gaps. If nothing remains: `1. None.`
+
+**B. Next session (Session 10)** — Numbered **executable** tasks; planned focus: **task state and evidence** (standard + enforcer).
+
+**Verification** — Same five parts as Session 2: absolute `HERMES_HOME` + profile name; read `.hermes.md` and print policy root + workspace paths (one line each); confirm `skip_context_files` is not disabling injection; list context files you read this session (`.hermes.md`, `WORKSPACE/BOOTSTRAP.md`, `WORKSPACE/AGENTS.md`, `SOUL.md`) with **verbatim first line or first heading** from disk for each read; bullet this session’s policy paths + one-line purpose; three topic phrases from handoff/workspace rules (no full system prompt dump).
 
 ---END SESSION 9---
 
@@ -200,6 +277,9 @@ Read `POLICY_ROOT/core/governance/standards/agent-lifecycle-org-hygiene-policy.m
 
 **This session = Session 10.** It **builds on** governance by applying **task state and evidence** rules (standard + enforcer role prompt).
 
+
+**Activation protocol (non-optional):** After your main work, you **must** output **Handoff** *before* **Verification**. Inside **Handoff**, use **two** bold subsection titles on their own lines — **A. Outstanding tasks** and **B.** as specified below — each immediately followed by a **numbered** list (`1.`, `2.`, …). Do **not** fold A/B into a narrative summary or into **Verification**. The operator copies **Handoff** into the next chat’s **Operator carry-in**; write A and B so a **fresh-context** agent can execute B without reading this thread.
+
 **Operator carry-in (paste from Session 9 closing handoff — or write “None.”)**  
 
 (paste here)
@@ -208,9 +288,16 @@ Read `POLICY_ROOT/core/governance/standards/agent-lifecycle-org-hygiene-policy.m
 
 Read `POLICY_ROOT/core/governance/standards/task-state-and-evidence-policy.md` then `POLICY_ROOT/core/governance/role-prompts/task-state-evidence-enforcer.md` via tools; apply.
 
-**Handoff (required)** — **A. Outstanding tasks** — Numbered. **B. Next session (Session 11)** — Numbered executable tasks; planned focus: **board review**.
+**Handoff + Verification (mandatory order)**  
+**Incomplete session** if you skip a top-level **Handoff** heading, omit **A** or **B**, or replace numbered lists with a vague summary. Reply order: substantive work → **Handoff** (below) → **Verification**.
 
-**Verification** — Same five parts as Session 2.
+**Handoff**
+
+**A. Outstanding tasks** — Numbered list (`1.`, `2.`, …): blockers, deferred work, human-only steps, risks, open register/policy gaps. If nothing remains: `1. None.`
+
+**B. Next session (Session 11)** — Numbered **executable** tasks; planned focus: **board of directors review** (standard + role prompt).
+
+**Verification** — Same five parts as Session 2: absolute `HERMES_HOME` + profile name; read `.hermes.md` and print policy root + workspace paths (one line each); confirm `skip_context_files` is not disabling injection; list context files you read this session (`.hermes.md`, `WORKSPACE/BOOTSTRAP.md`, `WORKSPACE/AGENTS.md`, `SOUL.md`) with **verbatim first line or first heading** from disk for each read; bullet this session’s policy paths + one-line purpose; three topic phrases from handoff/workspace rules (no full system prompt dump).
 
 ---END SESSION 10---
 
@@ -222,6 +309,9 @@ Read `POLICY_ROOT/core/governance/standards/task-state-and-evidence-policy.md` t
 
 **This session = Session 11.** It **builds on** prior registers by adding **board review** policy + role workflow.
 
+
+**Activation protocol (non-optional):** After your main work, you **must** output **Handoff** *before* **Verification**. Inside **Handoff**, use **two** bold subsection titles on their own lines — **A. Outstanding tasks** and **B.** as specified below — each immediately followed by a **numbered** list (`1.`, `2.`, …). Do **not** fold A/B into a narrative summary or into **Verification**. The operator copies **Handoff** into the next chat’s **Operator carry-in**; write A and B so a **fresh-context** agent can execute B without reading this thread.
+
 **Operator carry-in (paste from Session 10 closing handoff — or write “None.”)**  
 
 (paste here)
@@ -230,9 +320,16 @@ Read `POLICY_ROOT/core/governance/standards/task-state-and-evidence-policy.md` t
 
 Read `POLICY_ROOT/core/governance/standards/board-of-directors-review-policy.md` then `POLICY_ROOT/core/governance/role-prompts/board-of-directors-review.md` via tools; apply.
 
-**Handoff (required)** — **A. Outstanding tasks** — Numbered. **B. Next session (Session 12)** — Numbered executable tasks; planned focus: **channel architecture**.
+**Handoff + Verification (mandatory order)**  
+**Incomplete session** if you skip a top-level **Handoff** heading, omit **A** or **B**, or replace numbered lists with a vague summary. Reply order: substantive work → **Handoff** (below) → **Verification**.
 
-**Verification** — Same five parts as Session 2.
+**Handoff**
+
+**A. Outstanding tasks** — Numbered list (`1.`, `2.`, …): blockers, deferred work, human-only steps, risks, open register/policy gaps. If nothing remains: `1. None.`
+
+**B. Next session (Session 12)** — Numbered **executable** tasks; planned focus: **channel architecture** (standard + planner).
+
+**Verification** — Same five parts as Session 2: absolute `HERMES_HOME` + profile name; read `.hermes.md` and print policy root + workspace paths (one line each); confirm `skip_context_files` is not disabling injection; list context files you read this session (`.hermes.md`, `WORKSPACE/BOOTSTRAP.md`, `WORKSPACE/AGENTS.md`, `SOUL.md`) with **verbatim first line or first heading** from disk for each read; bullet this session’s policy paths + one-line purpose; three topic phrases from handoff/workspace rules (no full system prompt dump).
 
 ---END SESSION 11---
 
@@ -244,6 +341,9 @@ Read `POLICY_ROOT/core/governance/standards/board-of-directors-review-policy.md`
 
 **This session = Session 12.** It **builds on** org + comms governance by planning **channel architecture** (standard + planner prompt).
 
+
+**Activation protocol (non-optional):** After your main work, you **must** output **Handoff** *before* **Verification**. Inside **Handoff**, use **two** bold subsection titles on their own lines — **A. Outstanding tasks** and **B.** as specified below — each immediately followed by a **numbered** list (`1.`, `2.`, …). Do **not** fold A/B into a narrative summary or into **Verification**. The operator copies **Handoff** into the next chat’s **Operator carry-in**; write A and B so a **fresh-context** agent can execute B without reading this thread.
+
 **Operator carry-in (paste from Session 11 closing handoff — or write “None.”)**  
 
 (paste here)
@@ -252,9 +352,16 @@ Read `POLICY_ROOT/core/governance/standards/board-of-directors-review-policy.md`
 
 Read `POLICY_ROOT/core/governance/standards/channel-architecture-policy.md` then `POLICY_ROOT/core/governance/role-prompts/future-channel-architecture-planner.md` via tools; apply.
 
-**Handoff (required)** — **A. Outstanding tasks** — Numbered. **B. Next session (Session 13)** — Numbered executable tasks; planned focus: **client deployment** intake.
+**Handoff + Verification (mandatory order)**  
+**Incomplete session** if you skip a top-level **Handoff** heading, omit **A** or **B**, or replace numbered lists with a vague summary. Reply order: substantive work → **Handoff** (below) → **Verification**.
 
-**Verification** — Same five parts as Session 2.
+**Handoff**
+
+**A. Outstanding tasks** — Numbered list (`1.`, `2.`, …): blockers, deferred work, human-only steps, risks, open register/policy gaps. If nothing remains: `1. None.`
+
+**B. Next session (Session 13)** — Numbered **executable** tasks; planned focus: **client deployment** intake (standard + template).
+
+**Verification** — Same five parts as Session 2: absolute `HERMES_HOME` + profile name; read `.hermes.md` and print policy root + workspace paths (one line each); confirm `skip_context_files` is not disabling injection; list context files you read this session (`.hermes.md`, `WORKSPACE/BOOTSTRAP.md`, `WORKSPACE/AGENTS.md`, `SOUL.md`) with **verbatim first line or first heading** from disk for each read; bullet this session’s policy paths + one-line purpose; three topic phrases from handoff/workspace rules (no full system prompt dump).
 
 ---END SESSION 12---
 
@@ -266,6 +373,9 @@ Read `POLICY_ROOT/core/governance/standards/channel-architecture-policy.md` then
 
 **This session = Session 13.** It **builds on** the stack by applying **client deployment** intake (standard + template).
 
+
+**Activation protocol (non-optional):** After your main work, you **must** output **Handoff** *before* **Verification**. Inside **Handoff**, use **two** bold subsection titles on their own lines — **A. Outstanding tasks** and **B.** as specified below — each immediately followed by a **numbered** list (`1.`, `2.`, …). Do **not** fold A/B into a narrative summary or into **Verification**. The operator copies **Handoff** into the next chat’s **Operator carry-in**; write A and B so a **fresh-context** agent can execute B without reading this thread.
+
 **Operator carry-in (paste from Session 12 closing handoff — or write “None.”)**  
 
 (paste here)
@@ -274,9 +384,16 @@ Read `POLICY_ROOT/core/governance/standards/channel-architecture-policy.md` then
 
 Read `POLICY_ROOT/core/governance/standards/client-deployment-policy.md` then `POLICY_ROOT/core/governance/role-prompts/client-intake-deployment-template.md` via tools; apply.
 
-**Handoff (required)** — **A. Outstanding tasks** — Numbered. **B. Next session (Session 14)** — Numbered executable tasks; planned focus: **agentic-company-template** + optional playbooks.
+**Handoff + Verification (mandatory order)**  
+**Incomplete session** if you skip a top-level **Handoff** heading, omit **A** or **B**, or replace numbered lists with a vague summary. Reply order: substantive work → **Handoff** (below) → **Verification**.
 
-**Verification** — Same five parts as Session 2.
+**Handoff**
+
+**A. Outstanding tasks** — Numbered list (`1.`, `2.`, …): blockers, deferred work, human-only steps, risks, open register/policy gaps. If nothing remains: `1. None.`
+
+**B. Next session (Session 14)** — Numbered **executable** tasks; planned focus: **agentic-company-template** and optional **markdown playbooks**.
+
+**Verification** — Same five parts as Session 2: absolute `HERMES_HOME` + profile name; read `.hermes.md` and print policy root + workspace paths (one line each); confirm `skip_context_files` is not disabling injection; list context files you read this session (`.hermes.md`, `WORKSPACE/BOOTSTRAP.md`, `WORKSPACE/AGENTS.md`, `SOUL.md`) with **verbatim first line or first heading** from disk for each read; bullet this session’s policy paths + one-line purpose; three topic phrases from handoff/workspace rules (no full system prompt dump).
 
 ---END SESSION 13---
 
@@ -288,6 +405,9 @@ Read `POLICY_ROOT/core/governance/standards/client-deployment-policy.md` then `P
 
 **This session = Session 14.** It **builds on** the company template layer: **agentic-company-template** and optional **markdown playbooks** under workspace rules.
 
+
+**Activation protocol (non-optional):** After your main work, you **must** output **Handoff** *before* **Verification**. Inside **Handoff**, use **two** bold subsection titles on their own lines — **A. Outstanding tasks** and **B.** as specified below — each immediately followed by a **numbered** list (`1.`, `2.`, …). Do **not** fold A/B into a narrative summary or into **Verification**. The operator copies **Handoff** into the next chat’s **Operator carry-in**; write A and B so a **fresh-context** agent can execute B without reading this thread.
+
 **Operator carry-in (paste from Session 13 closing handoff — or write “None.”)**  
 
 (paste here)
@@ -296,9 +416,16 @@ Read `POLICY_ROOT/core/governance/standards/client-deployment-policy.md` then `P
 
 Read `POLICY_ROOT/core/governance/standards/agentic-company-template.md` via tools; if playbooks needed, read `POLICY_ROOT/core/governance/role-prompts/markdown-playbook-generator.md` and generate under workspace rules.
 
-**Handoff (required)** — **A. Outstanding tasks** — Numbered. **B. Next session (Session 15)** — Numbered executable tasks; planned focus: **functional director** (per function; repeat Session 15 per director if needed).
+**Handoff + Verification (mandatory order)**  
+**Incomplete session** if you skip a top-level **Handoff** heading, omit **A** or **B**, or replace numbered lists with a vague summary. Reply order: substantive work → **Handoff** (below) → **Verification**.
 
-**Verification** — Same five parts as Session 2.
+**Handoff**
+
+**A. Outstanding tasks** — Numbered list (`1.`, `2.`, …): blockers, deferred work, human-only steps, risks, open register/policy gaps. If nothing remains: `1. None.`
+
+**B. Next session (Session 15)** — Numbered **executable** tasks; planned focus: **functional director** (per function; repeat Session 15 per director if needed).
+
+**Verification** — Same five parts as Session 2: absolute `HERMES_HOME` + profile name; read `.hermes.md` and print policy root + workspace paths (one line each); confirm `skip_context_files` is not disabling injection; list context files you read this session (`.hermes.md`, `WORKSPACE/BOOTSTRAP.md`, `WORKSPACE/AGENTS.md`, `SOUL.md`) with **verbatim first line or first heading** from disk for each read; bullet this session’s policy paths + one-line purpose; three topic phrases from handoff/workspace rules (no full system prompt dump).
 
 ---END SESSION 14---
 
@@ -310,6 +437,9 @@ Read `POLICY_ROOT/core/governance/standards/agentic-company-template.md` via too
 
 **This session = Session 15.** It **builds on** ORG_CHART / registers by instantiating a **functional director** (substitute the function name in the template).
 
+
+**Activation protocol (non-optional):** After your main work, you **must** output **Handoff** *before* **Verification**. Inside **Handoff**, use **two** bold subsection titles on their own lines — **A. Outstanding tasks** and **B.** as specified below — each immediately followed by a **numbered** list (`1.`, `2.`, …). Do **not** fold A/B into a narrative summary or into **Verification**. The operator copies **Handoff** into the next chat’s **Operator carry-in**; write A and B so a **fresh-context** agent can execute B without reading this thread.
+
 **Operator carry-in (paste from Session 14 or prior Session 15 closing handoff — or write “None.”)**  
 
 (paste here)
@@ -318,9 +448,16 @@ Read `POLICY_ROOT/core/governance/standards/agentic-company-template.md` via too
 
 (Per director function) Read `POLICY_ROOT/core/governance/standards/functional-director-policy-template.md` then `POLICY_ROOT/core/governance/role-prompts/functional-director-template.md`; substitute function name; update registers.
 
-**Handoff (required)** — **A. Outstanding tasks** — Numbered. **B. Next session** — If more directors remain: number executable tasks for **another Session 15** (name the function). If directors are done: **Next session (Session 16)** — executable tasks for **project lead** (name project slug).
+**Handoff + Verification (mandatory order)**  
+**Incomplete session** if you skip a top-level **Handoff** heading, omit **A** or **B**, or replace numbered lists with a vague summary. Reply order: substantive work → **Handoff** (below) → **Verification**.
 
-**Verification** — Same five parts as Session 2.
+**Handoff**
+
+**A. Outstanding tasks** — Numbered list (`1.`, `2.`, …): blockers, deferred work, human-only steps, risks, open register/policy gaps. If nothing remains: `1. None.`
+
+**B. Next session** — Numbered list. If more directors remain: frame **B** as **another Session 15** and name the function + concrete template paths. If directors are done: use **B. Next session (Session 16)** with **executable** project-lead tasks (name the project slug and template paths).
+
+**Verification** — Same five parts as Session 2: absolute `HERMES_HOME` + profile name; read `.hermes.md` and print policy root + workspace paths (one line each); confirm `skip_context_files` is not disabling injection; list context files you read this session (`.hermes.md`, `WORKSPACE/BOOTSTRAP.md`, `WORKSPACE/AGENTS.md`, `SOUL.md`) with **verbatim first line or first heading** from disk for each read; bullet this session’s policy paths + one-line purpose; three topic phrases from handoff/workspace rules (no full system prompt dump).
 
 ---END SESSION 15---
 
@@ -332,6 +469,9 @@ Read `POLICY_ROOT/core/governance/standards/agentic-company-template.md` via too
 
 **This session = Session 16.** It **builds on** org structure by defining a **project lead** for a concrete project slug.
 
+
+**Activation protocol (non-optional):** After your main work, you **must** output **Handoff** *before* **Verification**. Inside **Handoff**, use **two** bold subsection titles on their own lines — **A. Outstanding tasks** and **B.** as specified below — each immediately followed by a **numbered** list (`1.`, `2.`, …). Do **not** fold A/B into a narrative summary or into **Verification**. The operator copies **Handoff** into the next chat’s **Operator carry-in**; write A and B so a **fresh-context** agent can execute B without reading this thread.
+
 **Operator carry-in (paste from Session 15 or prior Session 16 closing handoff — or write “None.”)**  
 
 (paste here)
@@ -340,9 +480,16 @@ Read `POLICY_ROOT/core/governance/standards/agentic-company-template.md` via too
 
 (Per real project) Read `POLICY_ROOT/core/governance/standards/project-lead-policy-template.md` then `POLICY_ROOT/core/governance/role-prompts/project-lead-template.md`; apply for project slug.
 
-**Handoff (required)** — **A. Outstanding tasks** — Numbered. **B. Next session** — If more projects: executable tasks for **another Session 16**. Else if supervisor needed: **Session 17**; else skip to **Session 18** or **19** and say so explicitly in numbered steps.
+**Handoff + Verification (mandatory order)**  
+**Incomplete session** if you skip a top-level **Handoff** heading, omit **A** or **B**, or replace numbered lists with a vague summary. Reply order: substantive work → **Handoff** (below) → **Verification**.
 
-**Verification** — Same five parts as Session 2.
+**Handoff**
+
+**A. Outstanding tasks** — Numbered list (`1.`, `2.`, …): blockers, deferred work, human-only steps, risks, open register/policy gaps. If nothing remains: `1. None.`
+
+**B. Next session** — Numbered list. If more projects: **another Session 16** with slug + paths. Else if supervisor needed: **Session 17** steps; else skip to **Session 18** or **19** with explicit numbered routing and paths.
+
+**Verification** — Same five parts as Session 2: absolute `HERMES_HOME` + profile name; read `.hermes.md` and print policy root + workspace paths (one line each); confirm `skip_context_files` is not disabling injection; list context files you read this session (`.hermes.md`, `WORKSPACE/BOOTSTRAP.md`, `WORKSPACE/AGENTS.md`, `SOUL.md`) with **verbatim first line or first heading** from disk for each read; bullet this session’s policy paths + one-line purpose; three topic phrases from handoff/workspace rules (no full system prompt dump).
 
 ---END SESSION 16---
 
@@ -354,6 +501,9 @@ Read `POLICY_ROOT/core/governance/standards/agentic-company-template.md` via too
 
 **This session = Session 17.** It **builds on** project structure by adding a **supervisor** layer where justified.
 
+
+**Activation protocol (non-optional):** After your main work, you **must** output **Handoff** *before* **Verification**. Inside **Handoff**, use **two** bold subsection titles on their own lines — **A. Outstanding tasks** and **B.** as specified below — each immediately followed by a **numbered** list (`1.`, `2.`, …). Do **not** fold A/B into a narrative summary or into **Verification**. The operator copies **Handoff** into the next chat’s **Operator carry-in**; write A and B so a **fresh-context** agent can execute B without reading this thread.
+
 **Operator carry-in (paste from Session 16 closing handoff — or write “None.”)**  
 
 (paste here)
@@ -362,9 +512,16 @@ Read `POLICY_ROOT/core/governance/standards/agentic-company-template.md` via too
 
 (If needed) Read `POLICY_ROOT/core/governance/standards/supervisor-policy-template.md` then `POLICY_ROOT/core/governance/role-prompts/supervisor-template.md`; apply.
 
-**Handoff (required)** — **A. Outstanding tasks** — Numbered. **B. Next session (Session 18)** — Numbered executable tasks if workers needed; else **Session 19** (runtime pack / BOOTSTRAP).
+**Handoff + Verification (mandatory order)**  
+**Incomplete session** if you skip a top-level **Handoff** heading, omit **A** or **B**, or replace numbered lists with a vague summary. Reply order: substantive work → **Handoff** (below) → **Verification**.
 
-**Verification** — Same five parts as Session 2.
+**Handoff**
+
+**A. Outstanding tasks** — Numbered list (`1.`, `2.`, …): blockers, deferred work, human-only steps, risks, open register/policy gaps. If nothing remains: `1. None.`
+
+**B. Next session (Session 18)** — Numbered **executable** tasks if worker/specialist roles are needed; otherwise numbered steps jumping to **Session 19** (runtime pack / `WORKSPACE/BOOTSTRAP.md`) and say why 18 is skipped.
+
+**Verification** — Same five parts as Session 2: absolute `HERMES_HOME` + profile name; read `.hermes.md` and print policy root + workspace paths (one line each); confirm `skip_context_files` is not disabling injection; list context files you read this session (`.hermes.md`, `WORKSPACE/BOOTSTRAP.md`, `WORKSPACE/AGENTS.md`, `SOUL.md`) with **verbatim first line or first heading** from disk for each read; bullet this session’s policy paths + one-line purpose; three topic phrases from handoff/workspace rules (no full system prompt dump).
 
 ---END SESSION 17---
 
@@ -376,6 +533,9 @@ Read `POLICY_ROOT/core/governance/standards/agentic-company-template.md` via too
 
 **This session = Session 18.** It **builds on** project/supervisor structure by applying **worker/specialist** templates.
 
+
+**Activation protocol (non-optional):** After your main work, you **must** output **Handoff** *before* **Verification**. Inside **Handoff**, use **two** bold subsection titles on their own lines — **A. Outstanding tasks** and **B.** as specified below — each immediately followed by a **numbered** list (`1.`, `2.`, …). Do **not** fold A/B into a narrative summary or into **Verification**. The operator copies **Handoff** into the next chat’s **Operator carry-in**; write A and B so a **fresh-context** agent can execute B without reading this thread.
+
 **Operator carry-in (paste from Session 17 closing handoff — or write “None.”)**  
 
 (paste here)
@@ -384,9 +544,16 @@ Read `POLICY_ROOT/core/governance/standards/agentic-company-template.md` via too
 
 (If delegating) Read `POLICY_ROOT/core/governance/standards/worker-specialist-policy-template.md` then `POLICY_ROOT/core/governance/role-prompts/worker-specialist-template.md`; apply.
 
-**Handoff (required)** — **A. Outstanding tasks** — Numbered. **B. Next session (Session 19)** — Numbered executable tasks; planned focus: **WORKSPACE/BOOTSTRAP.md** + USER/IDENTITY/TOOLS/MEMORY.
+**Handoff + Verification (mandatory order)**  
+**Incomplete session** if you skip a top-level **Handoff** heading, omit **A** or **B**, or replace numbered lists with a vague summary. Reply order: substantive work → **Handoff** (below) → **Verification**.
 
-**Verification** — Same five parts as Session 2.
+**Handoff**
+
+**A. Outstanding tasks** — Numbered list (`1.`, `2.`, …): blockers, deferred work, human-only steps, risks, open register/policy gaps. If nothing remains: `1. None.`
+
+**B. Next session (Session 19)** — Numbered **executable** tasks; planned focus: **`WORKSPACE/BOOTSTRAP.md`** plus `USER.md` / `IDENTITY.md` / `TOOLS.md` / `MEMORY.md`.
+
+**Verification** — Same five parts as Session 2: absolute `HERMES_HOME` + profile name; read `.hermes.md` and print policy root + workspace paths (one line each); confirm `skip_context_files` is not disabling injection; list context files you read this session (`.hermes.md`, `WORKSPACE/BOOTSTRAP.md`, `WORKSPACE/AGENTS.md`, `SOUL.md`) with **verbatim first line or first heading** from disk for each read; bullet this session’s policy paths + one-line purpose; three topic phrases from handoff/workspace rules (no full system prompt dump).
 
 ---END SESSION 18---
 
@@ -398,6 +565,9 @@ Read `POLICY_ROOT/core/governance/standards/agentic-company-template.md` via too
 
 **This session = Session 19.** It **builds on** everything prior by **customizing the runtime agent markdown pack** at `WORKSPACE/` (identity, tools, memory, user-facing files) per `BOOTSTRAP.md`.
 
+
+**Activation protocol (non-optional):** After your main work, you **must** output **Handoff** *before* **Verification**. Inside **Handoff**, use **two** bold subsection titles on their own lines — **A. Outstanding tasks** and **B.** as specified below — each immediately followed by a **numbered** list (`1.`, `2.`, …). Do **not** fold A/B into a narrative summary or into **Verification**. The operator copies **Handoff** into the next chat’s **Operator carry-in**; write A and B so a **fresh-context** agent can execute B without reading this thread.
+
 **Operator carry-in (paste from Session 18 closing handoff — or write “None.”)**  
 
 (paste here)
@@ -406,9 +576,16 @@ Read `POLICY_ROOT/core/governance/standards/agentic-company-template.md` via too
 
 Follow `WORKSPACE/BOOTSTRAP.md` checklist; edit `WORKSPACE/USER.md`, `IDENTITY.md`, `TOOLS.md`, `MEMORY.md` as needed.
 
-**Handoff (required)** — **A. Outstanding tasks** — Numbered. **B. Next session (Session 20)** — Numbered executable tasks; planned focus: **gateway-watchdog.md** + production messaging checks.
+**Handoff + Verification (mandatory order)**  
+**Incomplete session** if you skip a top-level **Handoff** heading, omit **A** or **B**, or replace numbered lists with a vague summary. Reply order: substantive work → **Handoff** (below) → **Verification**.
 
-**Verification** — Same five parts as Session 2.
+**Handoff**
+
+**A. Outstanding tasks** — Numbered list (`1.`, `2.`, …): blockers, deferred work, human-only steps, risks, open register/policy gaps. If nothing remains: `1. None.`
+
+**B. Next session (Session 20)** — Numbered **executable** tasks; planned focus: **gateway watchdog** + production messaging alignment — `POLICY_ROOT/core/gateway-watchdog.md`.
+
+**Verification** — Same five parts as Session 2: absolute `HERMES_HOME` + profile name; read `.hermes.md` and print policy root + workspace paths (one line each); confirm `skip_context_files` is not disabling injection; list context files you read this session (`.hermes.md`, `WORKSPACE/BOOTSTRAP.md`, `WORKSPACE/AGENTS.md`, `SOUL.md`) with **verbatim first line or first heading** from disk for each read; bullet this session’s policy paths + one-line purpose; three topic phrases from handoff/workspace rules (no full system prompt dump).
 
 ---END SESSION 19---
 
@@ -420,6 +597,9 @@ Follow `WORKSPACE/BOOTSTRAP.md` checklist; edit `WORKSPACE/USER.md`, `IDENTITY.m
 
 **This session = Session 20.** It **builds on** the full deployment by aligning **gateway watchdog** practice with what the operator runs on the VPS (`watchdog-check`, systemd, scripts).
 
+
+**Activation protocol (non-optional):** After your main work, you **must** output **Handoff** *before* **Verification**. Inside **Handoff**, use **two** bold subsection titles on their own lines — **A. Outstanding tasks** and **B.** as specified below — each immediately followed by a **numbered** list (`1.`, `2.`, …). Do **not** fold A/B into a narrative summary or into **Verification**. The operator copies **Handoff** into the next chat’s **Operator carry-in**; write A and B so a **fresh-context** agent can execute B without reading this thread.
+
 **Operator carry-in (paste from Session 19 closing handoff — or write “None.”)**  
 
 (paste here)
@@ -428,8 +608,15 @@ Follow `WORKSPACE/BOOTSTRAP.md` checklist; edit `WORKSPACE/USER.md`, `IDENTITY.m
 
 Read `POLICY_ROOT/core/gateway-watchdog.md`; confirm `hermes gateway watchdog-check` and external watchdog/systemd scripts match production messaging.
 
-**Handoff (required)** — **A. Outstanding tasks** — Numbered (open ops items, incidents, config debt). **B. Post-activation (no Session 21)** — Numbered **ongoing** tasks (monitoring, token rotation, gateway upgrades). State clearly: **numbered activation sequence complete.**
+**Handoff + Verification (mandatory order)**  
+**Incomplete session** if you skip a top-level **Handoff** heading, omit **A** or **B**, or replace numbered lists with a vague summary. Reply order: substantive work → **Handoff** (below) → **Verification**.
 
-**Verification** — Same five parts as Session 2.
+**Handoff**
+
+**A. Outstanding tasks** — Numbered list (`1.`, `2.`, …): blockers, deferred work, human-only steps, risks, open register/policy gaps. If nothing remains: `1. None.`
+
+**B. Post-activation (no Session 21)** — Numbered **ongoing** operational tasks (monitoring, token rotation, gateway upgrades, etc.). State clearly: **numbered activation sequence complete.**
+
+**Verification** — Same five parts as Session 2: absolute `HERMES_HOME` + profile name; read `.hermes.md` and print policy root + workspace paths (one line each); confirm `skip_context_files` is not disabling injection; list context files you read this session (`.hermes.md`, `WORKSPACE/BOOTSTRAP.md`, `WORKSPACE/AGENTS.md`, `SOUL.md`) with **verbatim first line or first heading** from disk for each read; bullet this session’s policy paths + one-line purpose; three topic phrases from handoff/workspace rules (no full system prompt dump).
 
 ---END SESSION 20---

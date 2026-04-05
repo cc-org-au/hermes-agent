@@ -434,6 +434,14 @@ def delegate_task(
     cfg = _load_config()
     default_max_iter = cfg.get("max_iterations", DEFAULT_MAX_ITERATIONS)
     effective_max_iter = max_iterations or default_max_iter
+    tg_cap = getattr(parent_agent, "_token_governance_delegation_max", None)
+    if tg_cap is not None:
+        try:
+            tg_i = int(tg_cap)
+            if tg_i > 0:
+                effective_max_iter = min(effective_max_iter, tg_i)
+        except (TypeError, ValueError):
+            pass
 
     # Resolve delegation credentials (provider:model pair).
     # When delegation.provider is configured, this resolves the full credential

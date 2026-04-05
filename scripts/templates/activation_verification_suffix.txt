@@ -3,6 +3,8 @@
 
 ---BEGIN VERIFICATION (append to each session)---
 
+**Phased activation:** If this chat is part of the 20-session activation sequence, you must already have output **Handoff** ( **A. Outstanding tasks** + **B.** next-session or post-activation steps, both numbered ) **above** this section. **Verification** comes **after** **Handoff**, never instead of it.
+
 Before you finish your reply, add a section **"Verification"** with:
 
 1. **HERMES_HOME** — Absolute path and active profile name (e.g. chief-orchestrator).
