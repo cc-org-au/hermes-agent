@@ -178,6 +178,7 @@ def load_cli_config() -> Dict[str, Any]:
         },
         "agent": {
             "max_turns": 90,  # Default max tool-calling iterations (shared with subagents)
+            "skip_context_files": False,  # When true, omit .hermes.md / workspace pack / SOUL from system prompt
             "verbose": False,
             "system_prompt": "",
             "prefill_messages_file": "",
@@ -1231,6 +1232,17 @@ class HermesCLI:
             self.max_turns = int(os.getenv("HERMES_MAX_ITERATIONS"))
         else:
             self.max_turns = 90
+
+        _scf = CLI_CONFIG["agent"].get("skip_context_files", False)
+        if isinstance(_scf, bool):
+            self.skip_context_files = _scf
+        else:
+            self.skip_context_files = str(_scf).strip().lower() in ("1", "true", "yes", "on")
+        _env_scf = os.getenv("HERMES_SKIP_CONTEXT_FILES", "").strip().lower()
+        if _env_scf in ("1", "true", "yes", "on"):
+            self.skip_context_files = True
+        elif _env_scf in ("0", "false", "no", "off"):
+            self.skip_context_files = False
         
         # Parse and validate toolsets
         self.enabled_toolsets = toolsets
@@ -2235,6 +2247,7 @@ class HermesCLI:
                 checkpoints_enabled=self.checkpoints_enabled,
                 checkpoint_max_snapshots=self.checkpoint_max_snapshots,
                 pass_session_id=self.pass_session_id,
+                skip_context_files=self.skip_context_files,
                 tool_progress_callback=self._on_tool_progress,
                 tool_start_callback=self._on_tool_start if self._inline_diffs_enabled else None,
                 tool_complete_callback=self._on_tool_complete if self._inline_diffs_enabled else None,
@@ -4255,6 +4268,7 @@ class HermesCLI:
                     provider_require_parameters=self._provider_require_params,
                     provider_data_collection=self._provider_data_collection,
                     fallback_model=self._fallback_model,
+                    skip_context_files=self.skip_context_files,
                 )
                 # Silence raw spinner; route thinking through TUI widget when no foreground agent is active.
                 bg_agent._print_fn = lambda *_a, **_kw: None

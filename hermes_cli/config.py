@@ -205,6 +205,12 @@ DEFAULT_CONFIG = {
     "toolsets": ["hermes-cli"],
     "agent": {
         "max_turns": 90,
+        # When true, do not inject HERMES_HOME/.hermes.md, workspace BOOTSTRAP/AGENTS,
+        # cwd AGENTS.md / .hermes.md chain, or SOUL.md into the system prompt (see
+        # run_agent.AIAgent / build_context_files_prompt). Use when policies live on
+        # disk and are loaded via tools, or after a bootstrap session — reduces tokens.
+        # Override anytime with env HERMES_SKIP_CONTEXT_FILES=1|0.
+        "skip_context_files": False,
         # Tool-use enforcement: injects system prompt guidance that tells the
         # model to actually call tools instead of describing intended actions.
         # Values: "auto" (default — applies to gpt/codex models), true/false
@@ -526,7 +532,7 @@ DEFAULT_CONFIG = {
     },
 
     # Config schema version - bump this when adding new required fields
-    "_config_version": 13,
+    "_config_version": 14,
 }
 
 # =============================================================================

@@ -352,6 +352,27 @@ def _platform_config_key(platform: "Platform") -> str:
     return "cli" if platform == Platform.LOCAL else platform.value
 
 
+def _gateway_skip_context_files() -> bool:
+    """Whether gateway AIAgent instances should omit governance/workspace context injection.
+
+    Controlled by env ``HERMES_SKIP_CONTEXT_FILES`` (1/true/yes/on or 0/false/no/off)
+    or ``agent.skip_context_files`` in config.yaml (via :func:`load_config`).
+    """
+    env = os.getenv("HERMES_SKIP_CONTEXT_FILES", "").strip().lower()
+    if env in ("1", "true", "yes", "on"):
+        return True
+    if env in ("0", "false", "no", "off"):
+        return False
+    try:
+        cfg = _load_gateway_config()
+        v = (cfg.get("agent") or {}).get("skip_context_files", False)
+        if isinstance(v, bool):
+            return v
+        return str(v).strip().lower() in ("1", "true", "yes", "on")
+    except Exception:
+        return False
+
+
 def _load_gateway_config() -> dict:
     """Load merged Hermes config (defaults + ~/.hermes/config.yaml).
 
@@ -608,6 +629,7 @@ class GatewayRunner:
                 max_iterations=8,
                 quiet_mode=True,
                 skip_memory=True,  # Flush agent — no memory provider
+                skip_context_files=True,
                 enabled_toolsets=["memory", "skills"],
                 session_id=old_session_id,
             )
@@ -2353,6 +2375,7 @@ class GatewayRunner:
                                     model=_hyg_model,
                                     max_iterations=4,
                                     quiet_mode=True,
+                                    skip_context_files=True,
                                     enabled_toolsets=["memory"],
                                     session_id=session_entry.session_id,
                                 )
@@ -3934,6 +3957,7 @@ class GatewayRunner:
                     platform=platform_key,
                     session_db=self._session_db,
                     fallback_model=self._fallback_model,
+                    skip_context_files=_gateway_skip_context_files(),
                 )
 
                 return agent.run_conversation(
@@ -4355,6 +4379,7 @@ class GatewayRunner:
                 model=model,
                 max_iterations=4,
                 quiet_mode=True,
+                skip_context_files=True,
                 enabled_toolsets=["memory"],
                 session_id=session_entry.session_id,
             )
@@ -5233,6 +5258,7 @@ class GatewayRunner:
         runtime: dict,
         enabled_toolsets: list,
         ephemeral_prompt: str,
+        skip_context_files: bool,
     ) -> str:
         """Compute a stable string key from agent config values.
 
@@ -5261,6 +5287,7 @@ class GatewayRunner:
                 # reasoning_config excluded — it's set per-message on the
                 # cached agent and doesn't affect system prompt or tools.
                 ephemeral_prompt or "",
+                skip_context_files,
             ],
             sort_keys=True,
             default=str,
@@ -5614,11 +5641,13 @@ class GatewayRunner:
             # Check agent cache — reuse the AIAgent from the previous message
             # in this session to preserve the frozen system prompt and tool
             # schemas for prompt cache hits.
+            _skip_ctx = _gateway_skip_context_files()
             _sig = self._agent_config_signature(
                 turn_route["model"],
                 turn_route["runtime"],
                 enabled_toolsets,
                 combined_ephemeral,
+                _skip_ctx,
             )
             agent = None
             _cache_lock = getattr(self, "_agent_cache_lock", None)
@@ -5652,6 +5681,7 @@ class GatewayRunner:
                     platform=platform_key,
                     session_db=self._session_db,
                     fallback_model=self._fallback_model,
+                    skip_context_files=_skip_ctx,
                 )
                 if _cache_lock and _cache is not None:
                     with _cache_lock:
