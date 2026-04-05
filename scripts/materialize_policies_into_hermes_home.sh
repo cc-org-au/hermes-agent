@@ -50,6 +50,10 @@ if [[ "${SKIP_GOVERNANCE_MD:-0}" != "1" ]]; then
 fi
 "$PY" "${ARGS[@]}"
 
+if [[ -x "${ROOT}/scripts/materialize_rem_operations.sh" ]]; then
+  bash "${ROOT}/scripts/materialize_rem_operations.sh"
+fi
+
 _ws_soul="${HERMES_HOME}/workspace/SOUL.md"
 _home_soul="${HERMES_HOME}/SOUL.md"
 if [[ "${SKIP_SOUL_SYMLINK:-0}" != "1" ]]; then
