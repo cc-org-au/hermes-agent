@@ -197,7 +197,9 @@ def ensure_hermes_home():
 # =============================================================================
 
 DEFAULT_CONFIG = {
-    "model": "",
+    # Default inference model when config.yaml omits model.default (Google AI Studio
+    # free tier). Provider is left unset so ``resolve_provider(auto)`` picks from API keys.
+    "model": {"default": "gemini-2.5-flash"},
     "fallback_providers": [],
     "credential_pool_strategies": {},
     "toolsets": ["hermes-cli"],
@@ -524,7 +526,7 @@ DEFAULT_CONFIG = {
     },
 
     # Config schema version - bump this when adding new required fields
-    "_config_version": 12,
+    "_config_version": 13,
 }
 
 # =============================================================================
@@ -1327,6 +1329,45 @@ def migrate_config(interactive: bool = True, quiet: bool = False) -> Dict[str, A
                 save_env_value("ANTHROPIC_TOKEN", "")
                 if not quiet:
                     print("  ✓ Cleared ANTHROPIC_TOKEN from .env (no longer used)")
+        except Exception:
+            pass
+
+    # ── Version 12 → 13: use direct Gemini when only a Gemini/Google API key is set ──
+    # Typical VPS profile: GEMINI_API_KEY in .env but stale OpenRouter opus defaults in yaml.
+    if current_ver < 13:
+        try:
+            from hermes_cli.auth import has_usable_secret
+
+            config = load_config()
+            mc = config.get("model")
+            migrated_model = False
+            if isinstance(mc, dict):
+                d = str(mc.get("default") or mc.get("model") or "").strip()
+                opus_slugs = {"anthropic/claude-opus-4.6", "claude-opus-4.6"}
+                if d in opus_slugs:
+                    has_gemini = has_usable_secret(get_env_value("GEMINI_API_KEY") or "") or has_usable_secret(
+                        get_env_value("GOOGLE_API_KEY") or ""
+                    )
+                    has_or = has_usable_secret(get_env_value("OPENROUTER_API_KEY") or "") or has_usable_secret(
+                        get_env_value("OPENAI_API_KEY") or ""
+                    )
+                    if has_gemini and not has_or:
+                        mc = dict(mc)
+                        mc["default"] = "gemini-2.5-flash"
+                        mc["provider"] = "gemini"
+                        mc.pop("base_url", None)
+                        config["model"] = mc
+                        migrated_model = True
+            if migrated_model:
+                save_config(config)
+                results["config_added"].append(
+                    "model.* (v13: Gemini default when only GEMINI_API_KEY / GOOGLE_API_KEY is set)"
+                )
+                if not quiet:
+                    print(
+                        "  ✓ v13: Set model to gemini-2.5-flash + provider gemini "
+                        "(OpenRouter/OpenAI keys not present; GEMINI_API_KEY or GOOGLE_API_KEY set)"
+                    )
         except Exception:
             pass
 

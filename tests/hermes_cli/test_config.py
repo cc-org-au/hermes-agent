@@ -348,6 +348,57 @@ class TestOptionalEnvVarsRegistry:
         assert "TAVILY_API_KEY" in all_vars
 
 
+class TestConfigV13GeminiDefaultMigration:
+    """v13: switch stale OpenRouter opus defaults to Gemini when only Gemini key is set."""
+
+    def test_migrates_opus_to_gemini_when_only_gemini_key(self, tmp_path):
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(
+            yaml.safe_dump(
+                {
+                    "_config_version": 12,
+                    "model": {
+                        "default": "anthropic/claude-opus-4.6",
+                        "provider": "openrouter",
+                        "base_url": "https://openrouter.ai/api/v1",
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        (tmp_path / ".env").write_text("GEMINI_API_KEY=ai-studio-test-key\n", encoding="utf-8")
+
+        with patch.dict(os.environ, {"HERMES_HOME": str(tmp_path)}, clear=False):
+            ensure_hermes_home()
+            migrate_config(interactive=False, quiet=True)
+            reloaded = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+            assert reloaded["model"]["default"] == "gemini-2.5-flash"
+            assert reloaded["model"]["provider"] == "gemini"
+            assert "base_url" not in reloaded["model"]
+
+    def test_does_not_migrate_when_openrouter_key_present(self, tmp_path):
+        config_path = tmp_path / "config.yaml"
+        original = {
+            "_config_version": 12,
+            "model": {
+                "default": "anthropic/claude-opus-4.6",
+                "provider": "openrouter",
+                "base_url": "https://openrouter.ai/api/v1",
+            },
+        }
+        config_path.write_text(yaml.safe_dump(original), encoding="utf-8")
+        (tmp_path / ".env").write_text(
+            "GEMINI_API_KEY=x\nOPENROUTER_API_KEY=sk-or-v1-test\n",
+            encoding="utf-8",
+        )
+
+        with patch.dict(os.environ, {"HERMES_HOME": str(tmp_path)}, clear=False):
+            ensure_hermes_home()
+            migrate_config(interactive=False, quiet=True)
+            reloaded = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+            assert reloaded["model"]["default"] == "anthropic/claude-opus-4.6"
+
+
 class TestAnthropicTokenMigration:
     """Test that config version 8→9 clears ANTHROPIC_TOKEN."""
 

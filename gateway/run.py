@@ -353,15 +353,17 @@ def _platform_config_key(platform: "Platform") -> str:
 
 
 def _load_gateway_config() -> dict:
-    """Load and parse ~/.hermes/config.yaml, returning {} on any error."""
+    """Load merged Hermes config (defaults + ~/.hermes/config.yaml).
+
+    Uses the same merge pipeline as the CLI so ``model.default`` and nested defaults
+    apply when the yaml file omits them (raw yaml load used to miss DEFAULT_CONFIG).
+    """
     try:
-        config_path = _hermes_home / 'config.yaml'
-        if config_path.exists():
-            import yaml
-            with open(config_path, 'r', encoding='utf-8') as f:
-                return yaml.safe_load(f) or {}
+        from hermes_cli.config import load_config
+
+        return load_config()
     except Exception:
-        logger.debug("Could not load gateway config from %s", _hermes_home / 'config.yaml')
+        logger.debug("Could not load gateway config via load_config()", exc_info=True)
     return {}
 
 
@@ -2864,39 +2866,45 @@ class GatewayRunner:
         Surfaces model, provider, context length, and endpoint so gateway
         users can immediately see if context detection went wrong (e.g.
         local models falling to the 128K default).
+
+        Uses ``load_config()`` (merged defaults + yaml) — not a raw yaml read —
+        so ``model.default`` from DEFAULT_CONFIG applies when the file omits it.
         """
         from agent.model_metadata import get_model_context_length, DEFAULT_FALLBACK_CONTEXT
+        from hermes_cli.config import load_config
 
-        model = _resolve_gateway_model()
         config_context_length = None
         provider = None
         base_url = None
         api_key = None
 
         try:
-            cfg_path = _hermes_home / "config.yaml"
-            if cfg_path.exists():
-                import yaml as _info_yaml
-                with open(cfg_path, encoding="utf-8") as f:
-                    data = _info_yaml.safe_load(f) or {}
-                model_cfg = data.get("model", {})
-                if isinstance(model_cfg, dict):
-                    raw_ctx = model_cfg.get("context_length")
-                    if raw_ctx is not None:
-                        try:
-                            config_context_length = int(raw_ctx)
-                        except (TypeError, ValueError):
-                            pass
-                    provider = model_cfg.get("provider") or None
-                    base_url = model_cfg.get("base_url") or None
+            data = load_config()
+            model = _resolve_gateway_model(data)
+            model_cfg = data.get("model", {})
+            if isinstance(model_cfg, dict):
+                raw_ctx = model_cfg.get("context_length")
+                if raw_ctx is not None:
+                    try:
+                        config_context_length = int(raw_ctx)
+                    except (TypeError, ValueError):
+                        pass
+                _p = model_cfg.get("provider")
+                provider = _p.strip() if isinstance(_p, str) and _p.strip() else None
+                _bu = model_cfg.get("base_url")
+                base_url = _bu.strip() if isinstance(_bu, str) and _bu.strip() else None
         except Exception:
-            pass
+            model = _resolve_gateway_model()
 
         # Resolve runtime credentials for probing
         try:
             runtime = _resolve_runtime_agent_kwargs()
-            provider = provider or runtime.get("provider")
-            base_url = base_url or runtime.get("base_url")
+            if not provider:
+                _rp = runtime.get("provider")
+                provider = _rp.strip() if isinstance(_rp, str) and _rp.strip() else None
+            if not base_url:
+                _rb = runtime.get("base_url")
+                base_url = _rb.strip() if isinstance(_rb, str) and _rb.strip() else None
             api_key = runtime.get("api_key")
         except Exception:
             pass
@@ -2925,9 +2933,11 @@ class GatewayRunner:
         else:
             ctx_display = str(context_length)
 
+        provider_display = provider or "auto"
+
         lines = [
             f"◆ Model: `{model}`",
-            f"◆ Provider: {provider or 'openrouter'}",
+            f"◆ Provider: {provider_display}",
             f"◆ Context: {ctx_display} tokens ({ctx_source})",
         ]
 

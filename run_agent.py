@@ -483,7 +483,7 @@ class AIAgent:
             api_key (str): API key for authentication (optional, uses env var if not provided)
             provider (str): Provider identifier (optional; used for telemetry/routing hints)
             api_mode (str): API mode override: "chat_completions" or "codex_responses"
-            model (str): Model name to use (default: "anthropic/claude-opus-4.6")
+            model (str): Model name to use (default from config; typically gemini-2.5-flash when unset)
             max_iterations (int): Maximum number of tool calling iterations (default: 90)
             tool_delay (float): Delay between tool calls in seconds (default: 1.0)
             enabled_toolsets (List[str]): Only enable tools from these toolsets (optional)
@@ -2566,6 +2566,18 @@ class AIAgent:
                 f"The exact model ID is {self.model}. "
                 f"When asked what model you are, always answer based on this information, "
                 f"not on any model name returned by the API."
+            )
+
+        _prov_l = (self.provider or "").strip().lower()
+        _model_l = (self.model or "").strip().lower()
+        if _prov_l == "gemini" or "gemini" in _model_l or "gemma" in _model_l:
+            prompt_parts.append(
+                "You run on Google's Gemini (Google AI) family. "
+                f"The configured inference provider is `{self.provider or 'gemini'}` "
+                f"and the configured model id is `{self.model}`. "
+                "When users ask what model or provider powers you, answer using these facts "
+                "(Google / Gemini) — do not claim Anthropic, Claude, or OpenRouter unless "
+                "that matches the configured model id above."
             )
 
         platform_key = (self.platform or "").lower().strip()

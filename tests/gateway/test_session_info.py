@@ -1,6 +1,7 @@
 """Tests for GatewayRunner._format_session_info — session config surfacing."""
 
 import pytest
+import yaml
 from unittest.mock import patch, MagicMock
 from pathlib import Path
 
@@ -16,10 +17,12 @@ def runner():
 def _patch_info(tmp_path, config_yaml, model, runtime):
     """Return a context-manager stack that patches _format_session_info deps."""
     cfg_path = tmp_path / "config.yaml"
+    merged = {}
     if config_yaml is not None:
         cfg_path.write_text(config_yaml)
+        merged = yaml.safe_load(config_yaml) or {}
     return (
-        patch("gateway.run._hermes_home", tmp_path),
+        patch("hermes_cli.config.load_config", return_value=merged),
         patch("gateway.run._resolve_gateway_model", return_value=model),
         patch("gateway.run._resolve_runtime_agent_kwargs", return_value=runtime),
     )
@@ -60,6 +63,7 @@ class TestFormatSessionInfo:
             info = runner._format_session_info()
         assert "128K" in info
         assert "model.context_length" in info
+        assert "Provider: auto" in info
 
     def test_local_endpoint_shown(self, runner, tmp_path):
         p1, p2, p3 = _patch_info(
@@ -100,9 +104,8 @@ class TestFormatSessionInfo:
 
     def test_runtime_resolution_failure_doesnt_crash(self, runner, tmp_path):
         """If runtime resolution raises, should still produce output."""
-        cfg_path = tmp_path / "config.yaml"
-        cfg_path.write_text("model:\n  default: test-model\n  context_length: 4096\n")
-        with patch("gateway.run._hermes_home", tmp_path), \
+        merged = yaml.safe_load("model:\n  default: test-model\n  context_length: 4096\n") or {}
+        with patch("hermes_cli.config.load_config", return_value=merged), \
              patch("gateway.run._resolve_gateway_model", return_value="test-model"), \
              patch("gateway.run._resolve_runtime_agent_kwargs", side_effect=RuntimeError("no creds")):
             info = runner._format_session_info()
