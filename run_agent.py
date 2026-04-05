@@ -6457,6 +6457,16 @@ class AIAgent:
         except Exception:
             logger.debug("apply_per_turn_tier_model failed", exc_info=True)
 
+        # Optional HR / org profile consultation (same governance runtime YAML)
+        try:
+            from agent.token_governance_runtime import load_runtime_config
+            from agent.hr_consultation import maybe_append_hr_consultation
+
+            _gov = load_runtime_config()
+            user_message = maybe_append_hr_consultation(self, user_message, _gov)
+        except Exception:
+            logger.debug("hr_consultation hook failed", exc_info=True)
+
         # Initialize conversation (copy to avoid mutating the caller's list)
         messages = list(conversation_history) if conversation_history else []
 

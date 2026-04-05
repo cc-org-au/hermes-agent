@@ -100,4 +100,26 @@ consultant_routing:
   # max_deliberations_per_session: 10
   # cap_tier_when_deliberation_exhausted: D
 
+# Automatic HR / org consultation: before the chief model runs, delegate once to the
+# Hermes profile below and append the subagent summary to this turn's user message.
+# Requires chief to have delegate_task; skipped inside subagents. Tune keywords to your org.
+hr_consultation:
+  enabled: false
+  hermes_profile: ag-org-hr
+  max_iterations: 28
+  min_message_chars: 12
+  trigger_keywords:
+    - new agent
+    - redundant agent
+    - headcount
+    - org chart
+    - RACI
+    - HR approval
+    - escalate to chief
+    - org registry
+    - proposal for role
+    - retire agent
+    - hiring agent
+  # goal: optional override string for delegate_task(goal=...)
+
 skip_context_files: false

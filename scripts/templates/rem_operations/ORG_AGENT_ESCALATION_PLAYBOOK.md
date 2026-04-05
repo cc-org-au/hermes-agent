@@ -17,6 +17,10 @@
 - On **accept**: update `scripts/org_agent_profiles_manifest.yaml`, run `scripts/bootstrap_org_agent_profiles.py`, update `ORG_CHART.md` / registers as your org requires, and document new `hermes_profile` names for `delegate_task`.
 - On **reject**: record rationale in workspace governance notes; do not add profiles or gateway bots without a new proposal cycle.
 
+## Automatic HR consultation (runtime)
+
+When enabled in `workspace/operations/hermes_token_governance.runtime.yaml` under **`hr_consultation`**, the **chief** (parent agent with `delegate_task`, not subagents) automatically delegates once per matching user turn to **`hermes_profile`** (default `ag-org-hr`) and **appends** the subagent summary to the same turn’s user message. Tune **`trigger_keywords`** for your org. See `agent/hr_consultation.py` and the example block in `scripts/templates/hermes_token_governance.runtime.example.yaml`.
+
 ## Non-goals
 
 - Hermes does not auto-create profiles from chat alone; **human operator** or chief-directed tooling runs the bootstrap script.

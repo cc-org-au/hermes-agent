@@ -41,3 +41,4 @@ REM_OPERATIONS_FORCE=1 ./scripts/materialize_rem_operations.sh
 ## Governance enforcement note
 
 - There is **no** `agent/governance.py` in core. **Model / turn caps** come from **`agent/token_governance_runtime.py`** reading `hermes_token_governance.runtime.yaml` (`max_agent_turns`). Logs: `Token governance: baseline …` and per-turn tier lines (gateway + CLI).
+- **HR / org auto-consultation:** optional `hr_consultation` block in the same YAML — chief delegates to `ag-org-hr` when keywords match; see `agent/hr_consultation.py`.
