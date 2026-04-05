@@ -22,6 +22,48 @@ logger = logging.getLogger(__name__)
 
 ENV_DISABLE = "HERMES_CONSULTANT_ROUTING_DISABLE"
 
+# Substrings typical of multi-step activation / org-governance session prompts (case-insensitive).
+_DEFAULT_GOV_ACTIVATION_KW = (
+    "activation protocol",
+    "handoff",
+    "verification",
+    "org_registry",
+    "org_chart",
+    "policy_root",
+    "rem-",
+    "session ",  # "Session 7"
+    "governance",
+    "deployment order",
+    "sub-agents",
+    "sub_agents",
+    "role-prompts",
+    "executable",
+    "outstanding tasks",
+)
+
+
+def governance_activation_signal(user_message: str, cr: Dict[str, Any]) -> bool:
+    """True when the user text looks like a long activation / governance session brief."""
+    t = (user_message or "").strip()
+    try:
+        min_c = int(cr.get("governance_activation_min_chars") or 1600)
+    except (TypeError, ValueError):
+        min_c = 1600
+    try:
+        min_h = int(cr.get("governance_activation_min_hits") or 3)
+    except (TypeError, ValueError):
+        min_h = 3
+    if len(t) < min_c:
+        return False
+    low = t.lower()
+    kws = cr.get("governance_activation_keywords")
+    if isinstance(kws, str):
+        kws = [kws]
+    if not isinstance(kws, list) or not kws:
+        kws = _DEFAULT_GOV_ACTIVATION_KW
+    hits = sum(1 for k in kws if str(k).lower() in low)
+    return hits >= min_h
+
 
 def _cr_cfg(gov: Dict[str, Any]) -> Dict[str, Any]:
     raw = gov.get("consultant_routing")
@@ -151,23 +193,40 @@ def resolve_consultant_tier(
     challenger_task = str(cr.get("challenger_task") or "consultant_challenger").strip()
     chief_task = str(cr.get("chief_task") or "consultant_chief").strip()
 
+    gov_sig = governance_activation_signal(user_message, cr)
+    audit["governance_activation_signal"] = gov_sig
+
     # --- LLM router (hybrid / llm) ---
     if mode in ("hybrid", "llm"):
         sys_router = (
             "You are a cost-aware routing advisor for a multi-agent organization. "
             "Tiers A–F increase in capability and cost (A lowest, F consultant). "
-            "Prefer the cheapest tier that can succeed. "
-            "Recommend E or F only for hard ambiguity, major architecture, security-critical "
-            "review, or consultant-grade coding/reasoning — never by default."
+            "Prefer the cheapest tier that can succeed for trivial work. "
+            "Strongly consider tier E (premium internal) or F (consultant) when the user message is a "
+            "multi-step activation / governance session: numbered REM items, Handoff + Verification "
+            "blocks, ORG_REGISTRY / ORG_CHART reconciliation, policy path drills, security "
+            "remediation, or orchestrator deployment sequencing — these need sustained reasoning and "
+            "often justify consultant depth even when a length-only heuristic chose tier D. "
+            "If that applies, set request_consultant_escalation to true and recommended_tier to E or F."
         )
+        hint = ""
+        if gov_sig:
+            hint = (
+                "\n\n[CLASSIFIER] This message matches org activation/governance session heuristics "
+                "(long structured brief with handoff, registry, or remediation-style tasks). "
+                "Bias toward recommended_tier E or F and request_consultant_escalation true unless "
+                "the substance is clearly clerical."
+            )
         user_router = (
             f"Deterministic baseline tier (from org heuristics): {deterministic_tier}\n\n"
             f"User message:\n---\n{(user_message or '')[:12000]}\n---\n\n"
+            f"{hint}"
             "Reply with ONLY a JSON object, no markdown fences, no other text:\n"
             '{"recommended_tier":"B"|"C"|"D"|"E"|"F", '
             '"request_consultant_escalation": true or false, '
             '"rationale": "one short sentence"}\n'
-            "Rules: request_consultant_escalation true only if E or F is plausibly needed."
+            "Rules: request_consultant_escalation true when E or F plausibly improves correctness "
+            "on security, registry alignment, or multi-artifact reconciliation."
         )
         try:
             raw_r = _call_aux_task(router_task, sys_router, user_router, max_tokens=400)
@@ -194,6 +253,17 @@ def resolve_consultant_tier(
         else:
             # Hybrid: do not serve a cheaper tier than deterministic heuristics (stability).
             merged = _max_tier(deterministic_tier, rec)
+
+        # Floor tier when activation/governance signal fires — forces Chief deliberation for E/F path
+        # (Chief may still deny and cap downward).
+        floor_raw = cr.get("governance_activation_deliberation_floor")
+        if gov_sig and floor_raw not in (None, "", False):
+            fl = _normalize_tier_letter(str(floor_raw), tier_models)
+            if fl:
+                before = merged
+                merged = _max_tier(merged, fl)
+                if merged != before:
+                    audit["governance_deliberation_floor"] = fl
 
         need_delib = merged in tiers_delib_u or esc
         max_sess = cr.get("max_deliberations_per_session")

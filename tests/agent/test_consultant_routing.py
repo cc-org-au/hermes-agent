@@ -9,6 +9,7 @@ import pytest
 
 from agent.consultant_routing import (
     consultant_routing_enabled,
+    governance_activation_signal,
     resolve_consultant_tier,
 )
 
@@ -45,6 +46,59 @@ def _gov_base():
             "chief_task": "consultant_chief",
         },
     }
+
+
+def test_governance_activation_signal_session_style_prompt():
+    cr = {}
+    blob = """
+    Session 7 builds on Sessions 4 and 6. Activation protocol: Handoff before Verification.
+    A. Outstanding tasks 1. REM-001: port 2. REM-002: browser
+    ORG_REGISTRY.md ORG_CHART.md POLICY_ROOT governance role-prompts deployment order
+    sub-agents verification executable
+    """ * 6
+    assert len(blob) >= 1600
+    assert governance_activation_signal(blob, cr)
+
+
+def test_governance_floor_forces_deliberation(monkeypatch, gov_env):
+    g = _gov_base()
+    g["consultant_routing"]["governance_activation_deliberation_floor"] = "E"
+
+    def fake_call(task, system, user, max_tokens=512):
+        if "cost-aware" in system.lower() or "routing advisor" in system.lower():
+            return json.dumps(
+                {
+                    "recommended_tier": "D",
+                    "request_consultant_escalation": False,
+                    "rationale": "stay cheap",
+                }
+            )
+        if "challenge" in user.lower():
+            return json.dumps({"challenge": "ok", "max_reasonable_tier": "E"})
+        if "Chief Orchestrator" in system:
+            return json.dumps(
+                {
+                    "approved_consultant_tier": True,
+                    "final_tier": "E",
+                    "decision_summary": "Activation session",
+                }
+            )
+        return "{}"
+
+    blob = (
+        "Session 7 Activation protocol Handoff Verification ORG_REGISTRY ORG_CHART "
+        "POLICY_ROOT governance REM-001 sub-agents deployment order executable "
+        * 80
+    )
+
+    class _A:
+        session_id = "s"
+
+    with patch("agent.consultant_routing._call_aux_task", side_effect=fake_call):
+        tier, audit = resolve_consultant_tier(blob, g, "D", g["tier_models"], agent=_A())
+    assert audit.get("governance_activation_signal") is True
+    assert audit.get("governance_deliberation_floor") == "E"
+    assert tier == "E"
 
 
 def test_consultant_disabled_without_nested_flag(gov_env):
