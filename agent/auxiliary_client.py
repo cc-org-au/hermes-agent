@@ -1133,6 +1133,7 @@ def get_text_auxiliary_client(task: str = "") -> Tuple[Optional[OpenAI], Optiona
     (e.g. CONTEXT_COMPRESSION_MODEL, AUXILIARY_WEB_EXTRACT_MODEL).
     """
     provider, model, base_url, api_key = _resolve_task_provider_model(task or None)
+    model = _resolve_tier_dynamic_for_auxiliary(model, [])
     return resolve_provider_client(
         provider,
         model=model,
@@ -1149,6 +1150,7 @@ def get_async_text_auxiliary_client(task: str = ""):
     Returns (None, None) when no provider is available.
     """
     provider, model, base_url, api_key = _resolve_task_provider_model(task or None)
+    model = _resolve_tier_dynamic_for_auxiliary(model, [])
     return resolve_provider_client(
         provider,
         model=model,
@@ -1518,6 +1520,26 @@ def _get_cached_client(
     return client, model or default_model
 
 
+def _resolve_tier_dynamic_for_auxiliary(
+    resolved_model: Optional[str],
+    messages: Optional[list],
+) -> Optional[str]:
+    """Map ``tier:dynamic`` to a concrete slug using governance ``tier_models`` + message text."""
+    if not resolved_model:
+        return resolved_model
+    from agent.tier_model_routing import (
+        is_tier_dynamic,
+        resolve_tier_dynamic_model,
+        prompt_text_for_tier_from_messages,
+    )
+
+    if not is_tier_dynamic(resolved_model):
+        return resolved_model
+    pt = prompt_text_for_tier_from_messages(messages or [])
+    rm = resolve_tier_dynamic_model(pt, None)
+    return rm or resolved_model
+
+
 def _resolve_task_provider_model(
     task: str = None,
     provider: str = None,
@@ -1706,11 +1728,12 @@ def call_llm(
     """
     resolved_provider, resolved_model, resolved_base_url, resolved_api_key = _resolve_task_provider_model(
         task, provider, model, base_url, api_key)
+    resolved_model = _resolve_tier_dynamic_for_auxiliary(resolved_model, messages)
 
     if task == "vision":
         effective_provider, client, final_model = resolve_vision_provider_client(
             provider=provider,
-            model=model,
+            model=resolved_model,
             base_url=base_url,
             api_key=api_key,
             async_mode=False,
@@ -1863,11 +1886,12 @@ async def async_call_llm(
     """
     resolved_provider, resolved_model, resolved_base_url, resolved_api_key = _resolve_task_provider_model(
         task, provider, model, base_url, api_key)
+    resolved_model = _resolve_tier_dynamic_for_auxiliary(resolved_model, messages)
 
     if task == "vision":
         effective_provider, client, final_model = resolve_vision_provider_client(
             provider=provider,
-            model=model,
+            model=resolved_model,
             base_url=base_url,
             api_key=api_key,
             async_mode=True,

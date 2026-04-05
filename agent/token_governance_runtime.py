@@ -66,6 +66,7 @@ def resolve_tier_strings_in_config(config: Dict[str, Any]) -> Dict[str, Any]:
         normalize_tier_models,
         resolve_tier_placeholder,
         TIER_SENTINEL_RE,
+        is_tier_dynamic,
     )
 
     tier_models = normalize_tier_models(cfg.get("tier_models"))
@@ -81,7 +82,11 @@ def resolve_tier_strings_in_config(config: Dict[str, Any]) -> Dict[str, Any]:
     def _walk(obj: Any) -> None:
         if isinstance(obj, dict):
             for k, v in list(obj.items()):
-                if isinstance(v, str) and TIER_SENTINEL_RE.match(v.strip()):
+                if (
+                    isinstance(v, str)
+                    and TIER_SENTINEL_RE.match(v.strip())
+                    and not is_tier_dynamic(v)
+                ):
                     obj[k] = resolve_tier_placeholder(v, tier_models, fallback_tier=fb)
                 else:
                     _walk(v)
@@ -105,6 +110,8 @@ def apply_token_governance_runtime(agent: Any) -> None:
         normalize_tier_models,
         resolve_tier_placeholder,
         TIER_SENTINEL_RE,
+        is_tier_dynamic,
+        infer_tier_letter_for_model,
     )
 
     tier_models = normalize_tier_models(cfg.get("tier_models"))
@@ -112,9 +119,24 @@ def apply_token_governance_runtime(agent: Any) -> None:
     if len(chief_tier) != 1 or chief_tier not in "ABCDEF":
         chief_tier = "D"
 
-    # Resolve tier: sentinel on agent.model before blocklist logic
+    # Resolve tier: sentinel on agent.model before blocklist logic (fixed letter → slug).
+    # tier:dynamic is left as-is until apply_per_turn_tier_model (per user message).
     if agent.model and TIER_SENTINEL_RE.match(str(agent.model).strip()):
         agent.model = resolve_tier_placeholder(agent.model, tier_models, fallback_tier=chief_tier)
+
+    # Provisional prompt-caching flags when model is tier:dynamic (probe chief tier slug).
+    if agent.model and is_tier_dynamic(agent.model) and tier_models:
+        probe = tier_models.get(chief_tier, "")
+        if probe:
+            _saved = agent.model
+            agent.model = probe
+            try:
+                is_openrouter = agent._is_openrouter_url()
+                is_claude = "claude" in (agent.model or "").lower()
+                is_native_anthropic = agent.api_mode == "anthropic_messages"
+                agent._use_prompt_caching = (is_openrouter and is_claude) or is_native_anthropic
+            finally:
+                agent.model = _saved
 
     # Effective "default" for blocklist replacement: explicit default_model, else tier chief_default_tier
     explicit_default = (cfg.get("default_model") or "").strip()
@@ -199,13 +221,21 @@ def apply_token_governance_runtime(agent: Any) -> None:
         and getattr(agent, "_delegate_depth", 0) == 0
     ):
         try:
+            if is_tier_dynamic(agent.model):
+                msg = (
+                    f"Token governance: baseline tier:dynamic "
+                    f"(per-message tier from tier_models; ref chief {chief_tier})"
+                )
+            else:
+                tier_lbl = infer_tier_letter_for_model(agent.model or "", tier_models)
+                msg = f"Token governance: baseline Tier {tier_lbl} → {agent.model}"
             emit = getattr(agent, "_emit_status", None)
             if callable(emit):
-                emit(f"Token governance: baseline Tier {chief_tier} → {agent.model}")
+                emit(msg)
             else:
-                logger.info("Token governance: baseline Tier %s → %s", chief_tier, agent.model)
+                logger.info("%s", msg)
         except Exception:
-            logger.info("Token governance: baseline Tier %s → %s", chief_tier, agent.model)
+            logger.info("Token governance: baseline → %s", agent.model)
 
 
 def apply_per_turn_tier_model(agent: Any, user_message: str) -> None:
@@ -214,13 +244,15 @@ def apply_per_turn_tier_model(agent: Any, user_message: str) -> None:
         normalize_tier_models,
         should_apply_per_turn_routing,
         select_tier_for_message,
+        is_tier_dynamic,
     )
 
     cfg = getattr(agent, "_token_governance_cfg", None) or load_runtime_config()
-    if not should_apply_per_turn_routing(cfg):
-        return
-    tier_models = normalize_tier_models(cfg.get("tier_models"))
+    tier_models = normalize_tier_models((cfg or {}).get("tier_models")) if cfg else {}
     if not tier_models:
+        return
+    # tier:dynamic always follows the same per-message tier pick as governance heuristics.
+    if not is_tier_dynamic(agent.model) and not should_apply_per_turn_routing(cfg):
         return
     tier = select_tier_for_message(user_message, cfg)
     mid = tier_models.get(tier)

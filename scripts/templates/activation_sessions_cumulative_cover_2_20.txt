@@ -1,3 +1,20 @@
+# Append this block to EVERY session user message (same chat rules as activation_session_commands.txt).
+# It asks the model to prove wiring + disk reads without dumping the whole system prompt.
+
+---BEGIN VERIFICATION (append to each session)---
+
+**Phased activation:** If this chat is part of the 20-session activation sequence, you must already have output **Handoff** ( **A. Outstanding tasks** + **B.** next-session or post-activation steps, both numbered ) **above** this section. **Verification** comes **after** **Handoff**, never instead of it.
+
+Before you finish your reply, add a section **"Verification"** with:
+
+1. **HERMES_HOME** — Absolute path and active profile name (e.g. chief-orchestrator).
+2. **Path wiring** — Read `HERMES_HOME/.hermes.md` with file tools; print the resolved absolute paths for the policy root and workspace (as stated in that file — one line each, no secrets).
+3. **Context injection** — Confirm `agent.skip_context_files` / `HERMES_SKIP_CONTEXT_FILES` are **not** disabling governance injection (state how you know: config or operator assurance). List which of these files you **read from disk this session** with tools: `HERMES_HOME/.hermes.md`, `WORKSPACE/BOOTSTRAP.md`, `WORKSPACE/AGENTS.md`, `HERMES_HOME/SOUL.md` (or `WORKSPACE/SOUL.md` if linked). For **each file you read**, give the **exact first line** or **first markdown heading** as it appears on disk (verbatim, ≤200 chars) — this proves you read the live files, not memory.
+4. **This session’s policy reads** — Bullet list: `path` → one-line purpose of what you used from it.
+5. **System prompt / pack** — You cannot dump the full system prompt. Instead: state that Hermes assembled the usual governance + workspace pack for this profile, and name **three section titles or topic phrases** you are following from the activation handoff or loaded workspace rules (not generic AI boilerplate).
+
+---END VERIFICATION---
+
 # Phased activation — Sessions 2–20 with cumulative cover + carry-in + handoff
 # =============================================================================
 # Assumes Session 1 (runtime activation / deployment-handoff) is DONE. Use one NEW chat per session.

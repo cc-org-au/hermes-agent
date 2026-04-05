@@ -5,8 +5,9 @@
 # (Tiers A–F) and workspace/operations/MODEL_ROUTING_REGISTRY.md. Edit **tier_models** when
 # OpenRouter pricing or availability changes — do not scatter model IDs across config by hand.
 #
-# In config.yaml use placeholders: `tier:D` (chief default), `tier:B` (auxiliary / summaries), etc.
-# Hermes resolves them via load_config() and per-turn routing (dynamic_tier_routing).
+# In config.yaml use `tier:X` for a fixed tier letter, or `tier:dynamic` so Hermes picks
+# tier per prompt from **tier_models** (auxiliary, delegation, and optional main model).
+# Fixed letters resolve at load_config(); `tier:dynamic` is resolved per call from message text.
 #
 # Visibility (CLI + gateway): at agent start, "Token governance: baseline Tier D → <model>";
 # each user message, "Token governance: this turn Tier X → <model>" (X from heuristics).
@@ -47,10 +48,20 @@ blocked_model_substrings:
 max_agent_turns: 60
 delegation_max_iterations: 30
 
-# Per user message, pick tier B/C/D and set the main agent model from tier_models (default: true).
+# Per user message, pick tier and set the main agent model from tier_models (default: true).
 dynamic_tier_routing: true
 
-# Default tier when heuristics do not force B or C.
-default_routing_tier: D
+# Fallback when B/C keyword heuristics do not match:
+# - D, B, C, … — fixed letter (legacy; many prompts fell through to D).
+# - chief — use chief_default_tier as the fallback letter.
+# - dynamic — short ambiguous prompts use chief_default_tier; longer text uses length bands
+#   (adjust thresholds/tiers below so “default” is not a single fixed slug).
+default_routing_tier: dynamic
+
+# Used only when default_routing_tier is dynamic (message length after B/C rules).
+dynamic_fallback_medium_chars: 800
+dynamic_fallback_long_chars: 2800
+dynamic_fallback_medium_tier: C
+dynamic_fallback_long_tier: D
 
 skip_context_files: false

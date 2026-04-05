@@ -11,6 +11,10 @@
 # Usage:
 #   ./scripts/ssh_droplet_user.sh              # sudo -i login shell as SSH_LOGIN_USER
 #   ./scripts/ssh_droplet_user.sh 'hostname'   # run one command as that user (sudo prompts once)
+#
+# Cursor / automation: prefer ./scripts/droplet_run.sh for non-interactive one-offs; use
+# droplet_run.sh --droplet-require-sudo --sudo-user hermesuser '…' when SSH_SUDO_PASSWORD is set.
+# This script uses interactive sudo (no sudo -S pipe) by design.
 
 set -euo pipefail
 

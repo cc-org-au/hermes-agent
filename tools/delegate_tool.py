@@ -443,15 +443,9 @@ def delegate_task(
         except (TypeError, ValueError):
             pass
 
-    # Resolve delegation credentials (provider:model pair).
-    # When delegation.provider is configured, this resolves the full credential
-    # bundle (base_url, api_key, api_mode) via the same runtime provider system
-    # used by CLI/gateway startup.  When unconfigured, returns None values so
-    # children inherit from the parent.
-    try:
-        creds = _resolve_delegation_credentials(cfg, parent_agent)
-    except ValueError as exc:
-        return json.dumps({"error": str(exc)})
+    from agent.tier_model_routing import is_tier_dynamic
+
+    per_task_dynamic = is_tier_dynamic(str(cfg.get("model") or ""))
 
     # Normalize to task list
     if tasks and isinstance(tasks, list):
@@ -488,6 +482,15 @@ def delegate_task(
     children = []
     try:
         for i, t in enumerate(task_list):
+            prompt_for = (
+                f"{t.get('goal') or ''}\n{t.get('context') or ''}"
+                if per_task_dynamic
+                else ""
+            )
+            try:
+                creds = _resolve_delegation_credentials(cfg, parent_agent, prompt_for)
+            except ValueError as exc:
+                return json.dumps({"error": str(exc)})
             child = _build_child_agent(
                 task_index=i, goal=t["goal"], context=t.get("context"),
                 toolsets=t.get("toolsets") or toolsets, model=creds["model"],
@@ -588,7 +591,11 @@ def delegate_task(
     }, ensure_ascii=False)
 
 
-def _resolve_delegation_credentials(cfg: dict, parent_agent) -> dict:
+def _resolve_delegation_credentials(
+    cfg: dict,
+    parent_agent,
+    prompt_for_tier: str = "",
+) -> dict:
     """Resolve credentials for subagent delegation.
 
     If ``delegation.base_url`` is configured, subagents use that direct
@@ -601,9 +608,20 @@ def _resolve_delegation_credentials(cfg: dict, parent_agent) -> dict:
     If neither base_url nor provider is configured, returns None values so the
     child inherits everything from the parent agent.
 
+    When ``delegation.model`` is ``tier:dynamic``, the concrete model is chosen
+    per call from governance ``tier_models`` using the same heuristics as the
+    main agent (pass *prompt_for_tier* with goal + context for batch tasks).
+
     Raises ValueError with a user-friendly message on credential failure.
     """
     configured_model = str(cfg.get("model") or "").strip() or None
+    if configured_model:
+        from agent.tier_model_routing import is_tier_dynamic, resolve_tier_dynamic_model
+
+        if is_tier_dynamic(configured_model):
+            rm = resolve_tier_dynamic_model(prompt_for_tier, None)
+            if rm:
+                configured_model = rm
     configured_provider = str(cfg.get("provider") or "").strip() or None
     configured_base_url = str(cfg.get("base_url") or "").strip() or None
     configured_api_key = str(cfg.get("api_key") or "").strip() or None

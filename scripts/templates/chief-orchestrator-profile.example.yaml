@@ -13,9 +13,12 @@
 #   HERMES_HOME/workspace/operations/hermes_token_governance.runtime.yaml
 # - Edit **tier_models** (A–F) there when pricing changes; keep policy alignment with
 #   workspace/operations/MODEL_ROUTING_REGISTRY.md
-# - Use **tier:D**, **tier:B**, **tier:C** placeholders below; Hermes resolves them at
-#   load_config() time. Each user turn can log "Token governance: this turn Tier X → …"
-#   when dynamic_tier_routing is enabled in that YAML.
+# - **tier:D** (or tier:X) on `model.default` resolves at load_config() to a concrete slug.
+# - **tier:dynamic** on auxiliary tasks and delegation: Hermes picks tier **per prompt**
+#   from `tier_models` using the same heuristics as the main agent (no fixed tier letter
+#   per channel in this file). Concrete slugs live only in `hermes_token_governance.runtime.yaml`.
+# - Each user turn can log "Token governance: this turn Tier X → …" when `dynamic_tier_routing`
+#   is enabled, or when the main model is `tier:dynamic`.
 #
 # `scripts/agent-droplet` uses the workstation sticky profile name on the VPS (HERMES_HOME=.../profiles/<name>);
 # if sticky is default/missing it uses chief-orchestrator. Trailing `droplet` on the CLI is not a profile.
@@ -26,37 +29,37 @@ model:
 
 compression:
   summary_provider: openrouter
-  summary_model: tier:B
+  summary_model: tier:dynamic
 
 auxiliary:
   vision:
     provider: openrouter
-    model: tier:B
+    model: tier:dynamic
   web_extract:
     provider: openrouter
-    model: tier:B
+    model: tier:dynamic
   compression:
     provider: openrouter
-    model: tier:B
+    model: tier:dynamic
   session_search:
     provider: openrouter
-    model: tier:B
+    model: tier:dynamic
   skills_hub:
     provider: openrouter
-    model: tier:B
+    model: tier:dynamic
   approval:
     provider: openrouter
-    model: tier:B
+    model: tier:dynamic
   mcp:
     provider: openrouter
-    model: tier:B
+    model: tier:dynamic
   flush_memories:
     provider: openrouter
-    model: tier:B
+    model: tier:dynamic
 
 delegation:
   provider: openrouter
-  model: tier:C
+  model: tier:dynamic
 
 # Skip dangerous-terminal approval prompts (gateway + CLI). Same effect as HERMES_YOLO_MODE.
 # Set to manual/smart when you want interactive approvals again.

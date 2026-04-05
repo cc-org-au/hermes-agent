@@ -37,6 +37,13 @@
 # Automation (AI / CI): ./scripts/droplet_run.sh 'remote command' — sudo off for that process only;
 # `hermes … droplet` still uses sudo on by default (agent-droplet does not inherit parent REQUIRE_SUDO).
 #
+# Cursor / batch droplet work — toggle sudo per invocation, not in ~/.env/.env:
+#   • Default automation path: ./scripts/droplet_run.sh '…'  → REQUIRE_SUDO=0, remote runs as SSH_USER.
+#   • Need hermesuser for that step only: add --droplet-require-sudo --sudo-user hermesuser (needs
+#     SSH_SUDO_PASSWORD in the env file for non-interactive sudo). When the step finishes, the next
+#     plain droplet_run / new shell is unchanged — no “switch back” file edit required.
+#   • Direct ssh_droplet.sh: HERMES_DROPLET_REQUIRE_SUDO=0 … or prefix --droplet-no-sudo / --droplet-require-sudo.
+#
 # Remote side of "<cli> … droplet" (workstation): scripts/hermes → scripts/agent-droplet.
 # See policies/core/unified-deployment-and-security.md (Step 15).
 

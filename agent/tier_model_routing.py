@@ -12,6 +12,64 @@ import re
 from typing import Any, Dict, Optional
 
 TIER_SENTINEL_RE = re.compile(r"^tier:([A-Fa-f])$")
+TIER_DYNAMIC_SENTINEL = "tier:dynamic"
+
+
+def is_tier_dynamic(model: Optional[str]) -> bool:
+    """True when config should pick a tier per prompt from ``tier_models`` + heuristics."""
+    if not model:
+        return False
+    return str(model).strip().lower() == TIER_DYNAMIC_SENTINEL.lower()
+
+
+def infer_tier_letter_for_model(model_id: str, tier_models: Dict[str, str]) -> str:
+    """Reverse-lookup tier letter for status lines, or ``?`` if unknown."""
+    if not model_id or not tier_models:
+        return "?"
+    mid = str(model_id).strip()
+    for letter, slug in tier_models.items():
+        if slug == mid:
+            return letter
+    return "?"
+
+
+def prompt_text_for_tier_from_messages(messages: Optional[Any]) -> str:
+    """Best-effort user/content text from chat messages for tier heuristics."""
+    if not messages:
+        return ""
+    parts: list[str] = []
+    for m in messages[-4:]:
+        if not isinstance(m, dict):
+            continue
+        c = m.get("content")
+        if isinstance(c, str):
+            parts.append(c)
+        elif isinstance(c, list):
+            for block in c:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    t = block.get("text")
+                    if isinstance(t, str):
+                        parts.append(t)
+    return "\n".join(parts)[:12000]
+
+
+def resolve_tier_dynamic_model(
+    user_text: str,
+    gov_cfg: Optional[Dict[str, Any]] = None,
+) -> Optional[str]:
+    """Pick concrete model from ``tier_models`` using the same heuristics as the main agent."""
+    cfg = gov_cfg
+    if cfg is None:
+        from agent.token_governance_runtime import load_runtime_config
+
+        cfg = load_runtime_config()
+    if not cfg or not cfg.get("enabled", False):
+        return None
+    tm = normalize_tier_models(cfg.get("tier_models"))
+    if not tm:
+        return None
+    tier = select_tier_for_message(user_text or "", cfg)
+    return tm.get(tier)
 
 
 def normalize_tier_models(raw: Any) -> Dict[str, str]:
@@ -45,19 +103,75 @@ def resolve_tier_placeholder(
     return tier_models.get(fallback_tier.upper(), "") or str(model).strip()
 
 
+def _chief_default_letter(cfg: Dict[str, Any]) -> str:
+    """Tier letter used as chief baseline (from runtime YAML)."""
+    ch = str(cfg.get("chief_default_tier") or cfg.get("default_tier") or "D").strip().upper()
+    if len(ch) == 1 and ch in "BCDEF":
+        return ch
+    return "D"
+
+
+def _normalize_tier_letter(value: str) -> Optional[str]:
+    u = str(value).strip().upper()
+    if len(u) == 1 and u in "BCDEF":
+        return u
+    return None
+
+
+def _resolved_default_routing_letter(cfg: Dict[str, Any]) -> str:
+    """Effective fallback letter before B/C/dynamic length rules.
+
+    * ``default_routing_tier: chief`` → :func:`_chief_default_letter`
+    * ``default_routing_tier: dynamic`` → chief letter for empty / short ambiguous text
+      (non-empty uses :func:`_fallback_tier_dynamic_length` after B/C rules)
+    * Single letter B–F → that letter
+    * Missing / invalid → ``D``
+    """
+    raw = str(cfg.get("default_routing_tier") or "D").strip().upper()
+    if raw == "CHIEF":
+        return _chief_default_letter(cfg)
+    if raw == "DYNAMIC":
+        return _chief_default_letter(cfg)
+    if len(raw) == 1 and raw in "BCDEF":
+        return raw
+    return "D"
+
+
+def _fallback_tier_dynamic_length(user_message: str, cfg: Dict[str, Any]) -> str:
+    """When ``default_routing_tier: dynamic``: tier by message length (after B/C rules)."""
+    t = (user_message or "").strip()
+    if not t:
+        return _chief_default_letter(cfg)
+    n = len(t)
+    try:
+        med = int(cfg.get("dynamic_fallback_medium_chars") or 800)
+    except (TypeError, ValueError):
+        med = 800
+    try:
+        long_th = int(cfg.get("dynamic_fallback_long_chars") or 2800)
+    except (TypeError, ValueError):
+        long_th = 2800
+    t_med = _normalize_tier_letter(str(cfg.get("dynamic_fallback_medium_tier") or "C")) or "C"
+    t_long = _normalize_tier_letter(str(cfg.get("dynamic_fallback_long_tier") or "D")) or "D"
+    if n >= long_th:
+        return t_long
+    if n >= med:
+        return t_med
+    return _chief_default_letter(cfg)
+
+
 def select_tier_for_message(user_message: str, cfg: Dict[str, Any]) -> str:
-    """Pick tier letter B/C/D for this user turn (conservative; policy-aligned)."""
-    default = str(cfg.get("default_routing_tier") or "D").strip().upper()
-    if len(default) != 1 or default not in "BCDEF":
-        default = "D"
+    """Pick tier letter B–F for this user turn (heuristics + optional dynamic fallback)."""
+    base_default = _resolved_default_routing_letter(cfg)
+    mode = str(cfg.get("default_routing_tier") or "D").strip().upper()
 
     t = (user_message or "").strip()
     if not t:
-        return default
+        return base_default
 
     low = t.lower()
-    # Optional override for “incident” language (defaults to same tier as default to avoid surprise spend)
-    incident_tier = str(cfg.get("incident_routing_tier") or default).strip().upper()
+    # Optional override for “incident” language (defaults to same tier as base_default)
+    incident_tier = str(cfg.get("incident_routing_tier") or base_default).strip().upper()
     if len(incident_tier) == 1 and incident_tier in "BCDEF":
         if any(
             k in low
@@ -105,7 +219,9 @@ def select_tier_for_message(user_message: str, cfg: Dict[str, Any]) -> str:
     if 120 <= len(t) <= 900 and not any(h in low for h in heavy):
         return "C"
 
-    return default
+    if mode == "DYNAMIC":
+        return _fallback_tier_dynamic_length(t, cfg)
+    return base_default
 
 
 def should_apply_per_turn_routing(cfg: Optional[Dict[str, Any]]) -> bool:

@@ -158,6 +158,24 @@ def test_resolve_tier_strings_in_config(gov_env):
     assert out["model"]["default"] == "m-b"
 
 
+def test_resolve_tier_strings_preserves_tier_dynamic(gov_env):
+    p = gov_env / RUNTIME_FILENAME
+    p.write_text(
+        yaml.safe_dump(
+            {
+                "enabled": True,
+                "chief_default_tier": "D",
+                "tier_models": {"D": "m-d", "B": "m-b"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    out = resolve_tier_strings_in_config(
+        {"auxiliary": {"compression": {"model": "tier:dynamic", "provider": "openrouter"}}}
+    )
+    assert out["auxiliary"]["compression"]["model"] == "tier:dynamic"
+
+
 def test_per_turn_selects_tier_b(gov_env):
     p = gov_env / RUNTIME_FILENAME
     p.write_text(
@@ -175,6 +193,35 @@ def test_per_turn_selects_tier_b(gov_env):
     class _A:
         def __init__(self):
             self.model = "main-d"
+            self.api_mode = "chat_completions"
+            self._base_url_lower = "openrouter"
+
+        def _is_openrouter_url(self):
+            return True
+
+    a = _A()
+    a._token_governance_cfg = load_runtime_config()
+    apply_per_turn_tier_model(a, "summarize the following paragraph in three bullets")
+    assert a.model == "cheap-b"
+
+
+def test_per_turn_tier_dynamic_resolves(gov_env):
+    p = gov_env / RUNTIME_FILENAME
+    p.write_text(
+        yaml.safe_dump(
+            {
+                "enabled": True,
+                "dynamic_tier_routing": False,
+                "tier_models": {"B": "cheap-b", "D": "main-d"},
+                "default_routing_tier": "D",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    class _A:
+        def __init__(self):
+            self.model = "tier:dynamic"
             self.api_mode = "chat_completions"
             self._base_url_lower = "openrouter"
 
