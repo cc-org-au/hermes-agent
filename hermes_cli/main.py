@@ -148,7 +148,21 @@ def _apply_profile_override() -> None:
         try:
             from hermes_cli.profiles import resolve_profile_env
             hermes_home = resolve_profile_env(profile_name)
-        except (ValueError, FileNotFoundError) as exc:
+        except FileNotFoundError as exc:
+            # Sticky file points at a removed profile (e.g. name "droplet" without
+            # ~/.hermes/profiles/droplet). Do not hard-fail startup; use default home.
+            print(
+                f"Warning: ignoring stale active_profile ({exc!s}). "
+                f"Using default ~/.hermes. Fix: hermes profile create {profile_name} "
+                f"or hermes profile use default",
+                file=sys.stderr,
+            )
+            try:
+                active_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            return
+        except ValueError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             sys.exit(1)
         except Exception as exc:

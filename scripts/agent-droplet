@@ -27,7 +27,9 @@ for a in "$@"; do
 done
 export HERMES_DROPLET_INTERACTIVE=1
 export HERMES_DROPLET_WORKSTATION_CLI=1
-# Default sudo on; do not inherit HERMES_DROPLET_REQUIRE_SUDO from the parent shell (avoids stale
-# exports after running droplet_run.sh). Use AGENT_DROPLET_REQUIRE_SUDO=0 to opt out per command.
-export HERMES_DROPLET_REQUIRE_SUDO="${AGENT_DROPLET_REQUIRE_SUDO:-1}"
+# Sudo on by default (explicit 0/false/no only opts out). Ignore inherited HERMES_DROPLET_REQUIRE_SUDO.
+case "${AGENT_DROPLET_REQUIRE_SUDO:-1}" in
+  0|false|FALSE|no|NO|off|OFF) export HERMES_DROPLET_REQUIRE_SUDO=0 ;;
+  *) export HERMES_DROPLET_REQUIRE_SUDO=1 ;;
+esac
 exec env -u HERMES_DROPLET_ALLOW_ENV_PASSPHRASE bash "$REPO/scripts/ssh_droplet.sh" --sudo-user "$RUNTIME_USER" "$cmd"

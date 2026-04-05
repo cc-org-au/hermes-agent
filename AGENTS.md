@@ -15,6 +15,7 @@ source venv/bin/activate  # ALWAYS activate before running Python
 - **Automated / non-interactive remote steps** (git pull, scripts, smoke tests): run **`./scripts/droplet_run.sh '…'`**. That sets **`HERMES_DROPLET_REQUIRE_SUDO=0`** only for that child process (no sudo to **`hermesuser`** on the VPS). Nothing to “turn back on” afterward — the next command uses defaults again.
 - **Interactive Hermes on the VPS** (`hermes tui droplet`, etc.): uses **`scripts/agent-droplet`**, which defaults **`HERMES_DROPLET_REQUIRE_SUDO=1`** (sudo **`sudo -k; sudo -u hermesuser …`**) and does **not** inherit a stray **`HERMES_DROPLET_REQUIRE_SUDO`** from the parent shell, so a prior **`droplet_run`** does not disable sudo for **`hermes … droplet`**.
 - Lower-level control: **`scripts/ssh_droplet.sh`** header documents **`HERMES_DROPLET_REQUIRE_SUDO`**, **`--droplet-no-sudo`**, and **`~/.env/.env`** overrides.
+- If **`~/.hermes/active_profile`** names a profile folder that does not exist (e.g. **`droplet`** without **`~/.hermes/profiles/droplet`**), Hermes warns, removes the stale sticky file, and continues with the default home — use **`hermes … droplet`** only via this repo’s **`scripts/hermes`** (trailing **`droplet`**) so the VPS path runs; **`droplet`** is not a Hermes profile name for local **`~/.hermes`**.
 
 ## Project Structure
 
