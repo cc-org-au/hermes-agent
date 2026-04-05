@@ -30,7 +30,7 @@ Implementation references in the Hermes Agent codebase:
 
 3. **Logging** — Watchdog output MUST be appended to a durable log (e.g. `$HERMES_HOME/logs/gateway-watchdog.log` when using the stock script) for post-incident review.
 
-4. **Alignment** — This operational policy complements [`unified-deployment-and-security.md`](unified-deployment-and-security.md) and channel/messaging governance; it does not replace security-first or deployment ordering.
+4. **Alignment** — This operational policy complements [`unified-deployment-and-security.md`](unified-deployment-and-security.md) and channel/messaging governance; it does not replace security-first or deployment ordering. For **VPS** specifics (which Unix user runs the gateway, **`hermes -p chief-orchestrator`**, avoiding a second gateway under the admin SSH account, and post-deploy **`watchdog-check`**), read **Step 15 — VPS gateway** in that runbook. For **Slack Socket Mode slash commands** and **`invalid_command_response`**, read the **Slash commands (`/hermes-*`)** subsection under **Hermes + Slack (Socket Mode)** in the same file.
 
 ---
 

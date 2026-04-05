@@ -640,9 +640,19 @@ This is the checklist that restored a working Slack path when the gateway showed
 6. **Socket Mode connection fan-out** — Slack may deliver Events API payloads over **any** of several concurrent WebSocket connections for the same app. Avoid running a second `hermes gateway` (or any other Socket Mode client) for the **same** Slack app and **same** app-level token elsewhere; otherwise some messages may be delivered to a non-production consumer. Prefer one production gateway per app, or separate app-level tokens per environment if Slack is used from multiple hosts.
 7. **Narrowing “no events” vs “events but no reply”** — Set `SLACK_LOG_INBOUND=1` in `~/.hermes/.env` temporarily. Hermes then logs `[Slack] bolt envelope event type=…` for each event Slack hands to Bolt **before** listeners run. If that line never appears after a test DM or channel `@mention`, the fault is still Slack configuration or another consumer — not Hermes message routing. Remove or unset `SLACK_LOG_INBOUND` after debugging.
 
+#### Slash commands (`/hermes-*`) and Slack `invalid_command_response`
+
+**Symptom:** Slash commands such as `/hermes-reset` fail in Slack with **`invalid_command_response`** (Socket Mode slash acknowledgement validation) even though the app manifest lists `/hermes` and `/hermes-*`, and the gateway listener calls **`await ack()`** with an empty body (the correct **envelope-only** acknowledgement for Socket Mode; see Slack’s “Acknowledge events” documentation for slash commands over Socket Mode).
+
+**Cause:** In **slack-bolt** (Python), with **`process_before_response=False`** (the **`AsyncApp`** default), **`AsyncioListenerRunner.run`** can return the **middleware** **`BoltResponse`** whenever that object is already non-`None`, **after** the listener has called **`ack()`**. The acknowledgement Slack should see is stored on **`request.context.ack.response`**, but that value was not always selected as the final response sent back over the Socket Mode client. The wrong body can produce a **`payload`** Slack rejects for slash commands.
+
+**Fix in this repository:** `gateway/platforms/slack.py` calls **`_ensure_slack_bolt_slash_socket_ack_fix()`** when the Slack adapter connects. It wraps **`AsyncioListenerRunner.run`** once (process-wide): for payloads that look like slash commands (**`"command"`** present in the body), if **`ack.response`** is set, that response is used instead of Bolt’s returned value. The Hermes slash router still uses **`await ack()`** with no arguments and defers **`_handle_slash_command`** via **`asyncio.create_task`** so the ack stays immediate and user-visible replies use the normal messaging path. Regression tests: **`tests/gateway/test_slack.py`** (**`TestSlashCommandSocketAckFixOut`**).
+
+**After upgrading this code:** Restart the gateway process that holds the Slack app token so the adapter loads the patch (see **Step 15 — VPS gateway operator account** below).
+
 **Slack home channel (cron / proactive delivery):** In `~/.hermes/.env`, set `SLACK_HOME_CHANNEL` to the Slack channel ID used as the default delivery target (for a 1:1 DM with the bot this is a `D…` id). Obtain it by opening the DM from the bot side (`conversations.open` with the operator’s member id) or by sending `/sethome` from that DM after messaging works. Optional: `SLACK_HOME_CHANNEL_NAME` for display (for example `Slack DM`).
 
-5. **Use structured health checks and automatic recovery**
+8. **Use structured health checks and automatic recovery**
    - Monitor gateway process state and per-platform connection state continuously.
    - On detected failure, restart the gateway once, then re-check platform connectivity.
    - If restart does not recover service, run automated diagnostics/fix routines and retry startup.
@@ -688,15 +698,15 @@ The watchdog log should include at least:
 
 **Hermes Agent (messaging gateway):** Mandated health semantics (`watchdog-check`, live `gateway.pid`, recovery ladder, logging) are specified in [`gateway-watchdog.md`](gateway-watchdog.md). Governance read order places that file after [`deployment-handoff.md`](deployment-handoff.md).
 
-6. **Run package operations from the correct working directory**
+9. **Run package operations from the correct working directory**
    - Perform dependency audit/fix commands from the project root where lockfiles exist.
    - If audit tools fail due to missing lockfiles or context mismatch, correct directory state first, then rerun.
 
-7. **Confirm model endpoint and auth compatibility early**
+10. **Confirm model endpoint and auth compatibility early**
    - Ensure configured model identifier, provider mode, endpoint format, and API key type are mutually compatible.
    - If authentication fails, switch to the provider’s supported endpoint/auth pattern for the selected model family.
 
-8. **Prevent stale runtime mode/config drift**
+11. **Prevent stale runtime mode/config drift**
    - After any configuration change affecting messaging mode, force a clean restart of all related runtime processes.
    - Verify live process arguments/runtime status match desired configuration, not just file contents.
 
@@ -1090,7 +1100,8 @@ Run **`direnv allow`** once in the clone. Do **not** reorder those lines: `HERME
 
 **Env files**  
 - **SSH + droplet:** **`~/.env/.env`** (same path **`scripts/ssh_droplet.sh`** reads) holds **`SSH_PORT`**, **`SSH_USER`**, **`SSH_TAILSCALE_IP`** (or **`SSH_IP`**), optional **`SSH_SUDO_PASSWORD`** for non-interactive **`sudo -S`** to **`hermesuser`**, optional **`HERMES_DROPLET_ALLOW_ENV_PASSPHRASE=1`** plus **`SSH_PASSPHRASE`** for headless key unlock. Private key default: **`~/.env/.ssh_key`**.  
-- **Hermes profile:** Sync the same SSH variables into the **active profile’s** **`$HERMES_HOME/.env`** if you use **`TERMINAL_ENV=ssh`** so in-app terminal and droplet agree on host/port/key. Use **`chmod 600`** on these files.
+- **Hermes profile:** Sync the same SSH variables into the **active profile’s** **`$HERMES_HOME/.env`** if you use **`TERMINAL_ENV=ssh`** so in-app terminal and droplet agree on host/port/key. Use **`chmod 600`** on these files.  
+- **Chief-orchestrator (VPS):** With **`hermes -p chief-orchestrator`**, **`HERMES_HOME`** is **`~/.hermes/profiles/chief-orchestrator`**. **`load_hermes_dotenv`** reads **`$HERMES_HOME/.env`** for that process — not the default **`~/.hermes/.env`** unless you copy or symlink. **`hermes profile show chief-orchestrator`** should report **`.env: exists`**. The repository provides **`scripts/ensure_chief_orchestrator_profile_env.sh`**: idempotent; seeds the profile **`.env`** from **`~/.hermes/.env`** or **`~/hermes-agent/.env`** if the profile file is missing. **`scripts/droplet_bootstrap_chief_orchestrator.sh`** runs it after **`profile use`**. Run the ensure script **as `hermesuser`** (or set **`HERMES_PROFILE_DIR`** / **`HERMES_AGENT_REPO`** explicitly). **`scripts/droplet_run.sh`** uses **`SSH_USER`** (often **`hermesadmin`**): its **`$HOME`** is wrong for **`~/.hermes/profiles/chief-orchestrator`**, so do not rely on **`droplet_run.sh`** alone to fix **`hermesuser`** profile secrets — use **`ssh_droplet.sh --sudo-user hermesuser '…'`** for profile-scoped maintenance.
 
 **Sticky profile mistakes**  
 - **`~/.hermes/active_profile` must not contain the word `droplet`.** That string is the **VPS hop suffix**, not a profile directory. If it was set to **`droplet`**, Hermes used to error or confuse profile resolution; current CLI **clears** that sticky and warns. Use a real profile name (e.g. **`chief-orchestrator`**) so the VPS **`agent-droplet`** **`-p`** matches.
@@ -1103,6 +1114,21 @@ Run **`direnv allow`** once in the clone. Do **not** reorder those lines: `HERME
 | **`zsh: command not found: droplet`** | Expecting a **`droplet`** command | Use **`hermes … droplet`**; there is no first-token **`droplet`** helper. |  
 | Welcome banner, then **`Warning: Input is not a terminal (fd=0)`**, **`^[[24;1R`**, immediate **`Goodbye`**, SSH disconnect | **`SSH_SUDO_PASSWORD`** + **`sudo -S`**: password is read from a **pipe**, so the **inner** shell’s **stdin** is **not a TTY**; prompt_toolkit exits | **`scripts/ssh_droplet.sh`** wraps the remote command with **`exec >/dev/tty 2>&1; exec </dev/tty; …`** after **`sudo -S`** so the Hermes TUI attaches to the **SSH pseudo-tty**. Requires **`ssh -tt`** (already used). |  
 | Interactive **sudo** prompts instead of password file | **`SSH_SUDO_PASSWORD`** unset | Set it in **`~/.env/.env`** if you accept storing the admin sudo password there; otherwise type sudo on the **remote** TTY. |
+| Slack **`invalid_command_response`** on **`/hermes-*`** | slack-bolt could return the middleware **`BoltResponse`** instead of **`ack.response`** for Socket Mode slash commands (**`process_before_response=False`**) | Fixed in **`gateway/platforms/slack.py`** (**`_ensure_slack_bolt_slash_socket_ack_fix`**); restart the gateway that owns the Slack app token. |
+| **`git pull`** on VPS: **merge abort** on **`policies/.pipeline_state/manifest.json`** | Local / pipeline edits in the repo tree on the server | **`git stash push -- policies/.pipeline_state/manifest.json`** (or commit), then **`git pull --ff-only`**. |
+| **`Slack app token already in use (PID …)`** / Telegram / WhatsApp scoped locks after a “restart” | A **second** gateway process (often started as **`SSH_USER`** / **`hermesadmin`**) or a leftover process while locks still reference a dead PID | Stop the stray process (e.g. match **`hermesadmin/.../hermes-agent`** + **`gateway run`**). Run production gateway **as `hermesuser`** with **`./venv/bin/hermes -p chief-orchestrator gateway run --replace`** (typically under **`nohup`** or the existing **`gateway-watchdog.sh`**). Confirm with **`hermes -p chief-orchestrator gateway watchdog-check`**. |
+| **`hermes gateway restart`** → **`Unit hermes-gateway-….service not found`** | No **systemd user** unit installed for that **`HERMES_HOME`** / profile | Use **`gateway run --replace`** (detached) or **`scripts/gateway-watchdog.sh`** as deployed; or run **`hermes gateway install`** for that profile if **`systemctl --user`** is desired. |
+| **`profile show`** → **`.env: not configured`** for **chief-orchestrator** while messaging “works” | Secrets only under default **`~/.hermes/.env`** or **`~/hermes-agent/.env`**, not under **`…/profiles/chief-orchestrator/.env`** | Run **`scripts/ensure_chief_orchestrator_profile_env.sh`** as **`hermesuser`**; keep a real **`$HERMES_HOME/.env`** for the profile. |
+
+### Step 15 — VPS gateway: operator account, restart, health
+
+**Canonical runtime user on the VPS** is **`hermesuser`** (see **`ssh_droplet.sh`** **`--sudo-user`**). The admin account (**`SSH_USER`**, e.g. **`hermesadmin`**) may have its own **`~/hermes-agent`** clone; starting **`gateway run`** there without **`-p`** and without the same **`.env`** as production produces a gateway with **no platforms enabled** or a **duplicate** that steals **Slack / Telegram / WhatsApp** scoped locks from the real instance.
+
+**Safe patterns**
+
+- **Pull + code update (automation):** Prefer **`ssh_droplet.sh --sudo-user hermesuser 'cd ~/hermes-agent && git pull --ff-only origin main'`** (resolve stash/commit conflicts on **`policies/.pipeline_state/`** if needed).  
+- **Restart gateway:** As **`hermesuser`**: **`cd ~/hermes-agent && nohup ./venv/bin/hermes -p chief-orchestrator gateway run --replace >> ~/.hermes/profiles/chief-orchestrator/logs/gateway-restart.log 2>&1 &`** (adjust log path if you standardize elsewhere).  
+- **Verify:** **`./venv/bin/hermes -p chief-orchestrator gateway watchdog-check`** — expect exit **0** and at least one **`connected=`** platform when Slack/Telegram (etc.) are configured.
 
 **Policy materialization:** run **`policies/core/scripts/start_pipeline.py`** (or your materialize helper) on the server before expecting updated policy trees; the `droplet` suffix only changes **where** the CLI runs.
 
