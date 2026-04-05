@@ -1,7 +1,9 @@
 # Hermes: always use the repo venv + scripts/hermes shim (including `… droplet`).
 #
 # Install (zsh/bash — add to ~/.zshrc or ~/.bashrc):
-#   export HERMES_AGENT_REPO="$HOME/hermes-agent"   # optional if not default
+#   If the clone is not $HOME/hermes-agent, set the repo root (two lines — avoids zsh export quirks):
+#   HERMES_AGENT_REPO=/path/to/hermes-agent
+#   export HERMES_AGENT_REPO
 #   source "$HERMES_AGENT_REPO/scripts/shell/hermes-env.sh"
 #
 # Then `hermes`, `hermes tui droplet`, etc. run via scripts/hermes → venv python -m hermes_cli.main
