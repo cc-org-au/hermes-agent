@@ -41,8 +41,8 @@ Use this order:
 2. `policies/core/unified-deployment-and-security.md`
 3. `policies/core/deployment-handoff.md` (this file)
 4. `python policies/core/scripts/start_pipeline.py --workspace-root "$AGENT_HOME/workspace" --policy-root "$AGENT_HOME/policies"` (or equivalent env vars) — verify tree, strict `standards/` cues, refresh `INDEX.md`, and materialize runtime outputs; see [`pipeline-runbook.md`](pipeline-runbook.md)
-5. [`security-prompts.md`](security-prompts.md) and [`chief-orchestrator-directive.md`](chief-orchestrator-directive.md) — activation layer (canonical read order before token governance)
-6. `policies/core/governance/standards/token-model-tool-and-channel-governance-policy.md` then `policies/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md` — additive token / model / tool / channel governance
+5. [`security-prompts.md`](security-prompts.md) and [`chief-orchestrator-directive.md`](chief-orchestrator-directive.md) — activation layer in the **policy read** sequence (still required content before org expansion).
+6. `policies/core/governance/standards/token-model-tool-and-channel-governance-policy.md` then `policies/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md` — token / model / tool / channel governance plus Hermes `workspace/operations/hermes_token_governance.runtime.yaml`. **Phased activation (one chat per session)** runs this block as **Sessions 1–2** *before* **Session 3** (runtime activation audit) so caps apply early — see § Session-by-session prompt order. Implementation map: [`hermes-model-delegation-and-tier-runtime.md`](hermes-model-delegation-and-tier-runtime.md).
 7. `policies/core/runtime/agent/BOOTSTRAP.md`
 8. `policies/core/runtime/agent/AGENTS.md`
 9. the remaining attached agent markdown files referenced by `BOOTSTRAP.md` and `AGENTS.md` (paths under `policies/core/runtime/agent/` in this repository)
@@ -172,7 +172,9 @@ Output a concise deployment summary showing:
 
 ---
 
-## Operator first message — Session 1 (low tokens; use this)
+## Operator first message — Session 3 (runtime activation; low tokens; use this)
+
+**When to use:** After **Sessions 1–2** (token governance policy + `hermes_token_governance.runtime.yaml`) so cost caps already apply during this audit. If you are **only** running the legacy “runtime first” path, treat this as your first activation chat and skip Sessions 1–2 only if token governance is not required yet.
 
 **Do not paste the large “Runtime Activation Prompt” block below into chat** — it duplicates what is already on disk and can overflow the model context together with Hermes system prompt + tools.
 
@@ -181,18 +183,18 @@ Copy **one** of these (shortest first if you still hit limits):
 **Minimal (if even the standard starter fails):**
 
 ```text
-Session 1 only. Read policy-root `core/deployment-handoff.md` from disk; run "## Runtime Activation Prompt" verification and preflight; output that section's Required output bullets. Paths: `HERMES_HOME/.hermes.md`.
+Session 3 only (runtime activation). Read policy-root `core/deployment-handoff.md` from disk; run "## Runtime Activation Prompt" verification and preflight; output that section's Required output bullets. Paths: `HERMES_HOME/.hermes.md`.
 ```
 
 **Standard starter (recommended):**
 
 ```text
-You are the Chief Orchestrator for Session 1 (runtime activation only).
+You are the Chief Orchestrator for Session 3 (runtime activation only).
 
 1. Open `HERMES_HOME/.hermes.md` and note `POLICY_ROOT` and workspace paths (do not paste them back at length).
 2. Using file tools, read `POLICY_ROOT/core/deployment-handoff.md` starting at "## Runtime Activation Prompt" — read in sections if the file is large. Do not ask the operator to paste this document.
 3. Follow "Hermes runtime discipline" and the activation checklist through verification, preflight, and security classification for this session only. Do not stand up directors or project leads yet unless the checklist explicitly requires naming them.
-4. End with the "Required output" bullet list from that section and one line: next session = Session 2 from the "Session-by-session prompt order" table in the same file.
+4. End with the "Required output" bullet list from that section and one line: next session = Session 4 from the "Session-by-session prompt order" table in the same file.
 ```
 
 ---
@@ -310,15 +312,17 @@ Required output:
 
 Use a **new messaging/CLI session per step** when you want the lowest conversation context: paste **one** block per session. Paths are under the materialized **`AGENT_HOME`** (for Hermes profile deployments, typically `HERMES_HOME/policies/...` and `HERMES_HOME/workspace/...` — see `HERMES_HOME/.hermes.md`).
 
+**Cost controls first:** Sessions **1–2** install token governance **policy** and **`hermes_token_governance.runtime.yaml`** so tier caps, blocklists, and delegation limits apply before the heavy **Session 3** runtime-activation audit. **Prerequisite:** profile + `HERMES_HOME/.hermes.md` + materialized `workspace/operations/` (see `scripts/materialize_policies_into_hermes_home.sh`). Cumulative paste blocks: `scripts/templates/activation_sessions_cumulative_cover_2_20.txt`. Hermes wiring reference: `policies/core/hermes-model-delegation-and-tier-runtime.md`.
+
 | Session | What to paste / instruct |
 |--------|---------------------------|
-| **1 — Runtime activation** | Use **§ Operator first message — Session 1** (minimal or standard starter). Do **not** paste the full Runtime Activation `text` fence — the agent reads it from `POLICY_ROOT/core/deployment-handoff.md`. |
-| **2 — Artifacts + constitution** | One message: read `policies/core/governance/artifacts-and-archival-memory.md` and `policies/core/agentic-company-deployment-pack.md` via tools; confirm how `workspace/operations/` and per-project archival paths will be used; write any missing register stubs only if empty. |
-| **3 — Security activation pack** | Prefer: *"Read `POLICY_ROOT/core/security-prompts.md` via tools in chunks; execute Chief Security Governor + audit posture against this runtime."* Avoid pasting the full file. |
-| **4 — Chief orchestrator** | Prefer: *"Read `POLICY_ROOT/core/chief-orchestrator-directive.md` via tools; adopt its doctrine for this deployment; output org stance, initial roles, next session pointer."* Paste only if the file read fails — the directive is long. |
-| **5 — Token governance (policy)** | Instruct: read `policies/core/governance/standards/token-model-tool-and-channel-governance-policy.md` fully via tools; summarize binding rules for this deployment. |
-| **6 — Token governance (implement)** | Paste `policies/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md`; create/update only the registries/templates that policy requires under `workspace/` or `operations/`. |
-| **7 — Lean org order** | Paste `policies/core/governance/role-prompts/minimal-default-deployment-order.md`; reconcile with Session 4 and update `operations/ORG_REGISTRY.md` / `ORG_CHART.md` if needed. |
+| **1 — Token governance (policy)** | Instruct: read `policies/core/governance/standards/token-model-tool-and-channel-governance-policy.md` fully via tools; summarize binding rules for this deployment. |
+| **2 — Token governance (implement)** | Paste `policies/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md`; create/update only the registries/templates that policy requires under `workspace/` or `operations/`. Copy `scripts/templates/hermes_token_governance.runtime.example.yaml` → `workspace/operations/hermes_token_governance.runtime.yaml`, `enabled: true`. |
+| **3 — Runtime activation** | Use **§ Operator first message — Session 3** (minimal or standard starter). Do **not** paste the full Runtime Activation `text` fence — the agent reads it from `POLICY_ROOT/core/deployment-handoff.md`. |
+| **4 — Artifacts + constitution** | One message: read `policies/core/governance/artifacts-and-archival-memory.md` and `policies/core/agentic-company-deployment-pack.md` via tools; confirm how `workspace/operations/` and per-project archival paths will be used; write any missing register stubs only if empty. |
+| **5 — Security activation pack** | Prefer: *"Read `POLICY_ROOT/core/security-prompts.md` via tools in chunks; execute Chief Security Governor + audit posture against this runtime."* Avoid pasting the full file. |
+| **6 — Chief orchestrator** | Prefer: *"Read `POLICY_ROOT/core/chief-orchestrator-directive.md` via tools; adopt its doctrine for this deployment; output org stance, initial roles, next session pointer."* Paste only if the file read fails — the directive is long. |
+| **7 — Lean org order** | Paste `policies/core/governance/role-prompts/minimal-default-deployment-order.md`; reconcile with Session 6 and update `operations/ORG_REGISTRY.md` / `ORG_CHART.md` if needed. |
 | **8 — Org mapper / HR** | First read standard `policies/core/governance/standards/org-mapper-hr-policy.md`, then paste `policies/core/governance/role-prompts/org-mapper-hr-controller.md`. |
 | **9 — Agent lifecycle hygiene** | Standard `agent-lifecycle-org-hygiene-policy.md`, then role prompt `agent-lifecycle-org-hygiene-controller.md`. |
 | **10 — Task state & evidence** | Standard `task-state-and-evidence-policy.md`, then `task-state-evidence-enforcer.md`. |
@@ -333,7 +337,7 @@ Use a **new messaging/CLI session per step** when you want the lowest conversati
 | **19 — Runtime pack customization** | One message: follow `workspace/BOOTSTRAP.md` checklist; edit `workspace/USER.md`, `IDENTITY.md`, `TOOLS.md`, `MEMORY.md` as needed (paths at `HERMES_HOME/workspace/`). |
 | **20 — Gateway watchdog (production messaging)** | Read `policies/core/gateway-watchdog.md`; confirm `hermes gateway watchdog-check` and external watchdog/systemd alignment with operator setup. |
 
-**Canonical security standard:** `policies/core/governance/standards/canonical-ai-agent-security-policy.md` is the policy layer for Session 3; it is already reflected through `security-prompts.md` — do not skip Session 3 in favor of ad-hoc security text.
+**Canonical security standard:** `policies/core/governance/standards/canonical-ai-agent-security-policy.md` is the policy layer for Session 5; it is already reflected through `security-prompts.md` — do not skip Session 5 in favor of ad-hoc security text.
 
 **Note:** Sessions 8–18 follow the standards → role-prompt pairing in `policies/README.md` (each **standard** immediately before its **role prompt**). Adjust 15–18 to match how many directors, projects, and workers you actually instantiate.
 

@@ -8,7 +8,7 @@
 # 2. Merge this into ~/.hermes/profiles/chief-orchestrator/config.yaml
 # 3. Put OPENROUTER_API_KEY in that profile's ~/.hermes/profiles/chief-orchestrator/.env
 #
-# Token / model governance (Session 6+): do **not** hardcode expensive OpenRouter slugs here.
+# Token / model governance (Session 2+ after activation): do **not** hardcode expensive OpenRouter slugs here.
 # - Copy scripts/templates/hermes_token_governance.runtime.example.yaml to
 #   HERMES_HOME/workspace/operations/hermes_token_governance.runtime.yaml
 # - Edit **tier_models** (A–F) there when pricing changes; keep policy alignment with
