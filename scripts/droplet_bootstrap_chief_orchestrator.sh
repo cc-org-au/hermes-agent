@@ -20,4 +20,6 @@ if [[ ! -x "$PY" ]]; then
 fi
 "$PY" -m hermes_cli.main -p default profile create chief-orchestrator --no-alias || true
 "$PY" -m hermes_cli.main -p default profile use chief-orchestrator
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+bash "$ROOT/scripts/ensure_chief_orchestrator_profile_env.sh"
 "$PY" -m hermes_cli.main -p default profile show chief-orchestrator

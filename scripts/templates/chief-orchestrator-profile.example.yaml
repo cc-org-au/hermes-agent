@@ -2,6 +2,9 @@
 #
 # 1. From repo: ./scripts/droplet_bootstrap_chief_orchestrator.sh
 #    (or: ./venv/bin/hermes profile create chief-orchestrator && ./venv/bin/hermes profile use chief-orchestrator)
+#    Bootstrap also runs ./scripts/ensure_chief_orchestrator_profile_env.sh so the profile has
+#    its own ~/.hermes/profiles/chief-orchestrator/.env (Hermes loads only HERMES_HOME/.env).
+#    Re-run that script anytime the profile is missing .env but ~/.hermes/.env or repo .env exists.
 #    Use ./venv/bin/hermes — bare `hermes` is not on PATH unless you add venv/bin.
 # 2. Merge this into ~/.hermes/profiles/chief-orchestrator/config.yaml
 # 3. Put GEMINI_API_KEY in that profile's ~/.hermes/profiles/chief-orchestrator/.env
