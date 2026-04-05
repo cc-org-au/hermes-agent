@@ -13,7 +13,7 @@
 #
 # env -u: a parent-exported HERMES_DROPLET_ALLOW_ENV_PASSPHRASE must not re-enable file passphrase here;
 # ssh_droplet still reads the file, but HERMES_DROPLET_WORKSTATION_CLI=1 disables file-based unlock.
-# For headless automation, call scripts/ssh_droplet.sh directly (not via this script).
+# For headless automation from the repo, prefer scripts/droplet_run.sh (sudo off, per invocation).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$ROOT/.." && pwd)"
@@ -27,5 +27,7 @@ for a in "$@"; do
 done
 export HERMES_DROPLET_INTERACTIVE=1
 export HERMES_DROPLET_WORKSTATION_CLI=1
-export HERMES_DROPLET_REQUIRE_SUDO="${AGENT_DROPLET_REQUIRE_SUDO:-${HERMES_DROPLET_REQUIRE_SUDO:-1}}"
+# Default sudo on; do not inherit HERMES_DROPLET_REQUIRE_SUDO from the parent shell (avoids stale
+# exports after running droplet_run.sh). Use AGENT_DROPLET_REQUIRE_SUDO=0 to opt out per command.
+export HERMES_DROPLET_REQUIRE_SUDO="${AGENT_DROPLET_REQUIRE_SUDO:-1}"
 exec env -u HERMES_DROPLET_ALLOW_ENV_PASSPHRASE bash "$REPO/scripts/ssh_droplet.sh" --sudo-user "$RUNTIME_USER" "$cmd"

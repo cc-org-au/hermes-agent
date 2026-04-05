@@ -10,6 +10,12 @@ source venv/bin/activate  # ALWAYS activate before running Python
 
 **direnv (`.envrc`):** Prefer **`./venv/bin/python`** for `HERMES_REAL_BIN` (or `./venv/bin/hermes`). Do **not** run `command -v hermes` *before* `PATH_add scripts` — that captures a **global** install. The repo’s **`scripts/hermes`** shim runs **`venv/bin/python -m hermes_cli.main`** first (avoids a stale **`venv/bin/hermes`** shebang if the checkout moved).
 
+### Droplet SSH (automation vs interactive Hermes)
+
+- **Automated / non-interactive remote steps** (git pull, scripts, smoke tests): run **`./scripts/droplet_run.sh '…'`**. That sets **`HERMES_DROPLET_REQUIRE_SUDO=0`** only for that child process (no sudo to **`hermesuser`** on the VPS). Nothing to “turn back on” afterward — the next command uses defaults again.
+- **Interactive Hermes on the VPS** (`hermes tui droplet`, etc.): uses **`scripts/agent-droplet`**, which defaults **`HERMES_DROPLET_REQUIRE_SUDO=1`** (sudo **`sudo -k; sudo -u hermesuser …`**) and does **not** inherit a stray **`HERMES_DROPLET_REQUIRE_SUDO`** from the parent shell, so a prior **`droplet_run`** does not disable sudo for **`hermes … droplet`**.
+- Lower-level control: **`scripts/ssh_droplet.sh`** header documents **`HERMES_DROPLET_REQUIRE_SUDO`**, **`--droplet-no-sudo`**, and **`~/.env/.env`** overrides.
+
 ## Project Structure
 
 ```

@@ -32,6 +32,9 @@
 #     ./scripts/ssh_droplet.sh --droplet-require-sudo --sudo-user hermesuser '…'
 #   Optional line in the same env file as SSH_*: HERMES_DROPLET_REQUIRE_SUDO=0 (default for scripts).
 #
+# Automation (AI / CI): ./scripts/droplet_run.sh 'remote command' — sudo off for that process only;
+# `hermes … droplet` still uses sudo on by default (agent-droplet does not inherit parent REQUIRE_SUDO).
+#
 # Remote side of "<cli> … droplet" (workstation): scripts/hermes → scripts/agent-droplet.
 # See policies/core/unified-deployment-and-security.md (Step 15).
 
@@ -64,7 +67,10 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   val="${line#*=}"
   case "$key" in
     SSH_PORT|SSH_USER|SSH_TAILSCALE_IP|SSH_IP|SSH_SUDO_PASSWORD) export "${key}=${val}" ;;
-    HERMES_DROPLET_REQUIRE_SUDO) export HERMES_DROPLET_REQUIRE_SUDO="${val}" ;;
+    HERMES_DROPLET_REQUIRE_SUDO)
+      # Parent (agent-droplet, droplet_run.sh env, user export) wins over the file.
+      [[ -n "${HERMES_DROPLET_REQUIRE_SUDO+x}" ]] || export HERMES_DROPLET_REQUIRE_SUDO="${val}"
+      ;;
     HERMES_DROPLET_ALLOW_ENV_PASSPHRASE)
       case "$val" in 1|true|TRUE|True|yes|YES) _ALLOW_ENV_PASS_FROM_FILE=1 ;; esac
       ;;
