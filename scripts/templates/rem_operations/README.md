@@ -23,9 +23,13 @@ This directory holds **runtime registers** for the agentic-company / chief-orche
 
 ## Hygiene (ORG_HYGIENE_RULES §6–7)
 
-- **Weekly (light):** scan `SECURITY_ALERT_REGISTER` for open rows; confirm gateway `watchdog-check` healthy.
-- **Monthly:** `CHANNEL_ARCHITECTURE.md` vs live integrations; `SKILL_INVENTORY_REGISTER.md` row accuracy.
-- **Quarterly:** `BOARD_REVIEW_REGISTER.md` entry or explicit “no review required”; token governance `tier_models` sanity vs OpenRouter catalog.
+The numbering maps to **`POLICY_ROOT/core/governance/standards/agent-lifecycle-org-hygiene-policy.md`**: **§6-style** ≈ *Org Hygiene Requirements* (duplication, drift, privilege, ownership); **§7-style** ≈ *Required Outputs* (lifecycle / duplication / privilege reports). This `operations/` tree is where **evidence** for those reviews accumulates.
+
+| Cadence | Actions |
+|---------|---------|
+| **Weekly** | Scan `SECURITY_ALERT_REGISTER.md` for non-COMPLETE rows; `hermes gateway watchdog-check` healthy; glance `gateway_state.json` for platform errors. |
+| **Monthly** | Re-run `scripts/render_workspace_registers_from_env.py` after messaging `.env` changes; spot-check `CHANNEL_ARCHITECTURE.md` vs Slack/Telegram/Discord/WhatsApp invites; audit `SKILL_INVENTORY_REGISTER.md` vs `skills/*/SKILL.md` permissions. |
+| **Quarterly** | `BOARD_REVIEW_REGISTER.md` real session **or** explicit “no review required” row; `CONSULTANT_REQUEST_REGISTER.md` backlog review; `tier_models` vs OpenRouter catalog; org profile list vs `org_agent_profiles_manifest.yaml`. |
 
 ## Sync from repo templates
 
@@ -37,6 +41,17 @@ REM_OPERATIONS_FORCE=1 ./scripts/materialize_rem_operations.sh
 ```
 
 `REM_OPERATIONS_FORCE=1` **overwrites** listed templates (use after `git pull` to refresh registers).
+
+### Live IDs + skill inventory (W003 / W004)
+
+After changing messaging **`.env`**, regenerate operational tables from the active profile:
+
+```bash
+export HERMES_HOME="$HOME/.hermes/profiles/chief-orchestrator"
+./venv/bin/python scripts/render_workspace_registers_from_env.py
+```
+
+Then restart the gateway if you changed allowlists or tokens.
 
 ## Governance enforcement note
 
