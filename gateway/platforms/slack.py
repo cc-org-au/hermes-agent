@@ -119,6 +119,56 @@ def check_slack_requirements() -> bool:
     return SLACK_AVAILABLE
 
 
+def _slash_command_socket_ack_fix_out(request_body: Any, dispatched: Any, ack: Any) -> Any:
+    """Prefer ``ack.response`` for slash commands when Bolt ignored it (Socket Mode).
+
+    slack-bolt's ``AsyncioListenerRunner`` with ``process_before_response=False`` returns
+    the middleware ``response`` object whenever it is non-None, even after the listener
+    calls ``ack()``. For Socket Mode slash commands, that wrong body can produce a
+    ``payload`` Slack rejects with ``invalid_command_response``. Hermes always acks
+    slash commands with an empty body (envelope-only); this restores that behavior.
+    """
+    if not isinstance(request_body, dict) or "command" not in request_body:
+        return dispatched
+    if ack is None:
+        return dispatched
+    ack_resp = getattr(ack, "response", None)
+    if ack_resp is None:
+        return dispatched
+    return ack_resp
+
+
+_HERMES_SLACK_ASYNCIO_RUNNER_PATCHED = False
+
+
+def _ensure_slack_bolt_slash_socket_ack_fix() -> None:
+    """Monkey-patch Bolt's async listener runner once (process-wide)."""
+    global _HERMES_SLACK_ASYNCIO_RUNNER_PATCHED
+    if _HERMES_SLACK_ASYNCIO_RUNNER_PATCHED:
+        return
+    try:
+        from slack_bolt.listener.asyncio_runner import AsyncioListenerRunner
+    except ImportError:
+        return
+
+    _orig = AsyncioListenerRunner.run
+
+    async def _run(self, request, response, listener_name, listener, starting_time=None):
+        out = await _orig(self, request, response, listener_name, listener, starting_time)
+        try:
+            return _slash_command_socket_ack_fix_out(
+                getattr(request, "body", None),
+                out,
+                getattr(request.context, "ack", None),
+            )
+        except Exception:
+            logger.debug("[Slack] slash ack fix wrapper failed (non-fatal)", exc_info=True)
+            return out
+
+    AsyncioListenerRunner.run = _run  # type: ignore[assignment]
+    _HERMES_SLACK_ASYNCIO_RUNNER_PATCHED = True
+
+
 class SlackAdapter(BasePlatformAdapter):
     """
     Slack bot adapter using Socket Mode.
@@ -201,6 +251,7 @@ class SlackAdapter(BasePlatformAdapter):
                 logger.warning("[Slack] Failed to read %s: %s", tokens_file, e)
 
         try:
+            _ensure_slack_bolt_slash_socket_ack_fix()
             # Acquire scoped lock to prevent duplicate app token usage
             from gateway.status import acquire_scoped_lock
             self._token_lock_identity = app_token
@@ -328,6 +379,9 @@ class SlackAdapter(BasePlatformAdapter):
             # - Socket Mode slash ack: send envelope only (no ``payload``). Slack validates
             #   HTTP-style bodies (``text`` / ``response_type``) and may return
             #   ``invalid_command_response``; see Socket Mode "Acknowledge events" + slash example.
+            # - ``_ensure_slack_bolt_slash_socket_ack_fix()`` works around slack-bolt's async
+            #   runner returning the middleware response instead of ``ack.response`` for slash
+            #   commands when ``process_before_response=False`` (default).
             # - Run _handle_slash_command in a task so the ack returns immediately; the real
             #   reply is posted via the normal messaging path.
             _hermes_slash = re.compile(r"^/hermes(?:$|-(.+))$", re.IGNORECASE)

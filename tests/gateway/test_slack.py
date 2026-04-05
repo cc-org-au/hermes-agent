@@ -62,6 +62,7 @@ _slack_mod.SLACK_AVAILABLE = True
 from gateway.platforms.slack import (  # noqa: E402
     SlackAdapter,
     _normalize_slack_socket_event,
+    _slash_command_socket_ack_fix_out,
     _slack_aggregate_visible_text,
 )
 
@@ -90,6 +91,28 @@ def _redirect_cache(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "gateway.platforms.base.DOCUMENT_CACHE_DIR", tmp_path / "doc_cache"
     )
+
+
+# ---------------------------------------------------------------------------
+# TestSlashCommandSocketAckFixOut
+# ---------------------------------------------------------------------------
+
+
+class TestSlashCommandSocketAckFixOut:
+    def test_non_command_body_unchanged(self):
+        wrong = object()
+        assert _slash_command_socket_ack_fix_out({"type": "event_callback"}, wrong, None) is wrong
+
+    def test_slash_prefers_ack_when_set(self):
+        wrong = object()
+        ack_obj = type("A", (), {"response": "from_ack"})()
+        out = _slash_command_socket_ack_fix_out({"command": "/hermes-reset"}, wrong, ack_obj)
+        assert out == "from_ack"
+
+    def test_slash_no_ack_keeps_dispatched(self):
+        wrong = object()
+        ack_obj = type("A", (), {"response": None})()
+        assert _slash_command_socket_ack_fix_out({"command": "/hermes"}, wrong, ack_obj) is wrong
 
 
 # ---------------------------------------------------------------------------
