@@ -5,7 +5,8 @@
 # (env-file SSH_PASSPHRASE / HERMES_DROPLET_ALLOW_ENV_PASSPHRASE is ignored for this entrypoint).
 # Remote command always runs under sudo -u <runtime> (sudo -k first) so your sudo password is required
 # on the VPS TTY when your account is not passwordless-sudo for that user (no SSH_SUDO_PASSWORD pipe).
-# Optional env: AGENT_DROPLET_RUNTIME_USER, AGENT_DROPLET_RUNTIME_HOME, AGENT_DROPLET_REPO
+# Optional env: AGENT_DROPLET_RUNTIME_USER, AGENT_DROPLET_RUNTIME_HOME, AGENT_DROPLET_REPO,
+# AGENT_DROPLET_PROFILE (default chief-orchestrator — passed as -p so argv wins over active_profile)
 # HERMES_DROPLET_INTERACTIVE=1 lets ssh_droplet pass its TTY check when stdin is not a TTY (IDE).
 # Defaults: runtime user hermesuser, HERMES_HOME …/profiles/chief-orchestrator, repo ~/hermes-agent.
 # One-time VPS setup: sudo bash scripts/droplet_bootstrap_hermesuser.sh
@@ -19,7 +20,8 @@ REPO="$(cd "$ROOT/.." && pwd)"
 RUNTIME_USER="${AGENT_DROPLET_RUNTIME_USER:-hermesuser}"
 HH=$(printf '%q' "${AGENT_DROPLET_RUNTIME_HOME:-/home/hermesuser/.hermes/profiles/chief-orchestrator}")
 REPO_Q=$(printf '%q' "${AGENT_DROPLET_REPO:-/home/hermesuser/hermes-agent}")
-cmd="export HERMES_HOME=${HH}; cd ${REPO_Q} && if [[ ! -x ./venv/bin/python ]]; then echo 'agent-droplet: missing ./venv/bin/python. On the droplet: python3 -m venv venv && ./venv/bin/pip install -e .' >&2; exit 127; fi && exec ./venv/bin/python -m hermes_cli.main"
+PROF_Q=$(printf '%q' "${AGENT_DROPLET_PROFILE:-chief-orchestrator}")
+cmd="export HERMES_HOME=${HH}; cd ${REPO_Q} && if [[ ! -x ./venv/bin/python ]]; then echo 'agent-droplet: missing ./venv/bin/python. On the droplet: sudo bash scripts/droplet_bootstrap_hermesuser.sh' >&2; exit 127; fi && exec ./venv/bin/python -m hermes_cli.main -p ${PROF_Q}"
 for a in "$@"; do
   cmd+=" $(printf '%q' "$a")"
 done

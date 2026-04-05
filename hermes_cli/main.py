@@ -78,7 +78,9 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # We intercept --profile/-p from sys.argv here and set the env var so that
 # every subsequent ``os.getenv("HERMES_HOME", ...)`` resolves correctly.
 # The flag is stripped from sys.argv so argparse never sees it.
-# Falls back to ~/.hermes/active_profile for sticky default.
+# Else falls back to ~/.hermes/active_profile for sticky default.
+# If HERMES_HOME is already set to an existing directory (e.g. agent-droplet, systemd), it wins
+# over active_profile so sticky files cannot clobber a pinned runtime home.
 # ---------------------------------------------------------------------------
 def _apply_profile_override() -> None:
     """Pre-parse --profile/-p and set HERMES_HOME before module imports."""
@@ -86,7 +88,7 @@ def _apply_profile_override() -> None:
     profile_name = None
     consume = 0
 
-    # 1. Check for explicit -p / --profile flag
+    # 1. Explicit -p / --profile in argv (highest priority)
     for i, arg in enumerate(argv):
         if arg in ("--profile", "-p") and i + 1 < len(argv):
             profile_name = argv[i + 1]
@@ -97,19 +99,6 @@ def _apply_profile_override() -> None:
             consume = 1
             break
 
-    # 2. If no flag, check ~/.hermes/active_profile
-    if profile_name is None:
-        try:
-            active_path = Path.home() / ".hermes" / "active_profile"
-            if active_path.exists():
-                name = active_path.read_text().strip()
-                if name and name != "default":
-                    profile_name = name
-                    consume = 0  # don't strip anything from argv
-        except (UnicodeDecodeError, OSError):
-            pass  # corrupted file, skip
-
-    # 3. If we found a profile, resolve and set HERMES_HOME
     if profile_name is not None:
         try:
             from hermes_cli.profiles import resolve_profile_env
@@ -122,7 +111,6 @@ def _apply_profile_override() -> None:
             print(f"Warning: profile override failed ({exc}), using default", file=sys.stderr)
             return
         os.environ["HERMES_HOME"] = hermes_home
-        # Strip the flag from argv so argparse doesn't choke
         if consume > 0:
             for i, arg in enumerate(argv):
                 if arg in ("--profile", "-p"):
@@ -133,6 +121,40 @@ def _apply_profile_override() -> None:
                     start = i + 1
                     sys.argv = sys.argv[:start] + sys.argv[start + 1:]
                     break
+        return
+
+    # 2. Parent-pinned HERMES_HOME (agent-droplet export, services) — do not override with sticky file
+    pre = os.environ.get("HERMES_HOME", "").strip()
+    if pre:
+        try:
+            if Path(pre).expanduser().resolve().is_dir():
+                return
+        except OSError:
+            pass
+
+    # 3. Sticky ~/.hermes/active_profile
+    profile_name = None
+    consume = 0
+    try:
+        active_path = Path.home() / ".hermes" / "active_profile"
+        if active_path.exists():
+            name = active_path.read_text().strip()
+            if name and name != "default":
+                profile_name = name
+    except (UnicodeDecodeError, OSError):
+        pass
+
+    if profile_name is not None:
+        try:
+            from hermes_cli.profiles import resolve_profile_env
+            hermes_home = resolve_profile_env(profile_name)
+        except (ValueError, FileNotFoundError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            sys.exit(1)
+        except Exception as exc:
+            print(f"Warning: profile override failed ({exc}), using default", file=sys.stderr)
+            return
+        os.environ["HERMES_HOME"] = hermes_home
 
 _apply_profile_override()
 

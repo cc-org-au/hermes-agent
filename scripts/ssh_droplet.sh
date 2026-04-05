@@ -79,8 +79,9 @@ HOST="${SSH_TAILSCALE_IP:-${SSH_IP:?}}"
 # ControlMaster=no / ControlPath=none — never reuse a ControlPersist socket; otherwise a second
 # `ssh` can attach without unlocking the key again (looks like "no passphrase").
 # -t allocates a TTY so passphrase prompts work when stdin is not a terminal (IDE).
+# -tt: force TTY even if stdin is not a terminal (helps sudo passphrase prompts under IDE wrappers).
 REMOTE_BASE=(
-  ssh -t -o BatchMode=no -o IdentitiesOnly=yes -o IdentityAgent=none
+  ssh -tt -o BatchMode=no -o IdentitiesOnly=yes -o IdentityAgent=none
   -o AddKeysToAgent=no -o ControlMaster=no -o ControlPath=none
   -o StrictHostKeyChecking=accept-new
   -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=4
@@ -110,6 +111,13 @@ if [[ "$_ALLOW_ENV_PASS_FROM_FILE" == "1" ]]; then
   export SSH_ASKPASS_REQUIRE=force
   export DISPLAY="${DISPLAY:-:0}"
   _DROPLET_ENV=(env -u SSH_AUTH_SOCK -u SSH_AUTH_SOCK_PRIVATE)
+fi
+
+# Workstation `hermes … droplet`: never use SSH_ASKPASS (force TTY / pinentry for encrypted keys).
+if [[ "${HERMES_DROPLET_WORKSTATION_CLI:-}" == "1" ]]; then
+  unset SSH_ASKPASS
+  export SSH_ASKPASS_REQUIRE=never
+  _DROPLET_ENV=(env -u SSH_AUTH_SOCK -u SSH_AUTH_SOCK_PRIVATE -u SSH_ASKPASS SSH_ASKPASS_REQUIRE=never)
 fi
 
 if [[ ! -t 0 && "${HERMES_DROPLET_INTERACTIVE:-}" != "1" && "$_ALLOW_ENV_PASS_FROM_FILE" != "1" ]]; then
