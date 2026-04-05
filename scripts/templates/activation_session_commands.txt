@@ -17,6 +17,9 @@ Rules for you:
 Acknowledge in one short paragraph, then wait for **Session 1**.
 ---END INITIAL PROMPT---
 
+# Sessions 2–20 with cumulative “cover” + same tasks + Verification (Session 1 assumed done):
+#   scripts/templates/activation_sessions_cumulative_cover_2_20.txt
+#
 # One session = one new chat. Paste ONE line per session (after resolving paths from HERMES_HOME/.hermes.md).
 # POLICY_ROOT = canonical bundle path from .hermes.md. WORKSPACE = HERMES_HOME/workspace.
 # All paths below are relative to POLICY_ROOT unless prefixed with WORKSPACE/

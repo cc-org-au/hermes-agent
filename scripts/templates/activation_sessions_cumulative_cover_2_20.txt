@@ -1,0 +1,309 @@
+# Phased activation — Sessions 2–20 with cumulative cover context
+# =============================================================================
+# Assumes Session 1 (runtime activation / deployment-handoff) is DONE. Use one NEW chat per session.
+# Resolve POLICY_ROOT and WORKSPACE from HERMES_HOME/.hermes.md (absolute paths in real use).
+# Paste each block below as a single user message (cover + task + verification).
+
+# ── Session 2 ────────────────────────────────────────────────────────────────
+---BEGIN SESSION 2---
+
+**Cover — phased activation (fresh context)**  
+We are continuing a **20-step procedural activation** of the agentic-company policy pack. **Session 1 is complete** (runtime activation: `deployment-handoff.md` checklist, preflight, Required output). This chat has **no prior turn history** — treat **disk** as source of truth: `WORKSPACE/operations/` registers, any Session 1 outputs you wrote, and `POLICY_ROOT` policies. **Do not redo Session 1** unless you find registers or security state invalidated.
+
+**This session = Session 2.** It **builds on** Session 1 by locking in **artifacts, archival memory, and the deployment pack constitution** so later sessions (security, token governance, org roles) have stable file/register contracts.
+
+**Session task**
+
+Read `POLICY_ROOT/core/governance/artifacts-and-archival-memory.md` and `POLICY_ROOT/core/agentic-company-deployment-pack.md` via tools; confirm `workspace/operations/` and archival layout; patch registers only if missing.
+
+**Verification** — Before you finish, add a section **"Verification"** with: (1) absolute `HERMES_HOME` + profile name; (2) read `.hermes.md` and print policy root + workspace paths (one line each); (3) confirm `skip_context_files` is not disabling injection; list context files you read this session (`.hermes.md`, `WORKSPACE/BOOTSTRAP.md`, `WORKSPACE/AGENTS.md`, `SOUL.md`) with **verbatim first line or first heading** from disk for each read; (4) bullet list this session’s policy paths + one-line purpose; (5) three topic phrases from the handoff/workspace rules you are following (no full system prompt dump).
+
+---END SESSION 2---
+
+# ── Session 3 ────────────────────────────────────────────────────────────────
+---BEGIN SESSION 3---
+
+**Cover — phased activation (fresh context)**  
+**Sessions 1–2 are done:** Session 1 = runtime activation; Session 2 = artifacts/archival + canonical deployment pack alignment and `workspace/operations/` layout. This chat is **empty of prior turns** — load continuity from **files and registers** only.
+
+**This session = Session 3.** It **builds on** 1–2 by activating the **security layer** (Chief Security Governor posture, audit framing) using `security-prompts.md`, so token governance and org sessions later inherit a classified security baseline.
+
+**Session task**
+
+Read `POLICY_ROOT/core/security-prompts.md` in chunks; run Chief Security Governor + audit posture for this runtime; summarize findings.
+
+**Verification** — Same five-part **Verification** section as Session 2 (HERMES_HOME, path wiring from `.hermes.md`, context files + verbatim first lines, policy reads list, three pack topics — no full system prompt dump).
+
+---END SESSION 3---
+
+# ── Session 4 ────────────────────────────────────────────────────────────────
+---BEGIN SESSION 4---
+
+**Cover — phased activation (fresh context)**  
+**Sessions 1–3 complete:** activation → artifacts/pack → security prompts/audit posture. **No chat history here** — use registers, `WORKSPACE/`, and policy on disk.
+
+**This session = Session 4.** It **builds on** prior work by fixing **orchestrator doctrine** (chief directive): org stance, which roles to register next, and how later “lean org” and token sessions will align.
+
+**Session task**
+
+Read `POLICY_ROOT/core/chief-orchestrator-directive.md` via tools; state org stance, initial roles to register, next step.
+
+**Verification** — Same five-part **Verification** section as Session 2.
+
+---END SESSION 4---
+
+# ── Session 5 ────────────────────────────────────────────────────────────────
+---BEGIN SESSION 5---
+
+**Cover — phased activation (fresh context)**  
+**Sessions 1–4 complete:** through chief orchestrator directive and org stance. Fresh context — continuity is in **ORG/operations files** and your prior written outputs.
+
+**This session = Session 5.** It **builds on** Session 4 by loading **token / model / tool / channel governance policy** (read-only summary of binding rules) before implementation in Session 6.
+
+**Session task**
+
+Read `POLICY_ROOT/core/governance/standards/token-model-tool-and-channel-governance-policy.md` via tools; summarize binding rules for this deployment.
+
+**Verification** — Same five-part **Verification** section as Session 2.
+
+---END SESSION 5---
+
+# ── Session 6 ────────────────────────────────────────────────────────────────
+---BEGIN SESSION 6---
+
+**Cover — phased activation (fresh context)**  
+**Sessions 1–5 complete:** including token governance **policy** summary. Empty thread — use disk.
+
+**This session = Session 6.** It **builds on** Session 5 by **implementing** what that policy requires: registries/templates under `WORKSPACE/` and `WORKSPACE/operations/` only (per implement prompt).
+
+**Session task**
+
+Read `POLICY_ROOT/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md` via tools; implement required registries/templates under `WORKSPACE/` and `WORKSPACE/operations/` only.
+
+**Verification** — Same five-part **Verification** section as Session 2.
+
+---END SESSION 6---
+
+# ── Session 7 ────────────────────────────────────────────────────────────────
+---BEGIN SESSION 7---
+
+**Cover — phased activation (fresh context)**  
+**Sessions 1–6 complete:** token governance implemented on disk. Fresh chat.
+
+**This session = Session 7.** It **builds on** Sessions 4 and 6 by reconciling **minimal default deployment order** with orchestrator stance and **ORG_REGISTRY / ORG_CHART**.
+
+**Session task**
+
+Read `POLICY_ROOT/core/governance/role-prompts/minimal-default-deployment-order.md` via tools; align `ORG_REGISTRY` / `ORG_CHART` with Session 4.
+
+**Verification** — Same five-part **Verification** section as Session 2.
+
+---END SESSION 7---
+
+# ── Session 8 ────────────────────────────────────────────────────────────────
+---BEGIN SESSION 8---
+
+**Cover — phased activation (fresh context)**  
+**Sessions 1–7 complete:** org chart alignment started. No history — files only.
+
+**This session = Session 8.** It **builds on** org registers by applying **org-mapper / HR** standard + controller to operations files.
+
+**Session task**
+
+Read `POLICY_ROOT/core/governance/standards/org-mapper-hr-policy.md` then `POLICY_ROOT/core/governance/role-prompts/org-mapper-hr-controller.md` via tools; apply to registers.
+
+**Verification** — Same five-part **Verification** section as Session 2.
+
+---END SESSION 8---
+
+# ── Session 9 ────────────────────────────────────────────────────────────────
+---BEGIN SESSION 9---
+
+**Cover — phased activation (fresh context)**  
+**Sessions 1–8 complete:** HR/mapper pass applied. Fresh context.
+
+**This session = Session 9.** It **builds on** org structure by enforcing **agent lifecycle and org hygiene** (standards + controller).
+
+**Session task**
+
+Read `POLICY_ROOT/core/governance/standards/agent-lifecycle-org-hygiene-policy.md` then `POLICY_ROOT/core/governance/role-prompts/agent-lifecycle-org-hygiene-controller.md` via tools; apply.
+
+**Verification** — Same five-part **Verification** section as Session 2.
+
+---END SESSION 9---
+
+# ── Session 10 ────────────────────────────────────────────────────────────────
+---BEGIN SESSION 10---
+
+**Cover — phased activation (fresh context)**  
+**Sessions 1–9 complete:** lifecycle hygiene. Empty thread.
+
+**This session = Session 10.** It **builds on** governance by applying **task state and evidence** rules (standard + enforcer role prompt).
+
+**Session task**
+
+Read `POLICY_ROOT/core/governance/standards/task-state-and-evidence-policy.md` then `POLICY_ROOT/core/governance/role-prompts/task-state-evidence-enforcer.md` via tools; apply.
+
+**Verification** — Same five-part **Verification** section as Session 2.
+
+---END SESSION 10---
+
+# ── Session 11 ────────────────────────────────────────────────────────────────
+---BEGIN SESSION 11---
+
+**Cover — phased activation (fresh context)**  
+**Sessions 1–10 complete:** task/evidence layer. Fresh chat.
+
+**This session = Session 11.** It **builds on** prior registers by adding **board review** policy + role workflow.
+
+**Session task**
+
+Read `POLICY_ROOT/core/governance/standards/board-of-directors-review-policy.md` then `POLICY_ROOT/core/governance/role-prompts/board-of-directors-review.md` via tools; apply.
+
+**Verification** — Same five-part **Verification** section as Session 2.
+
+---END SESSION 11---
+
+# ── Session 12 ────────────────────────────────────────────────────────────────
+---BEGIN SESSION 12---
+
+**Cover — phased activation (fresh context)**  
+**Sessions 1–11 complete:** board review. No prior turns.
+
+**This session = Session 12.** It **builds on** org + comms governance by planning **channel architecture** (standard + planner prompt).
+
+**Session task**
+
+Read `POLICY_ROOT/core/governance/standards/channel-architecture-policy.md` then `POLICY_ROOT/core/governance/role-prompts/future-channel-architecture-planner.md` via tools; apply.
+
+**Verification** — Same five-part **Verification** section as Session 2.
+
+---END SESSION 12---
+
+# ── Session 13 ────────────────────────────────────────────────────────────────
+---BEGIN SESSION 13---
+
+**Cover — phased activation (fresh context)**  
+**Sessions 1–12 complete:** channel architecture. Fresh context.
+
+**This session = Session 13.** It **builds on** the stack by applying **client deployment** intake (standard + template).
+
+**Session task**
+
+Read `POLICY_ROOT/core/governance/standards/client-deployment-policy.md` then `POLICY_ROOT/core/governance/role-prompts/client-intake-deployment-template.md` via tools; apply.
+
+**Verification** — Same five-part **Verification** section as Session 2.
+
+---END SESSION 13---
+
+# ── Session 14 ────────────────────────────────────────────────────────────────
+---BEGIN SESSION 14---
+
+**Cover — phased activation (fresh context)**  
+**Sessions 1–13 complete:** client deployment patterns. Empty thread.
+
+**This session = Session 14.** It **builds on** the company template layer: **agentic-company-template** and optional **markdown playbooks** under workspace rules.
+
+**Session task**
+
+Read `POLICY_ROOT/core/governance/standards/agentic-company-template.md` via tools; if playbooks needed, read `POLICY_ROOT/core/governance/role-prompts/markdown-playbook-generator.md` and generate under workspace rules.
+
+**Verification** — Same five-part **Verification** section as Session 2.
+
+---END SESSION 14---
+
+# ── Session 15 ────────────────────────────────────────────────────────────────
+---BEGIN SESSION 15---
+
+**Cover — phased activation (fresh context)**  
+**Sessions 1–14 complete:** template/playbook layer. Fresh chat. **Repeat this session once per director function** you are standing up (new chat each time if multiple functions).
+
+**This session = Session 15.** It **builds on** ORG_CHART / registers by instantiating a **functional director** (substitute the function name in the template).
+
+**Session task**
+
+(Per director function) Read `POLICY_ROOT/core/governance/standards/functional-director-policy-template.md` then `POLICY_ROOT/core/governance/role-prompts/functional-director-template.md`; substitute function name; update registers.
+
+**Verification** — Same five-part **Verification** section as Session 2.
+
+---END SESSION 15---
+
+# ── Session 16 ────────────────────────────────────────────────────────────────
+---BEGIN SESSION 16---
+
+**Cover — phased activation (fresh context)**  
+**Sessions 1–15 complete** (or 15 repeated per director). No history. **Repeat per real project** — new chat per project if several.
+
+**This session = Session 16.** It **builds on** org structure by defining a **project lead** for a concrete project slug.
+
+**Session task**
+
+(Per real project) Read `POLICY_ROOT/core/governance/standards/project-lead-policy-template.md` then `POLICY_ROOT/core/governance/role-prompts/project-lead-template.md`; apply for project slug.
+
+**Verification** — Same five-part **Verification** section as Session 2.
+
+---END SESSION 16---
+
+# ── Session 17 ────────────────────────────────────────────────────────────────
+---BEGIN SESSION 17---
+
+**Cover — phased activation (fresh context)**  
+**Sessions 1–16 complete** (or 16 per project). Fresh context. **Only if complexity warrants a supervisor.**
+
+**This session = Session 17.** It **builds on** project structure by adding a **supervisor** layer where justified.
+
+**Session task**
+
+(If needed) Read `POLICY_ROOT/core/governance/standards/supervisor-policy-template.md` then `POLICY_ROOT/core/governance/role-prompts/supervisor-template.md`; apply.
+
+**Verification** — Same five-part **Verification** section as Session 2.
+
+---END SESSION 17---
+
+# ── Session 18 ────────────────────────────────────────────────────────────────
+---BEGIN SESSION 18---
+
+**Cover — phased activation (fresh context)**  
+**Sessions 1–17 complete** (or skipped 17). Empty thread. **Only when delegating narrow worker/specialist roles.**
+
+**This session = Session 18.** It **builds on** project/supervisor structure by applying **worker/specialist** templates.
+
+**Session task**
+
+(If delegating) Read `POLICY_ROOT/core/governance/standards/worker-specialist-policy-template.md` then `POLICY_ROOT/core/governance/role-prompts/worker-specialist-template.md`; apply.
+
+**Verification** — Same five-part **Verification** section as Session 2.
+
+---END SESSION 18---
+
+# ── Session 19 ────────────────────────────────────────────────────────────────
+---BEGIN SESSION 19---
+
+**Cover — phased activation (fresh context)**  
+**Sessions 1–18 complete** (adjust for skipped optional sessions). Fresh chat.
+
+**This session = Session 19.** It **builds on** everything prior by **customizing the runtime agent markdown pack** at `WORKSPACE/` (identity, tools, memory, user-facing files) per `BOOTSTRAP.md`.
+
+**Session task**
+
+Follow `WORKSPACE/BOOTSTRAP.md` checklist; edit `WORKSPACE/USER.md`, `IDENTITY.md`, `TOOLS.md`, `MEMORY.md` as needed.
+
+**Verification** — Same five-part **Verification** section as Session 2.
+
+---END SESSION 19---
+
+# ── Session 20 ────────────────────────────────────────────────────────────────
+---BEGIN SESSION 20---
+
+**Cover — phased activation (fresh context)**  
+**Sessions 1–19 complete:** runtime pack tuned. This is the **final scheduled activation chat** for production messaging hygiene.
+
+**This session = Session 20.** It **builds on** the full deployment by aligning **gateway watchdog** practice with what the operator runs on the VPS (`watchdog-check`, systemd, scripts).
+
+**Session task**
+
+Read `POLICY_ROOT/core/gateway-watchdog.md`; confirm `hermes gateway watchdog-check` and external watchdog/systemd scripts match production messaging.
+
+**Verification** — Same five-part **Verification** section as Session 2.
+
+---END SESSION 20---
