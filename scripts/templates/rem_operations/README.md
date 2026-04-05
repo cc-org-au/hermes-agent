@@ -53,6 +53,8 @@ export HERMES_HOME="$HOME/.hermes/profiles/chief-orchestrator"
 
 Then restart the gateway if you changed allowlists or tokens.
 
+If you just ran **`REM_OPERATIONS_FORCE=1`** `materialize_rem_operations.sh`, run this script **again** afterward so `CHANNEL_ARCHITECTURE.md`, `SKILL_INVENTORY_REGISTER.md`, consultant/board seeds, and `SECURITY_ALERT` W003/W004 lines are not overwritten by template copies.
+
 ## Governance enforcement note
 
 - There is **no** `agent/governance.py` in core. **Model / turn caps** come from **`agent/token_governance_runtime.py`** reading `hermes_token_governance.runtime.yaml` (`max_agent_turns`). Logs: `Token governance: baseline …` and per-turn tier lines (gateway + CLI).
