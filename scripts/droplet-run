@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-# Short entry: one-off remote command as SSH_USER (no sudo to hermesuser).
-# Same as: scripts/droplet_run.sh
-#
-# Example: droplet-run 'cd ~/hermes-agent && git pull'
-set -euo pipefail
-_ROOT="$(cd "$(dirname "$0")" && pwd)"
-exec bash "$_ROOT/droplet_run.sh" "$@"

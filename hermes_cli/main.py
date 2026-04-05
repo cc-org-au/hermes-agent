@@ -161,6 +161,19 @@ def _apply_profile_override() -> None:
         pass
 
     if profile_name is not None:
+        # "droplet" is the VPS hop suffix (hermes doctor droplet), not a profile name.
+        if profile_name.strip() == "droplet":
+            print(
+                "Warning: ~/.hermes/active_profile contained 'droplet' — that is not a profile. "
+                "Use: hermes <command> … droplet   (droplet must be the last argument). "
+                "Clearing sticky; using default ~/.hermes.",
+                file=sys.stderr,
+            )
+            try:
+                active_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            return
         try:
             from hermes_cli.profiles import resolve_profile_env
             hermes_home = resolve_profile_env(profile_name)
@@ -5254,10 +5267,11 @@ For more help on a command:
     # =========================================================================
     droplet_parser = subparsers.add_parser(
         "droplet",
-        help="Run Hermes CLI on the VPS over SSH (requires repo scripts/agent-droplet)",
+        help="VPS hop — canonical form is: hermes <subcommand> … droplet (droplet last)",
         description=(
-            "Opens an SSH session that runs the same Hermes CLI on the server "
-            "(venv + HERMES_HOME). Optional arguments are forwarded to hermes on the VPS. "
+            "SSH to the VPS and run Hermes there (venv + HERMES_HOME). "
+            "Normally you append droplet as the last argument (e.g. hermes doctor droplet); "
+            "this subcommand is a fallback when scripts/agent-droplet was not available at startup. "
             "Configure ~/.env/.env with SSH_* (see scripts/ssh_droplet.sh)."
         ),
     )
