@@ -22,7 +22,8 @@ enabled: true
 tier_models:
   A: "openrouter/auto"
   B: "google/gemini-2.5-flash-lite"
-  C: "deepseek/deepseek-reasoner"
+  # OpenRouter: use deepseek-r1 (deepseek-reasoner is the DeepSeek-direct API name, not a valid OR slug).
+  C: "deepseek/deepseek-r1"
   D: "google/gemini-2.5-flash"
   E: "google/gemini-2.5-pro"
   F: "anthropic/claude-sonnet-4.5"

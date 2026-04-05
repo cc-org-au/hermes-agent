@@ -370,7 +370,7 @@ Use for:
 
 ### Tier C — Cheap reasoning workers
 Examples:
-- `deepseek/deepseek-reasoner`
+- `deepseek/deepseek-r1` on OpenRouter (DeepSeek’s direct API may expose `deepseek-reasoner` under a different routing name)
 - strong low-cost Qwen reasoning models
 - stronger low-cost fast/minor variants from frontier providers where available
 
@@ -460,7 +460,7 @@ Default primary:
 
 Fallbacks:
 - `google/gemini-2.5-flash-lite`
-- `deepseek/deepseek-reasoner`
+- `deepseek/deepseek-r1`
 
 ### Project Leads
 Default primary:
@@ -468,7 +468,7 @@ Default primary:
 
 Coding-heavy leads may use:
 - `qwen/qwen3-coder`
-- `deepseek/deepseek-reasoner`
+- `deepseek/deepseek-r1`
 
 ### Supervisors
 Default primary:
@@ -481,7 +481,7 @@ Default primary:
 ### Workers — Coding
 Default primary:
 - `qwen/qwen3-coder`
-- `deepseek/deepseek-reasoner`
+- `deepseek/deepseek-r1`
 - `google/gemini-2.5-flash` only when broader reasoning is needed
 
 Workers may not self-call premium consultants.
