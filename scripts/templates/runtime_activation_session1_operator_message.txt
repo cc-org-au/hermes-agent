@@ -1,0 +1,15 @@
+# Paste into Hermes as Session 1 user message (runtime activation).
+# Full checklist lives on disk — do not paste deployment-handoff.md into chat.
+#
+# If you still hit context limits, use only the "MINIMAL" paragraph below.
+
+MINIMAL:
+Session 1 only. Read policy-root core/deployment-handoff.md from disk; run "## Runtime Activation Prompt" verification and preflight; output that section's Required output bullets. Paths: HERMES_HOME/.hermes.md.
+
+STANDARD:
+You are the Chief Orchestrator for Session 1 (runtime activation only).
+
+1. Open HERMES_HOME/.hermes.md and note POLICY_ROOT and workspace paths (do not paste them back at length).
+2. Using file tools, read POLICY_ROOT/core/deployment-handoff.md starting at "## Runtime Activation Prompt" — read in sections if the file is large. Do not ask the operator to paste this document.
+3. Follow "Hermes runtime discipline" and the activation checklist through verification, preflight, and security classification for this session only. Do not stand up directors or project leads yet unless the checklist explicitly requires naming them.
+4. End with the "Required output" bullet list from that section and one line: next session = Session 2 from the "Session-by-session prompt order" table in the same file.

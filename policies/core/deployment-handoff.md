@@ -172,7 +172,34 @@ Output a concise deployment summary showing:
 
 ---
 
-## Runtime Activation Prompt
+## Operator first message — Session 1 (low tokens; use this)
+
+**Do not paste the large “Runtime Activation Prompt” block below into chat** — it duplicates what is already on disk and can overflow the model context together with Hermes system prompt + tools.
+
+Copy **one** of these (shortest first if you still hit limits):
+
+**Minimal (if even the standard starter fails):**
+
+```text
+Session 1 only. Read policy-root `core/deployment-handoff.md` from disk; run "## Runtime Activation Prompt" verification and preflight; output that section's Required output bullets. Paths: `HERMES_HOME/.hermes.md`.
+```
+
+**Standard starter (recommended):**
+
+```text
+You are the Chief Orchestrator for Session 1 (runtime activation only).
+
+1. Open `HERMES_HOME/.hermes.md` and note `POLICY_ROOT` and workspace paths (do not paste them back at length).
+2. Using file tools, read `POLICY_ROOT/core/deployment-handoff.md` starting at "## Runtime Activation Prompt" — read in sections if the file is large. Do not ask the operator to paste this document.
+3. Follow "Hermes runtime discipline" and the activation checklist through verification, preflight, and security classification for this session only. Do not stand up directors or project leads yet unless the checklist explicitly requires naming them.
+4. End with the "Required output" bullet list from that section and one line: next session = Session 2 from the "Session-by-session prompt order" table in the same file.
+```
+
+---
+
+## Runtime Activation Prompt (full reference — for disk / tools, not for operator paste)
+
+The block below is the **authoritative checklist** the agent should follow after loading it from **`POLICY_ROOT/core/deployment-handoff.md`**. Operators trigger it with the **short messages above**.
 
 ```text
 The deployment files, policies, prompts, registries, runbooks, and agent markdown files already exist in this workspace.
@@ -285,10 +312,10 @@ Use a **new messaging/CLI session per step** when you want the lowest conversati
 
 | Session | What to paste / instruct |
 |--------|---------------------------|
-| **1 — Runtime activation** | The **Runtime Activation Prompt** block above (full `text` fence). |
+| **1 — Runtime activation** | Use **§ Operator first message — Session 1** (minimal or standard starter). Do **not** paste the full Runtime Activation `text` fence — the agent reads it from `POLICY_ROOT/core/deployment-handoff.md`. |
 | **2 — Artifacts + constitution** | One message: read `policies/core/governance/artifacts-and-archival-memory.md` and `policies/core/agentic-company-deployment-pack.md` via tools; confirm how `workspace/operations/` and per-project archival paths will be used; write any missing register stubs only if empty. |
-| **3 — Security activation pack** | Paste or point the model at `policies/core/security-prompts.md` and execute the security-governor / audit posture it defines against this runtime (files on disk, not chat dumps of the whole repo). |
-| **4 — Chief orchestrator** | Paste `policies/core/chief-orchestrator-directive.md` (directive body); output: org stance, initial roles to stand up, next session pointer. |
+| **3 — Security activation pack** | Prefer: *"Read `POLICY_ROOT/core/security-prompts.md` via tools in chunks; execute Chief Security Governor + audit posture against this runtime."* Avoid pasting the full file. |
+| **4 — Chief orchestrator** | Prefer: *"Read `POLICY_ROOT/core/chief-orchestrator-directive.md` via tools; adopt its doctrine for this deployment; output org stance, initial roles, next session pointer."* Paste only if the file read fails — the directive is long. |
 | **5 — Token governance (policy)** | Instruct: read `policies/core/governance/standards/token-model-tool-and-channel-governance-policy.md` fully via tools; summarize binding rules for this deployment. |
 | **6 — Token governance (implement)** | Paste `policies/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md`; create/update only the registries/templates that policy requires under `workspace/` or `operations/`. |
 | **7 — Lean org order** | Paste `policies/core/governance/role-prompts/minimal-default-deployment-order.md`; reconcile with Session 4 and update `operations/ORG_REGISTRY.md` / `ORG_CHART.md` if needed. |
