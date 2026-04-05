@@ -499,6 +499,27 @@ def slack_subcommand_map() -> dict[str, str]:
     return mapping
 
 
+def slack_slack_subcommand_text_map() -> dict[str, str]:
+    """Subcommand map for Slack routing, including Slack-only ``compact``."""
+    m = slack_subcommand_map().copy()
+    m["compact"] = "/compress"
+    return m
+
+
+def slack_socket_mode_prefixed_subcommand_keys() -> list[str]:
+    """Sorted first-token keys for ``/hermes-<key>`` Socket Mode slash commands.
+
+    Used by the Slack adapter (Bolt) and ``hermes_slack_manifest_dict`` so the
+    app manifest stays aligned with live listeners.
+    """
+    return sorted(slack_slack_subcommand_text_map().keys())
+
+
+def slack_bolt_slash_command_paths() -> list[str]:
+    """Return Bolt listener paths ``/hermes-<key>`` for each gateway subcommand."""
+    return [f"/hermes-{k}" for k in slack_socket_mode_prefixed_subcommand_keys()]
+
+
 # ---------------------------------------------------------------------------
 # Autocomplete
 # ---------------------------------------------------------------------------

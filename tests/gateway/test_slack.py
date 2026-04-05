@@ -222,7 +222,7 @@ class TestAppMentionHandler:
     """Verify that the app_mention event handler is registered."""
 
     def test_app_mention_registered_on_connect(self):
-        """connect() should register event(message), app_mention, and /hermes."""
+        """connect() should register event(message), app_mention, and /hermes (+ /hermes-*)."""
         config = PlatformConfig(enabled=True, token="xoxb-fake")
         adapter = SlackAdapter(config)
 
@@ -281,6 +281,10 @@ class TestAppMentionHandler:
         assert "message" in registered_events
         assert "app_mention" in registered_events
         assert "/hermes" in registered_commands
+        from hermes_cli.commands import slack_bolt_slash_command_paths
+
+        assert "/hermes-help" in registered_commands
+        assert len(registered_commands) == 1 + len(slack_bolt_slash_command_paths())
 
 
 # ---------------------------------------------------------------------------

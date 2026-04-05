@@ -76,6 +76,10 @@ def test_hermes_slack_manifest_dict_shape():
     assert len(m["display_information"]["long_description"]) >= 174
     assert m["settings"]["socket_mode_enabled"] is True
     assert "message.channels" in m["settings"]["event_subscriptions"]["bot_events"]
+    slash = m["features"]["slash_commands"]
+    assert slash[0]["command"] == "/hermes"
+    assert any(e.get("command") == "/hermes-help" for e in slash)
+    assert len(slash) >= 30
 
 
 def test_slack_command_manifest_validate_dispatch(monkeypatch):

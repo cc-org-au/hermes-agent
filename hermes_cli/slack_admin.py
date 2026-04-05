@@ -21,6 +21,38 @@ from typing import Any, Dict, List, Optional
 from hermes_constants import display_hermes_home
 
 
+def _slack_manifest_slash_command_features() -> List[Dict[str, Any]]:
+    """Build ``features.slash_commands`` for the Slack app manifest (Socket Mode).
+
+    Registers ``/hermes`` plus ``/hermes-<subcommand>`` for each gateway key so
+    commands appear in Slack's slash picker; the gateway maps them to the same
+    handler as ``/hermes <subcommand>``.
+    """
+    from hermes_cli.commands import resolve_command, slack_bolt_slash_command_paths
+
+    entries: List[Dict[str, Any]] = [
+        {
+            "command": "/hermes",
+            "description": (
+                "Hermes AI — subcommand or free text; see /hermes-help and "
+                "other /hermes-* shortcuts"
+            ),
+            "should_escape": False,
+        }
+    ]
+    for path in slack_bolt_slash_command_paths():
+        key = path[len("/hermes-") :]
+        if key == "compact":
+            desc = "Compress conversation context (same as /hermes compress)"
+        else:
+            cmd = resolve_command(key)
+            desc = cmd.description if cmd else f"Hermes gateway: {key}"
+        if len(desc) > 300:
+            desc = desc[:297] + "..."
+        entries.append({"command": path, "description": desc, "should_escape": False})
+    return entries
+
+
 def hermes_slack_manifest_dict() -> Dict[str, Any]:
     """Hermes-recommended Slack app manifest (v2 JSON) for Socket Mode + Bolt.
 
@@ -56,13 +88,7 @@ def hermes_slack_manifest_dict() -> Dict[str, Any]:
                 "display_name": "hermes",
                 "always_online": True,
             },
-            "slash_commands": [
-                {
-                    "command": "/hermes",
-                    "description": "Hermes gateway commands (help, session, tools)",
-                    "should_escape": False,
-                }
-            ],
+            "slash_commands": _slack_manifest_slash_command_features(),
         },
         "oauth_config": {
             "scopes": {

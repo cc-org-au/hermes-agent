@@ -131,7 +131,7 @@ class SlackAdapter(BasePlatformAdapter):
       - DMs and channel messages (mention-gated in channels)
       - Thread support
       - File/image/audio attachments
-      - Slash commands (/hermes)
+      - Slash commands (/hermes and /hermes-<subcommand>)
       - Typing indicators (not natively supported by Slack bots)
     """
 
@@ -323,11 +323,31 @@ class SlackAdapter(BasePlatformAdapter):
                     return
                 await self._handle_slack_message(normalized)
 
-            # Register slash command handler
-            @self._app.command("/hermes")
-            async def handle_hermes_command(ack, command):
+            # Slash commands: /hermes <text> plus one Slack app entry per subcommand
+            # (/hermes-help, /hermes-bg, …) so they appear in Slack's command picker.
+            from hermes_cli.commands import (
+                slack_bolt_slash_command_paths,
+                slack_socket_mode_prefixed_subcommand_keys,
+            )
+
+            _slack_prefix_keys = frozenset(slack_socket_mode_prefixed_subcommand_keys())
+
+            async def _hermes_slash_router(ack, command):
                 await ack()
+                cmd = (command.get("command") or "").strip()
+                if cmd.startswith("/hermes-") and len(cmd) > len("/hermes-"):
+                    suffix = cmd[len("/hermes-") :]
+                    if suffix in _slack_prefix_keys:
+                        rest = (command.get("text") or "").strip()
+                        command = dict(command)
+                        command["text"] = (
+                            f"{suffix} {rest}".strip() if rest else suffix
+                        )
                 await self._handle_slash_command(command)
+
+            self._app.command("/hermes")(_hermes_slash_router)
+            for _path in slack_bolt_slash_command_paths():
+                self._app.command(_path)(_hermes_slash_router)
 
             # Start Socket Mode handler in background
             self._handler = AsyncSocketModeHandler(self._app, app_token)
@@ -1182,9 +1202,8 @@ class SlackAdapter(BasePlatformAdapter):
 
         # Map subcommands to gateway commands — derived from central registry.
         # Also keep "compact" as a Slack-specific alias for /compress.
-        from hermes_cli.commands import slack_subcommand_map
-        subcommand_map = slack_subcommand_map()
-        subcommand_map["compact"] = "/compress"
+        from hermes_cli.commands import slack_slack_subcommand_text_map
+        subcommand_map = slack_slack_subcommand_text_map()
         first_word = text.split()[0] if text else ""
         if first_word in subcommand_map:
             # Preserve arguments after the subcommand
