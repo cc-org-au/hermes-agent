@@ -46,13 +46,6 @@ def parse_dotenv(path: Path) -> dict[str, str]:
     return out
 
 
-def _mask_token(val: str, keep: int = 6) -> str:
-    v = (val or "").strip()
-    if len(v) <= keep:
-        return "***" if v else ""
-    return v[:keep] + "…"
-
-
 def render_channel_architecture(home: Path, env: dict[str, str]) -> str:
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     rows = []
@@ -63,8 +56,10 @@ def render_channel_architecture(home: Path, env: dict[str, str]) -> str:
             val = env.get(key, "")
             if not val:
                 block.append(f"| `{key}` | *(unset)* |")
-            elif "TOKEN" in key or "SECRET" in key or "PASSWORD" in key or "KEY" in key:
-                block.append(f"| `{key}` | `{_mask_token(val)}` |")
+            elif "TOKEN" in key or "SECRET" in key or "PASSWORD" in key:
+                block.append(f"| `{key}` | *(set — redacted in register)* |")
+            elif key.endswith("_KEY") or "_API_KEY" in key:
+                block.append(f"| `{key}` | *(set — redacted)* |")
             else:
                 block.append(f"| `{key}` | `{val}` |")
         rows.append("\n".join(block))
@@ -254,8 +249,11 @@ def patch_security_alert_w003_w004(home: Path) -> None:
     text = path.read_text(encoding="utf-8")
     text2 = text
     text2 = re.sub(
-        r"(\| W003 \|[^\n]+\| Medium \| )\*\*IN PROGRESS\*\*",
-        r"\1**COMPLETE**",
+        r"\| W003 \|[^\n]+\n",
+        "| W003 | Integration allowlists documented | Medium | **COMPLETE** | AG-009 / Operator | "
+        "`CHANNEL_ARCHITECTURE.md` generated from live `.env` (see script). "
+        "Set `TELEGRAM_ALLOWED_CHATS`, `SLACK_ALLOWED_CHANNELS`, `SLACK_ALLOWED_TEAMS`, "
+        "`DISCORD_*`, `WHATSAPP_ALLOWED_CHATS` when locking non-DM surfaces; restart gateway. |\n",
         text2,
         count=1,
     )
