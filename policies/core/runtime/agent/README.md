@@ -1,5 +1,5 @@
 <!-- policy-read-order-nav:top -->
-> **Governance read order** — step 24 of 56 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../../../README.md)).
+> **Governance read order** — step 26 of 58 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../../../README.md)).
 > **Before this file:** read [core/runtime/agent/HEARTBEAT.md](HEARTBEAT.md) and everything earlier in that sequence. **Do not** interpret this document as authoritative until those prerequisites are satisfied.
 > **This file:** safe to apply only after the prerequisite above (if any) is complete.
 <!-- policy-read-order-nav:top-end -->
@@ -16,9 +16,11 @@ Use this order:
 2. `policies/core/unified-deployment-and-security.md`
 3. `policies/core/deployment-handoff.md`
 4. `python policies/core/scripts/start_pipeline.py` — see `policies/core/pipeline-runbook.md`
-5. `policies/core/runtime/agent/BOOTSTRAP.md`
-6. `policies/core/runtime/agent/AGENTS.md`
-7. the remaining attached agent markdown files
+5. `policies/core/security-prompts.md` and `policies/core/chief-orchestrator-directive.md`
+6. `policies/core/governance/standards/token-model-tool-and-channel-governance-policy.md` then `policies/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md`
+7. `policies/core/runtime/agent/BOOTSTRAP.md`
+8. `policies/core/runtime/agent/AGENTS.md`
+9. the remaining attached agent markdown files
 
 The attached markdown pack is the workspace operating layer and is subordinate to:
 - `policies/README.md`

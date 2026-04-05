@@ -1,5 +1,5 @@
 <!-- policy-read-order-nav:top -->
-> **Governance read order** — step 9 of 56 in the canonical `policies/` sequence (layer map & tables: [`README.md`](README.md)).
+> **Governance read order** — step 9 of 58 in the canonical `policies/` sequence (layer map & tables: [`README.md`](README.md)).
 > **Before this file:** read [core/global-agentic-company-deployment-policy.md](core/global-agentic-company-deployment-policy.md) and everything earlier in that sequence. **Do not** interpret this document as authoritative until those prerequisites are satisfied.
 > **This file:** safe to apply only after the prerequisite above (if any) is complete.
 <!-- policy-read-order-nav:top-end -->
@@ -44,13 +44,16 @@ For runtime deployments, `operations/` should live under `AGENT_HOME/workspace/o
 | A6 | [`core/global-agentic-company-deployment-policy.md`](core/global-agentic-company-deployment-policy.md) | Global deployment policy |
 | A7 | **This** [`README.md`](README.md) | Repo-level map (you are here) |
 | A8 | [`core/pipeline-runbook.md`](core/pipeline-runbook.md) | Run `start_pipeline.py` |
-| A9–A10 | [`core/security-prompts.md`](core/security-prompts.md), [`core/chief-orchestrator-directive.md`](core/chief-orchestrator-directive.md) | Activation |
+| A9 | [`core/security-prompts.md`](core/security-prompts.md) | Activation prompts |
+| A10 | [`core/chief-orchestrator-directive.md`](core/chief-orchestrator-directive.md) | Chief orchestrator activation |
+| A11 | [`core/governance/standards/token-model-tool-and-channel-governance-policy.md`](core/governance/standards/token-model-tool-and-channel-governance-policy.md) | Additive token / model / tool / channel governance (after chief activation) |
+| A12 | [`core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md`](core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md) | Implementation prompt for token governance layer |
 
 ### B — Runtime agent pack
 
 | Step | File | Notes |
 |------|------|--------|
-| B1 | [`core/runtime/agent/BOOTSTRAP.md`](core/runtime/agent/BOOTSTRAP.md) | Then [`AGENTS.md`](core/runtime/agent/AGENTS.md) and the rest of `core/runtime/agent/` |
+| B1 | [`core/runtime/agent/BOOTSTRAP.md`](core/runtime/agent/BOOTSTRAP.md) | Then [`AGENTS.md`](core/runtime/agent/AGENTS.md) and the rest of `core/runtime/agent/` (read **after** A11–A12 when the full canonical sequence is required) |
 
 ### C — Governance
 
@@ -98,6 +101,7 @@ python policies/core/scripts/start_pipeline.py
 | [`core/governance/standards/client-deployment-policy.md`](core/governance/standards/client-deployment-policy.md) | [`core/governance/role-prompts/client-intake-deployment-template.md`](core/governance/role-prompts/client-intake-deployment-template.md) |
 | [`core/governance/standards/agent-lifecycle-org-hygiene-policy.md`](core/governance/standards/agent-lifecycle-org-hygiene-policy.md) | [`core/governance/role-prompts/agent-lifecycle-org-hygiene-controller.md`](core/governance/role-prompts/agent-lifecycle-org-hygiene-controller.md) |
 | [`core/governance/standards/agentic-company-template.md`](core/governance/standards/agentic-company-template.md) | [`core/governance/role-prompts/markdown-playbook-generator.md`](core/governance/role-prompts/markdown-playbook-generator.md) · [`core/governance/role-prompts/minimal-default-deployment-order.md`](core/governance/role-prompts/minimal-default-deployment-order.md) |
+| [`core/governance/standards/token-model-tool-and-channel-governance-policy.md`](core/governance/standards/token-model-tool-and-channel-governance-policy.md) | [`core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md`](core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md) |
 
 ---
 

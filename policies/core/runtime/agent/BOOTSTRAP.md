@@ -1,6 +1,6 @@
 <!-- policy-read-order-nav:top -->
-> **Governance read order** — step 13 of 56 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../../../README.md)).
-> **Before this file:** read [core/chief-orchestrator-directive.md](../../chief-orchestrator-directive.md) and everything earlier in that sequence. **Do not** interpret this document as authoritative until those prerequisites are satisfied.
+> **Governance read order** — step 15 of 58 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../../../README.md)).
+> **Before this file:** read [core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md](../../governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md) and everything earlier in that sequence. **Do not** interpret this document as authoritative until those prerequisites are satisfied.
 > **This file:** safe to apply only after the prerequisite above (if any) is complete.
 <!-- policy-read-order-nav:top-end -->
 
@@ -18,11 +18,14 @@ The total order is:
 2. `policies/core/unified-deployment-and-security.md`
 3. `policies/core/deployment-handoff.md`
 4. `python policies/core/scripts/start_pipeline.py` (see `policies/core/pipeline-runbook.md`)
-5. `BOOTSTRAP.md`
-6. `AGENTS.md`
-7. the remaining attached agent markdown files
+5. `policies/core/security-prompts.md` and `policies/core/chief-orchestrator-directive.md`
+6. `policies/core/governance/standards/token-model-tool-and-channel-governance-policy.md`
+7. `policies/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md`
+8. `BOOTSTRAP.md` (this file)
+9. `AGENTS.md`
+10. the remaining attached agent markdown files
 
-This file should be used only after the security-first setup, the unified deployment and security runbook, and the deployment-handoff document have already been followed.
+This file should be used only after the security-first setup, the unified deployment and security runbook, the deployment-handoff document, activation prompts, and (when following the full canonical sequence) the token/model/tool/channel governance standard and its implementation prompt have already been read.
 
 ---
 

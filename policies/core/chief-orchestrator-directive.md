@@ -1,5 +1,5 @@
 <!-- policy-read-order-nav:top -->
-> **Governance read order** — step 12 of 56 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../README.md)).
+> **Governance read order** — step 12 of 58 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../README.md)).
 > **Before this file:** read [core/security-prompts.md](security-prompts.md) and everything earlier in that sequence. **Do not** interpret this document as authoritative until those prerequisites are satisfied.
 > **This file:** safe to apply only after the prerequisite above (if any) is complete.
 <!-- policy-read-order-nav:top-end -->
@@ -322,5 +322,5 @@ After receiving this instruction, begin implementation by:
 6. producing the role prompts below as reusable operational prompts
 
 <!-- policy-read-order-nav:bottom -->
-> **Next step:** continue to [core/runtime/agent/BOOTSTRAP.md](runtime/agent/BOOTSTRAP.md) after this file is fully read and applied. Do not skip ahead unless a human operator explicitly directs a narrower scope.
+> **Next step:** continue to [core/governance/standards/token-model-tool-and-channel-governance-policy.md](governance/standards/token-model-tool-and-channel-governance-policy.md) after this file is fully read and applied. Do not skip ahead unless a human operator explicitly directs a narrower scope.
 <!-- policy-read-order-nav:bottom-end -->

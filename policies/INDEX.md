@@ -1,5 +1,5 @@
 <!-- policy-read-order-nav:top -->
-> **Governance read order** — step 56 of 56 in the canonical `policies/` sequence (layer map & tables: [`README.md`](README.md)).
+> **Governance read order** — step 58 of 58 in the canonical `policies/` sequence (layer map & tables: [`README.md`](README.md)).
 > **Before this file:** read [core/scripts/README.md](core/scripts/README.md) and everything earlier in that sequence. **Do not** interpret this document as authoritative until those prerequisites are satisfied.
 > **This file:** safe to apply only after the prerequisite above (if any) is complete.
 <!-- policy-read-order-nav:top-end -->
@@ -27,6 +27,7 @@ Paths are relative to the repository root.
 - `policies/core/governance/role-prompts/client-intake-deployment-template.md`
 - `policies/core/governance/role-prompts/functional-director-template.md`
 - `policies/core/governance/role-prompts/future-channel-architecture-planner.md`
+- `policies/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md`
 - `policies/core/governance/role-prompts/markdown-playbook-generator.md`
 - `policies/core/governance/role-prompts/minimal-default-deployment-order.md`
 - `policies/core/governance/role-prompts/org-mapper-hr-controller.md`
@@ -45,6 +46,7 @@ Paths are relative to the repository root.
 - `policies/core/governance/standards/project-lead-policy-template.md`
 - `policies/core/governance/standards/supervisor-policy-template.md`
 - `policies/core/governance/standards/task-state-and-evidence-policy.md`
+- `policies/core/governance/standards/token-model-tool-and-channel-governance-policy.md`
 - `policies/core/governance/standards/worker-specialist-policy-template.md`
 - `policies/core/pipeline-runbook.md`
 - `policies/core/README.md`

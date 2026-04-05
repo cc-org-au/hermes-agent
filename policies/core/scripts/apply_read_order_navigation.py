@@ -35,6 +35,8 @@ READ_ORDER_SEQUENCE: tuple[str, ...] = (
     "core/pipeline-runbook.md",
     "core/security-prompts.md",
     "core/chief-orchestrator-directive.md",
+    "core/governance/standards/token-model-tool-and-channel-governance-policy.md",
+    "core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md",
     "core/runtime/agent/BOOTSTRAP.md",
     "core/runtime/agent/AGENTS.md",
     "core/runtime/agent/IDENTITY.md",

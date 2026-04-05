@@ -1,5 +1,5 @@
 <!-- policy-read-order-nav:top -->
-> **Governance read order** — step 4 of 56 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../README.md)).
+> **Governance read order** — step 4 of 58 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../README.md)).
 > **Before this file:** read [core/unified-deployment-and-security.md](unified-deployment-and-security.md) and everything earlier in that sequence. **Do not** interpret this document as authoritative until those prerequisites are satisfied.
 > **This file:** safe to apply only after the prerequisite above (if any) is complete.
 <!-- policy-read-order-nav:top-end -->
@@ -41,9 +41,11 @@ Use this order:
 2. `policies/core/unified-deployment-and-security.md`
 3. `policies/core/deployment-handoff.md` (this file)
 4. `python policies/core/scripts/start_pipeline.py --workspace-root "$AGENT_HOME/workspace" --policy-root "$AGENT_HOME/policies"` (or equivalent env vars) — verify tree, strict `standards/` cues, refresh `INDEX.md`, and materialize runtime outputs; see [`pipeline-runbook.md`](pipeline-runbook.md)
-5. `policies/core/runtime/agent/BOOTSTRAP.md`
-6. `policies/core/runtime/agent/AGENTS.md`
-7. the remaining attached agent markdown files referenced by `BOOTSTRAP.md` and `AGENTS.md` (paths under `policies/core/runtime/agent/` in this repository)
+5. [`security-prompts.md`](security-prompts.md) and [`chief-orchestrator-directive.md`](chief-orchestrator-directive.md) — activation layer (canonical read order before token governance)
+6. `policies/core/governance/standards/token-model-tool-and-channel-governance-policy.md` then `policies/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md` — additive token / model / tool / channel governance
+7. `policies/core/runtime/agent/BOOTSTRAP.md`
+8. `policies/core/runtime/agent/AGENTS.md`
+9. the remaining attached agent markdown files referenced by `BOOTSTRAP.md` and `AGENTS.md` (paths under `policies/core/runtime/agent/` in this repository)
 
 Do not skip `BOOTSTRAP.md`. It is required because it instigates and explains use of the full agent markdown pack.
 
@@ -81,6 +83,7 @@ Supporting policy and template sources:
 - `policies/core/governance/standards/client-deployment-policy.md`
 - `policies/core/governance/standards/agent-lifecycle-org-hygiene-policy.md`
 - `policies/core/governance/standards/agentic-company-template.md`
+- `policies/core/governance/standards/token-model-tool-and-channel-governance-policy.md`
 - `policies/core/governance/role-prompts/org-mapper-hr-controller.md`
 - `policies/core/governance/role-prompts/functional-director-template.md`
 - `policies/core/governance/role-prompts/project-lead-template.md`
@@ -93,6 +96,7 @@ Supporting policy and template sources:
 - `policies/core/governance/role-prompts/agent-lifecycle-org-hygiene-controller.md`
 - `policies/core/governance/role-prompts/task-state-evidence-enforcer.md`
 - `policies/core/governance/role-prompts/minimal-default-deployment-order.md`
+- `policies/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md`
 
 Attached agent markdown files that must be included in the full deployment process (under `policies/core/runtime/agent/` in this repo):
 - `BOOTSTRAP.md`

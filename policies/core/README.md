@@ -1,5 +1,5 @@
 <!-- policy-read-order-nav:top -->
-> **Governance read order** — step 6 of 56 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../README.md)).
+> **Governance read order** — step 6 of 58 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../README.md)).
 > **Before this file:** read [core/gateway-watchdog.md](gateway-watchdog.md) and everything earlier in that sequence. **Do not** interpret this document as authoritative until those prerequisites are satisfied.
 > **This file:** safe to apply only after the prerequisite above (if any) is complete.
 <!-- policy-read-order-nav:top-end -->
@@ -19,6 +19,7 @@ Everything substantive for the agentic company lives under **`policies/core/`**.
 | **Pipeline tooling only** (verify / `INDEX.md`) | [`pipeline-runbook.md`](pipeline-runbook.md) | How to run `python policies/core/scripts/start_pipeline.py` — read **after** runbooks + handoff when you need automation |
 | Firewall exception process | [`firewall-exceptions-workflow.md`](firewall-exceptions-workflow.md) | Controlled inbound/egress rule changes |
 | Activation | [`security-prompts.md`](security-prompts.md), [`chief-orchestrator-directive.md`](chief-orchestrator-directive.md) | Runtime activation prompts |
+| Token / model / tool / channel governance | [`governance/standards/token-model-tool-and-channel-governance-policy.md`](governance/standards/token-model-tool-and-channel-governance-policy.md), [`governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md`](governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md) | Additive layer after chief activation; before workspace `runtime/agent/` pack in canonical read order |
 
 Do **not** run `start_pipeline.py` until the runbooks and [`deployment-handoff.md`](deployment-handoff.md) are understood; the script does not replace that context. See also [`../README.md`](../README.md).
 
