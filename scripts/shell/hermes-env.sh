@@ -10,11 +10,11 @@
 # (or agent-droplet when the last argument is `droplet`). This avoids a global `hermes` on PATH
 # when you are not in a direnv-enabled repo directory.
 #
-# `droplet` — plain OpenSSH to hermesuser@droplet (scripts/ssh_droplet_hermesuser_direct.sh). Your
-# pubkey must be in hermesuser's authorized_keys. If you only have admin SSH, use `droplet_sudo`.
-# ~/.env/.env: SSH_PORT, SSH_TAILSCALE_IP or SSH_IP (not SSH_USER for the connection target).
+# `droplet` — SSH to the VPS as admin (`SSH_USER`), then `sudo` to `hermesuser` (interactive remote
+# shell as hermesuser). Needs ~/.env/.env: SSH_USER, SSH_PORT, SSH_TAILSCALE_IP or SSH_IP.
 #
-# `droplet_sudo` — SSH as admin then sudo to hermesuser (scripts/ssh_droplet_user.sh; needs SSH_USER).
+# `droplet_direct` — one-hop `ssh hermesuser@…` (scripts/ssh_droplet_hermesuser_direct.sh). Use only
+# after your pubkey is in hermesuser's ~/.ssh/authorized_keys; otherwise you get Permission denied.
 #
 # direnv users: `.envrc` already PATH_add scripts; you can still source this file so `hermes`
 # works from any cwd.
@@ -34,9 +34,9 @@ hermes() {
   command "$_HERMES_SHIM" "$@"
 }
 
-# Remote SSH session as hermesuser (direct ssh user@host — not a local Hermes process).
+# Remote shell as hermesuser (via admin SSH + sudo — works with typical DO/VPS key-on-root-only setups).
 droplet() {
-  local s="${HERMES_AGENT_REPO}/scripts/ssh_droplet_hermesuser_direct.sh"
+  local s="${HERMES_AGENT_REPO}/scripts/ssh_droplet_user.sh"
   if [[ ! -f "$s" ]]; then
     echo "droplet: missing $s — set HERMES_AGENT_REPO to your hermes-agent checkout" >&2
     return 127
@@ -44,12 +44,17 @@ droplet() {
   bash "$s" "$@"
 }
 
-# Same destination user, but via admin account + sudo (when hermesuser cannot SSH directly).
-droplet_sudo() {
-  local s="${HERMES_AGENT_REPO}/scripts/ssh_droplet_user.sh"
+# One-hop ssh hermesuser@droplet (requires pubkey in hermesuser authorized_keys).
+droplet_direct() {
+  local s="${HERMES_AGENT_REPO}/scripts/ssh_droplet_hermesuser_direct.sh"
   if [[ ! -f "$s" ]]; then
-    echo "droplet_sudo: missing $s — set HERMES_AGENT_REPO to your hermes-agent checkout" >&2
+    echo "droplet_direct: missing $s — set HERMES_AGENT_REPO to your hermes-agent checkout" >&2
     return 127
   fi
   bash "$s" "$@"
+}
+
+# Backward-compatible name for the same path as `droplet`.
+droplet_sudo() {
+  droplet "$@"
 }
