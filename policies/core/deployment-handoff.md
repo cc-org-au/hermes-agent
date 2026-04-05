@@ -179,6 +179,13 @@ The deployment files, policies, prompts, registries, runbooks, and agent markdow
 
 Your role is not to redesign the system. Your role is to activate, validate, and operate the deployed architecture in strict compliance with the existing canonical pack, runbook, bootstrap file, and agent markdown pack.
 
+Hermes runtime discipline (must uphold throughout activation and afterward):
+1. Keep Hermes context injection enabled — do not ask the operator to set `agent.skip_context_files` or `HERMES_SKIP_CONTEXT_FILES`. Governance paths in `HERMES_HOME/.hermes.md` and the workspace `BOOTSTRAP.md` / `AGENTS.md` pack are the canonical wiring; they stay in the system prompt as designed.
+2. Do not paste full policy trees into chat to “load” them. When a step requires policy text, use file tools to read the specific path under `AGENT_HOME/policies/` or `AGENT_HOME/workspace/` (Hermes already points to these in `.hermes.md`). Pull only the sections needed for the current task.
+3. Prefer one focused operator intent per conversation session (new chat / new session when practical) so conversation context stays small; carry state forward via `workspace/operations/` registers, per-project `memory/archival/`, and memory tools — not by re-pasting large prompts.
+4. After substantive activation work, write durable outputs to the registers and/or a short workspace charter file; keep summaries tight. The canonical policy files on disk remain authoritative; runtime markdown is pointers, registers, and distilled state — not a second copy of the whole pack.
+5. Observe prompt-caching discipline: do not recommend changing toolsets or rewriting past system context mid-session; if a new phase needs a clean context budget, start a new session and rely on files + registers for continuity.
+
 Use this exact load order:
 
 1. `policies/core/security-first-setup.md`
@@ -186,14 +193,13 @@ Use this exact load order:
 3. `policies/core/deployment-handoff.md` (this document)
 4. `python policies/core/scripts/start_pipeline.py --workspace-root "$AGENT_HOME/workspace" --policy-root "$AGENT_HOME/policies"` — see `policies/core/pipeline-runbook.md`
 5. `policies/README.md`
-6. `policies/README.md`
-7. `policies/core/governance/artifacts-and-archival-memory.md`
-8. `policies/core/agentic-company-deployment-pack.md`
-9. `policies/core/security-prompts.md`
-10. `policies/core/chief-orchestrator-directive.md`
-11. `policies/core/runtime/agent/BOOTSTRAP.md`
-12. `policies/core/runtime/agent/AGENTS.md`
-13. the remaining attached agent markdown files (under `policies/core/runtime/agent/` in this repository):
+6. `policies/core/governance/artifacts-and-archival-memory.md`
+7. `policies/core/agentic-company-deployment-pack.md`
+8. `policies/core/security-prompts.md`
+9. `policies/core/chief-orchestrator-directive.md`
+10. `policies/core/runtime/agent/BOOTSTRAP.md`
+11. `policies/core/runtime/agent/AGENTS.md`
+12. the remaining attached agent markdown files (under `policies/core/runtime/agent/` in this repository):
    - `policies/core/runtime/agent/IDENTITY.md`
    - `policies/core/runtime/agent/USER.md`
    - `policies/core/runtime/agent/SOUL.md`
@@ -204,10 +210,11 @@ Use this exact load order:
    - `policies/core/runtime/agent/HEARTBEAT.md`
    - `policies/core/runtime/agent/SECURITY.md`
    - `policies/core/runtime/agent/README.md`
-14. secondary supporting policy files in `policies/core/governance/standards/`
-15. secondary supporting role templates in `policies/core/governance/role-prompts/`
-16. `AGENT_HOME/workspace/operations/` registers and `AGENT_HOME/workspace/operations/projects/*/memory/archival/` as applicable
-17. `AGENT_HOME/workspace/policies/core/governance/generated/` index and governed additions
+13. secondary supporting policy files in `policies/core/governance/standards/`
+14. secondary supporting role templates in `policies/core/governance/role-prompts/`
+15. `AGENT_HOME/workspace/operations/` registers and `AGENT_HOME/workspace/operations/projects/*/memory/archival/` as applicable
+16. `AGENT_HOME/workspace/policies/core/governance/generated/` index and governed additions
+17. `policies/core/gateway-watchdog.md` when the messaging gateway is production-critical (after activation core)
 
 Activation rules:
 1. Treat the canonical deployment pack as authoritative.
@@ -269,6 +276,39 @@ Required output:
 - safe mode status
 - next recommended step
 ```
+
+---
+
+## Session-by-session prompt order (one prompt per chat)
+
+Use a **new messaging/CLI session per step** when you want the lowest conversation context: paste **one** block per session. Paths are under the materialized **`AGENT_HOME`** (for Hermes profile deployments, typically `HERMES_HOME/policies/...` and `HERMES_HOME/workspace/...` — see `HERMES_HOME/.hermes.md`).
+
+| Session | What to paste / instruct |
+|--------|---------------------------|
+| **1 — Runtime activation** | The **Runtime Activation Prompt** block above (full `text` fence). |
+| **2 — Artifacts + constitution** | One message: read `policies/core/governance/artifacts-and-archival-memory.md` and `policies/core/agentic-company-deployment-pack.md` via tools; confirm how `workspace/operations/` and per-project archival paths will be used; write any missing register stubs only if empty. |
+| **3 — Security activation pack** | Paste or point the model at `policies/core/security-prompts.md` and execute the security-governor / audit posture it defines against this runtime (files on disk, not chat dumps of the whole repo). |
+| **4 — Chief orchestrator** | Paste `policies/core/chief-orchestrator-directive.md` (directive body); output: org stance, initial roles to stand up, next session pointer. |
+| **5 — Token governance (policy)** | Instruct: read `policies/core/governance/standards/token-model-tool-and-channel-governance-policy.md` fully via tools; summarize binding rules for this deployment. |
+| **6 — Token governance (implement)** | Paste `policies/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md`; create/update only the registries/templates that policy requires under `workspace/` or `operations/`. |
+| **7 — Lean org order** | Paste `policies/core/governance/role-prompts/minimal-default-deployment-order.md`; reconcile with Session 4 and update `operations/ORG_REGISTRY.md` / `ORG_CHART.md` if needed. |
+| **8 — Org mapper / HR** | First read standard `policies/core/governance/standards/org-mapper-hr-policy.md`, then paste `policies/core/governance/role-prompts/org-mapper-hr-controller.md`. |
+| **9 — Agent lifecycle hygiene** | Standard `agent-lifecycle-org-hygiene-policy.md`, then role prompt `agent-lifecycle-org-hygiene-controller.md`. |
+| **10 — Task state & evidence** | Standard `task-state-and-evidence-policy.md`, then `task-state-evidence-enforcer.md`. |
+| **11 — Board review** | Standard `board-of-directors-review-policy.md`, then `board-of-directors-review.md`. |
+| **12 — Channel architecture** | Standard `channel-architecture-policy.md`, then `future-channel-architecture-planner.md`. |
+| **13 — Client deployment** | Standard `client-deployment-policy.md`, then `client-intake-deployment-template.md`. |
+| **14 — Company template + playbooks** | Read `agentic-company-template.md`; then `markdown-playbook-generator.md` if you need generated playbooks. |
+| **15 — Functional director (per function)** | One session per function when standing up a director: standard `functional-director-policy-template.md`, then paste `functional-director-template.md` with the function name filled in. |
+| **16 — Project lead (per project)** | When a real project exists: `project-lead-policy-template.md`, then `project-lead-template.md`. |
+| **17 — Supervisor** | Only if needed: `supervisor-policy-template.md`, then `supervisor-template.md`. |
+| **18 — Worker / specialist** | Only when delegating: `worker-specialist-policy-template.md`, then `worker-specialist-template.md`. |
+| **19 — Runtime pack customization** | One message: follow `workspace/BOOTSTRAP.md` checklist; edit `workspace/USER.md`, `IDENTITY.md`, `TOOLS.md`, `MEMORY.md` as needed (paths at `HERMES_HOME/workspace/`). |
+| **20 — Gateway watchdog (production messaging)** | Read `policies/core/gateway-watchdog.md`; confirm `hermes gateway watchdog-check` and external watchdog/systemd alignment with operator setup. |
+
+**Canonical security standard:** `policies/core/governance/standards/canonical-ai-agent-security-policy.md` is the policy layer for Session 3; it is already reflected through `security-prompts.md` — do not skip Session 3 in favor of ad-hoc security text.
+
+**Note:** Sessions 8–18 follow the standards → role-prompt pairing in `policies/README.md` (each **standard** immediately before its **role prompt**). Adjust 15–18 to match how many directors, projects, and workers you actually instantiate.
 
 ---
 
