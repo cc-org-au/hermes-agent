@@ -323,26 +323,36 @@ class SlackAdapter(BasePlatformAdapter):
                     return
                 await self._handle_slack_message(normalized)
 
-            # Slash commands: exact /hermes plus any /hermes-* registered in the Slack app
-            # manifest. Use one regex Bolt listener for all /hermes-<subcommand> so every
-            # manifest entry is handled even if the gateway predates a specific path string
-            # (per-path registration can otherwise yield "app did not respond" / no ack).
-            _hermes_prefixed_slash = re.compile(r"^/hermes-.+")
+            # Slash commands: /hermes and every /hermes-* from the Slack app manifest.
+            # - One case-insensitive regex listener so Slack always matches after manifest changes.
+            # - ack() must return JSON (not empty text/plain) for Socket Mode slash commands;
+            #   otherwise Slack may show "the app did not respond".
+            # - Run _handle_slash_command in a task so the Socket Mode envelope is sent right
+            #   after ack; slow agent work must not delay the websocket response.
+            _hermes_slash = re.compile(r"^/hermes(?:$|-(.+))$", re.IGNORECASE)
 
             async def _hermes_slash_router(ack, command):
-                await ack()
-                cmd = (command.get("command") or "").strip()
-                if _hermes_prefixed_slash.search(cmd) and cmd != "/hermes":
-                    suffix = cmd[len("/hermes-") :]
-                    rest = (command.get("text") or "").strip()
-                    command = dict(command)
-                    command["text"] = (
-                        f"{suffix} {rest}".strip() if rest else suffix
-                    )
-                await self._handle_slash_command(command)
+                cmd_dict = dict(command) if isinstance(command, dict) else {}
+                cmd_raw = (cmd_dict.get("command") or "").strip()
+                cmd_norm = cmd_raw if cmd_raw.startswith("/") else f"/{cmd_raw}" if cmd_raw else ""
+                m = _hermes_slash.match(cmd_norm.lower())
+                if m and m.group(1):
+                    suffix = m.group(1).strip()
+                    rest = (cmd_dict.get("text") or "").strip()
+                    cmd_dict["text"] = f"{suffix} {rest}".strip() if rest else suffix
+                await ack({"text": "", "response_type": "ephemeral"})
 
-            self._app.command("/hermes")(_hermes_slash_router)
-            self._app.command(_hermes_prefixed_slash)(_hermes_slash_router)
+                async def _slash_followup() -> None:
+                    try:
+                        await self._handle_slash_command(cmd_dict)
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception:
+                        logger.exception("[Slack] Slash command handler failed after ack")
+
+                asyncio.create_task(_slash_followup())
+
+            self._app.command(_hermes_slash)(_hermes_slash_router)
 
             # Start Socket Mode handler in background
             self._handler = AsyncSocketModeHandler(self._app, app_token)

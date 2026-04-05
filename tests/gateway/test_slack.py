@@ -280,10 +280,10 @@ class TestAppMentionHandler:
         assert registered_message_keywords == []
         assert "message" in registered_events
         assert "app_mention" in registered_events
-        assert "/hermes" in registered_commands
-        assert len(registered_commands) == 2
+        assert len(registered_commands) == 1
         assert any(
-            getattr(c, "pattern", None) == r"^/hermes-.+" for c in registered_commands
+            getattr(c, "pattern", None) == r"^/hermes(?:$|-(.+))$"
+            for c in registered_commands
         )
 
 
