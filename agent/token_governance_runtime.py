@@ -231,7 +231,7 @@ def apply_token_governance_runtime(agent: Any) -> None:
                 msg = f"Token governance: baseline Tier {tier_lbl} → {agent.model}"
             emit = getattr(agent, "_emit_status", None)
             if callable(emit):
-                emit(msg)
+                emit(msg, "token_governance")
             else:
                 logger.info("%s", msg)
         except Exception:
@@ -299,9 +299,9 @@ def apply_per_turn_tier_model(agent: Any, user_message: str) -> None:
         emit = getattr(agent, "_emit_status", None)
         extra = format_status_line(audit, tier, mid) if audit else ""
         if callable(emit):
-            emit(f"Token governance: this turn Tier {tier} → {mid}")
+            emit(f"Token governance: this turn Tier {tier} → {mid}", "token_governance")
             if extra:
-                emit(extra)
+                emit(extra, "consultant")
         else:
             logger.info("Token governance: this turn Tier %s → %s", tier, mid)
             if extra:

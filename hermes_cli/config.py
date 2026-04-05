@@ -396,6 +396,10 @@ DEFAULT_CONFIG = {
         "skin": "default",
         "tool_progress_command": False,  # Enable /verbose command in messaging gateway
         "tool_preview_length": 0,  # Max chars for tool call previews (0 = no limit, show full paths/commands)
+        # Forward AIAgent status_callback lines to Telegram/Slack/WhatsApp (separate chat messages).
+        "gateway_status_messages": True,
+        # When True, only token_governance / consultant events are sent (not rate-limit retries etc.).
+        "gateway_status_governance_only": False,
     },
 
     # Privacy settings

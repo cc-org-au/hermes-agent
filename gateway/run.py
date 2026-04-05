@@ -5550,15 +5550,34 @@ class GatewayRunner:
         _status_adapter = self.adapters.get(source.platform)
         _status_chat_id = source.chat_id
         _status_thread_metadata = {"thread_id": _progress_thread_id} if _progress_thread_id else None
+        _display_cfg = user_config.get("display") or {}
+
+        def _format_gateway_status_text(event_type: str, message: str) -> str:
+            """Prefix tier/consultant lines for Telegram/Slack/WhatsApp readability."""
+            et = (event_type or "lifecycle").lower()
+            if et == "consultant":
+                return f"⚖️ {message}"
+            if et == "token_governance":
+                return f"📊 {message}"
+            return message
 
         def _status_callback_sync(event_type: str, message: str) -> None:
             if not _status_adapter:
                 return
+            if _display_cfg.get("gateway_status_messages") is False:
+                return
+            if _display_cfg.get("gateway_status_governance_only") and (
+                event_type or "lifecycle"
+            ).lower() not in ("token_governance", "consultant"):
+                return
+            text = _format_gateway_status_text(event_type, message)
+            if len(text) > 3900:
+                text = text[:3897] + "..."
             try:
                 asyncio.run_coroutine_threadsafe(
                     _status_adapter.send(
                         _status_chat_id,
-                        message,
+                        text,
                         metadata=_status_thread_metadata,
                     ),
                     _loop_for_step,

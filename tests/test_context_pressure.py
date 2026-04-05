@@ -169,6 +169,12 @@ class TestContextPressureFlags:
         assert args[0] == "context_pressure"
         assert "85% to compaction" in args[1]
 
+    def test_emit_status_passes_event_type_to_callback(self, agent):
+        cb = MagicMock()
+        agent.status_callback = cb
+        agent._emit_status("tier line", "token_governance")
+        cb.assert_called_once_with("token_governance", "tier line")
+
     def test_emit_no_callback_no_crash(self, agent):
         """No status_callback set — should not crash."""
         agent.status_callback = None
