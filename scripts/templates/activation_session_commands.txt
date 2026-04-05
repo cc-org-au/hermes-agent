@@ -1,3 +1,20 @@
+# ── Initial prompt (send once in the first chat, before Session 1) ───────────
+# Copy the block below (between the lines) as a single user message:
+
+---BEGIN INITIAL PROMPT---
+I am running a phased activation of the agentic-company policy pack on this Hermes profile.
+
+Over the next messages I will send you **one short instruction per chat** (Sessions 1–20). Each instruction tells you which files to read under the **canonical policy bundle** and **workspace** paths shown in `HERMES_HOME/.hermes.md` (use those absolute paths; I may write `POLICY_ROOT` and `WORKSPACE` as shorthand for them).
+
+Rules for you:
+- Do **not** ask me to paste large policy documents; use file tools and read on disk (in chunks if files are huge).
+- Keep Hermes default context injection as-is (`skip_context_files` off).
+- After each session, give a brief summary and what the next session number will cover.
+- When I send only a numbered line, treat it as the **entire** task for that chat.
+
+Acknowledge in one short paragraph, then wait for **Session 1**.
+---END INITIAL PROMPT---
+
 # One session = one new chat. Paste ONE line per session (after resolving paths from HERMES_HOME/.hermes.md).
 # POLICY_ROOT = canonical bundle path from .hermes.md. WORKSPACE = HERMES_HOME/workspace.
 # All paths below are relative to POLICY_ROOT unless prefixed with WORKSPACE/
