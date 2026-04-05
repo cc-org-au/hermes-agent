@@ -20,3 +20,35 @@
 model:
   provider: openrouter
   default: anthropic/claude-sonnet-4.5
+
+# Context compression summarizer (otherwise may stay on a legacy Gemini slug).
+compression:
+  summary_provider: openrouter
+  summary_model: anthropic/claude-sonnet-4.5
+
+# Auxiliary LLM tasks default to OpenRouter Gemini when model is empty; pin Claude for VPS consistency.
+auxiliary:
+  vision:
+    provider: openrouter
+    model: anthropic/claude-sonnet-4.5
+  web_extract:
+    provider: openrouter
+    model: anthropic/claude-sonnet-4.5
+  compression:
+    provider: openrouter
+    model: anthropic/claude-sonnet-4.5
+  session_search:
+    provider: openrouter
+    model: anthropic/claude-sonnet-4.5
+  skills_hub:
+    provider: openrouter
+    model: anthropic/claude-sonnet-4.5
+  approval:
+    provider: openrouter
+    model: anthropic/claude-sonnet-4.5
+  mcp:
+    provider: openrouter
+    model: anthropic/claude-sonnet-4.5
+  flush_memories:
+    provider: openrouter
+    model: anthropic/claude-sonnet-4.5

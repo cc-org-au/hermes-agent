@@ -197,7 +197,12 @@ restart_gateway() {
   unit="${HOME}/.config/systemd/user/${svc}.service"
 
   if [[ "$PREFER_SYSTEMD" == "1" ]] && [[ -n "$svc" ]] && [[ -f "$unit" ]] && command -v systemctl >/dev/null 2>&1; then
+    # Match hermes_cli.gateway._ensure_user_systemd_env — XDG alone is not always enough;
+    # without DBUS_SESSION_BUS_ADDRESS, systemctl --user can fail with "No medium found".
     export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+    if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && -S "${XDG_RUNTIME_DIR}/bus" ]]; then
+      export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+    fi
     if systemctl --user restart "${svc}.service" >>"$LOG_FILE" 2>&1; then
       log "recovery: systemctl --user restart ${svc}.service"
       return 0
