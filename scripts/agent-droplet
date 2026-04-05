@@ -1,15 +1,21 @@
 #!/usr/bin/env bash
 # Backend for workstation `hermes … droplet` (see scripts/hermes shim + Step 15 in
 # policies/core/unified-deployment-and-security.md). Runs the same CLI on the VPS (venv + HERMES_HOME). All args forwarded.
+#
+# The word "droplet" is only the SSH hop — it is NOT a Hermes profile name. The remote session uses
+# the same profile as your workstation sticky file (~/.hermes/active_profile), unless you set
+# AGENT_DROPLET_PROFILE or AGENT_DROPLET_RUNTIME_HOME. Override when your VPS profile name differs.
+#
 # Requires ~/.env/.env with SSH_* (host, port, user). SSH key passphrase is typed interactively
 # (env-file SSH_PASSPHRASE / HERMES_DROPLET_ALLOW_ENV_PASSPHRASE is ignored for this entrypoint).
 # Remote command uses sudo -u <runtime> by default (sudo -k first). Set AGENT_DROPLET_REQUIRE_SUDO=0
 # to run as SSH_USER without sudo (e.g. headless maintenance). See scripts/ssh_droplet.sh header.
 # Optional env: AGENT_DROPLET_RUNTIME_USER, AGENT_DROPLET_RUNTIME_HOME, AGENT_DROPLET_REPO,
-# AGENT_DROPLET_PROFILE (default chief-orchestrator — passed as -p so argv wins over active_profile)
+# AGENT_DROPLET_PROFILE (if unset: read workstation ~/.hermes/active_profile; else chief-orchestrator).
 # HERMES_DROPLET_INTERACTIVE=1 lets ssh_droplet pass its TTY check when stdin is not a TTY (IDE).
-# Defaults: runtime user hermesuser, HERMES_HOME …/profiles/chief-orchestrator, repo ~/hermes-agent.
-# One-time VPS setup: sudo bash scripts/droplet_bootstrap_hermesuser.sh
+# Defaults: runtime user hermesuser, repo ~/hermesuser/hermes-agent.
+# One-time VPS setup: sudo bash scripts/droplet_bootstrap_hermesuser.sh (creates chief-orchestrator there;
+# create matching profiles on the VPS if your workstation sticky name differs).
 #
 # env -u: a parent-exported HERMES_DROPLET_ALLOW_ENV_PASSPHRASE must not re-enable file passphrase here;
 # ssh_droplet still reads the file, but HERMES_DROPLET_WORKSTATION_CLI=1 disables file-based unlock.
@@ -18,9 +24,25 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$ROOT/.." && pwd)"
 RUNTIME_USER="${AGENT_DROPLET_RUNTIME_USER:-hermesuser}"
-HH=$(printf '%q' "${AGENT_DROPLET_RUNTIME_HOME:-/home/hermesuser/.hermes/profiles/chief-orchestrator}")
 REPO_Q=$(printf '%q' "${AGENT_DROPLET_REPO:-/home/hermesuser/hermes-agent}")
-PROF_Q=$(printf '%q' "${AGENT_DROPLET_PROFILE:-chief-orchestrator}")
+
+# Remote profile = workstation sticky (orchestrator, chief-orchestrator, etc.) — not related to the word "droplet".
+_DROP_STICKY=""
+if [[ -f "${HOME}/.hermes/active_profile" ]]; then
+  _DROP_STICKY=$(head -n1 "${HOME}/.hermes/active_profile" 2>/dev/null | tr -d '\r\n' || true)
+  _DROP_STICKY="${_DROP_STICKY#"${_DROP_STICKY%%[![:space:]]*}"}"
+  _DROP_STICKY="${_DROP_STICKY%"${_DROP_STICKY##*[![:space:]]}"}"
+fi
+PROF_NAME="${AGENT_DROPLET_PROFILE:-}"
+if [[ -z "$PROF_NAME" ]]; then
+  if [[ -n "$_DROP_STICKY" && "$_DROP_STICKY" != "default" ]]; then
+    PROF_NAME="$_DROP_STICKY"
+  else
+    PROF_NAME="chief-orchestrator"
+  fi
+fi
+PROF_Q=$(printf '%q' "$PROF_NAME")
+HH=$(printf '%q' "${AGENT_DROPLET_RUNTIME_HOME:-/home/${RUNTIME_USER}/.hermes/profiles/${PROF_NAME}}")
 cmd="export HERMES_HOME=${HH}; cd ${REPO_Q} && if [[ ! -x ./venv/bin/python ]]; then echo 'agent-droplet: missing ./venv/bin/python. On the droplet: sudo bash scripts/droplet_bootstrap_hermesuser.sh' >&2; exit 127; fi && exec ./venv/bin/python -m hermes_cli.main -p ${PROF_Q}"
 for a in "$@"; do
   cmd+=" $(printf '%q' "$a")"

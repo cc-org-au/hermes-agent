@@ -39,7 +39,7 @@
     "core/governance/standards/project-lead-policy-template.md": "df506fa5b2fb7f1f6695269566fd9ec076a651e159722455f484476b84701cee",
     "core/governance/standards/supervisor-policy-template.md": "b7834af50ac81f8b3e3185c0dfedf4627bbd47ed416fb4749690dd4708d930b1",
     "core/governance/standards/task-state-and-evidence-policy.md": "14b213ee2011117ed9a161cd63ded4dcb8630465456a4a2fa3675f065dab1bca",
-    "core/governance/standards/token-model-tool-and-channel-governance-policy.md": "5150d3fd07b439073130a24f7f73ec511b03fe3791f01cf1ae12667c3ac38b66",
+    "core/governance/standards/token-model-tool-and-channel-governance-policy.md": "a77852d2f6524a26462de88a8c360e85b369be62ce2ea5a23778dcccf7a8df22",
     "core/governance/standards/worker-specialist-policy-template.md": "33d70e12763e5bd81652586b96fbb1175c3ebd05dd6461d3244d34e0436583b6",
     "core/pipeline-runbook.md": "3ff1777ca3373ec995821fb8e8dc8fc7321fa396f8796a1ccf22b771e6056d4a",
     "core/runtime/agent/AGENTS.md": "eb7d2a3b00074ddf970fff0dc9813039f96b69bf3ef4d4c0493b87d001cf62d8",
@@ -65,7 +65,7 @@
     "core/scripts/verify_policy_tree.py": "f98abb1d066c91d1853761c9fa43bf38b6a1b55cb778fa267f95249a08e60419",
     "core/security-first-setup.md": "ffc9c52c3c0e48974c9e3dbd1698fdf2a3840885d79ccfcafa96de240ed3ec6c",
     "core/security-prompts.md": "5eaa8b2cc49ad0043b32989686ccb04d1051e4b8b09d6db26c0ccc386c9e38ab",
-    "core/unified-deployment-and-security.md": "c4118890df17cf59a0e56c42afdbb2b320a22a3fb1bbe809a61dfe1207e8147d"
+    "core/unified-deployment-and-security.md": "f17226a14f7e9b99c6a387d834938eb598d78a174a78857745f16fc0780ac967"
   },
   "version": 1
 }
