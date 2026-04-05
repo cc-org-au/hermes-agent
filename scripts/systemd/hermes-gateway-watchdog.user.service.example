@@ -15,7 +15,8 @@
 
 [Unit]
 Description=Hermes external gateway watchdog (watchdog-check + recovery)
-After=network-online.target
+# After network; also after the profile gateway unit (adjust suffix if profile name differs).
+After=network-online.target hermes-gateway-chief-orchestrator.service
 
 [Service]
 Type=simple
