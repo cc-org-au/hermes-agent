@@ -92,6 +92,16 @@ For Hermes, use **`scripts/materialize_policies_into_hermes_home.sh`** after set
 
 **Tests:** `pytest tests/agent/test_prompt_builder.py` (context loading); policy verification runs inside `start_pipeline.py`.
 
+## Droplet remediation backlog (REM) — operator notes
+
+| ID | Topic | Repo / operator action |
+|----|--------|-------------------------|
+| REM-001 | SSH on `40227` (`sshd`) | **Do not** bind `ListenAddress 127.0.0.1` on the only remote admin port without a second verified path and console rollback — see [`security-first-setup.md`](security-first-setup.md) (incident note). Prefer firewall / Tailscale allowlists. Requires working **interactive** sudo on the maintenance account. |
+| REM-003 | Channel / workspace allowlists | Hermes: optional env `TELEGRAM_ALLOWED_CHATS`, `DISCORD_ALLOWED_CHANNELS`, `DISCORD_ALLOWED_GUILDS`, `SLACK_ALLOWED_CHANNELS`, `SLACK_ALLOWED_TEAMS`, `WHATSAPP_ALLOWED_CHATS` (comma-separated immutable IDs). Non-DM surfaces only; DMs still use user allowlists / pairing. |
+| REM-005 | Log file `664` → `600` | `scripts/gateway-watchdog.sh` sets `chmod 600` on `$HERMES_HOME/logs/gateway-watchdog.log` when the runtime user owns it. Other log paths: operator `find` + `chmod` as owner or sudo. |
+| REM-006 / REM-007 / REM-009 | Sub-agents, directors, project lead | Planning / deployment pack (Phase 4+); not automated in Hermes core. Track in workspace registers. |
+| Post-activation B | Gateway watchdog | Official script: `scripts/gateway-watchdog.sh` — health = `hermes gateway watchdog-check` (live `gateway.pid`, `gateway_state=running`, ≥1 platform `connected`); recovery prefers `systemctl --user restart hermes-gateway-<profile>.service`, then `gateway run --replace` + `doctor --fix`, with backoff and attempt caps; logs append to `$HERMES_HOME/logs/gateway-watchdog.log`. |
+
 **Full read sequence:** [`../README.md`](../README.md) (layer map & step tables) · scripts: [`scripts/README.md`](scripts/README.md).
 
 <!-- policy-read-order-nav:bottom -->

@@ -1227,6 +1227,7 @@ class SlackAdapter(BasePlatformAdapter):
             user_id=user_id,
             user_name=user_name,
             thread_id=thread_ts,
+            server_id=str(team_id) if team_id else None,
         )
 
         msg_event = MessageEvent(
@@ -1274,10 +1275,13 @@ class SlackAdapter(BasePlatformAdapter):
         else:
             text = "/help"
 
+        _cid_u = str(channel_id).upper()
+        _slash_is_dm = _cid_u.startswith("D")
         source = self.build_source(
             chat_id=channel_id,
-            chat_type="dm",  # Slash commands are always in DM-like context
+            chat_type="dm" if _slash_is_dm else "group",
             user_id=user_id,
+            server_id=str(team_id) if team_id else None,
         )
 
         event = MessageEvent(

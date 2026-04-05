@@ -122,6 +122,9 @@ POST_DOCTOR_WAIT="${WATCHDOG_POST_DOCTOR_WAIT_SECONDS:-25}"
 PREFER_SYSTEMD="${WATCHDOG_PREFER_SYSTEMD:-1}"
 
 mkdir -p "$LOG_DIR"
+# Tighten log perms when possible (REM-005 / audit); ignore if not owner.
+touch "$LOG_FILE" 2>/dev/null || true
+chmod 600 "$LOG_FILE" 2>/dev/null || true
 declare -a ATTEMPTS=()
 
 log() {

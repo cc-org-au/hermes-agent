@@ -269,6 +269,14 @@ def _expand_whatsapp_auth_aliases(identifier: str) -> set:
 
     return resolved
 
+
+def _parse_csv_env_allowlist(env_name: str) -> set[str]:
+    raw = os.getenv(env_name, "").strip()
+    if not raw:
+        return set()
+    return {x.strip() for x in raw.split(",") if x.strip()}
+
+
 logger = logging.getLogger(__name__)
 
 # Sentinel placed into _running_agents immediately when a session starts
@@ -1570,6 +1578,45 @@ class GatewayRunner:
             return adapter
 
         return None
+
+    def _integration_surface_allowed(self, source: SessionSource) -> bool:
+        """Optional channel / workspace allowlists (REM-003 / Session 10).
+
+        When the relevant env vars are unset or empty, returns True. Direct
+        messages (``chat_type == "dm"``) are not filtered by these lists.
+        For other surfaces, if at least one list is non-empty for the
+        platform, the message must match a listed channel id and/or server
+        (guild / Slack team) id.
+        """
+        if source.chat_type == "dm":
+            return True
+
+        channel_var: str | None
+        server_var: str | None
+        if source.platform == Platform.TELEGRAM:
+            channel_var, server_var = "TELEGRAM_ALLOWED_CHATS", None
+        elif source.platform == Platform.DISCORD:
+            channel_var, server_var = "DISCORD_ALLOWED_CHANNELS", "DISCORD_ALLOWED_GUILDS"
+        elif source.platform == Platform.SLACK:
+            channel_var, server_var = "SLACK_ALLOWED_CHANNELS", "SLACK_ALLOWED_TEAMS"
+        elif source.platform == Platform.WHATSAPP:
+            channel_var, server_var = "WHATSAPP_ALLOWED_CHATS", None
+        else:
+            return True
+
+        channels = _parse_csv_env_allowlist(channel_var) if channel_var else set()
+        servers = _parse_csv_env_allowlist(server_var) if server_var else set()
+        if not channels and not servers:
+            return True
+
+        ok_ch = bool(channels) and source.chat_id in channels
+        sid = (source.server_id or "").strip()
+        ok_srv = bool(servers) and sid in servers
+        if channels and servers:
+            return ok_ch or ok_srv
+        if channels:
+            return ok_ch
+        return ok_srv
     
     def _is_user_authorized(self, source: SessionSource) -> bool:
         """
@@ -1581,6 +1628,10 @@ class GatewayRunner:
         3. DM pairing approved list
         4. Global allow-all (GATEWAY_ALLOW_ALL_USERS=true)
         5. Default: deny
+
+        After user-level authorization, optional channel/workspace lists
+        (``TELEGRAM_ALLOWED_CHATS``, ``DISCORD_ALLOWED_CHANNELS``, etc.)
+        may further restrict non-DM surfaces.
         """
         # Home Assistant events are system-generated (state changes), not
         # user-initiated messages.  The HASS_TOKEN already authenticates the
@@ -1626,12 +1677,12 @@ class GatewayRunner:
         # Per-platform allow-all flag (e.g., DISCORD_ALLOW_ALL_USERS=true)
         platform_allow_all_var = platform_allow_all_map.get(source.platform, "")
         if platform_allow_all_var and os.getenv(platform_allow_all_var, "").lower() in ("true", "1", "yes"):
-            return True
+            return self._integration_surface_allowed(source)
 
         # Check pairing store (always checked, regardless of allowlists)
         platform_name = source.platform.value if source.platform else ""
         if self.pairing_store.is_approved(platform_name, user_id):
-            return True
+            return self._integration_surface_allowed(source)
 
         # Check platform-specific and global allowlists
         platform_allowlist = os.getenv(platform_env_map.get(source.platform, ""), "").strip()
@@ -1639,7 +1690,9 @@ class GatewayRunner:
 
         if not platform_allowlist and not global_allowlist:
             # No allowlists configured -- check global allow-all flag
-            return os.getenv("GATEWAY_ALLOW_ALL_USERS", "").lower() in ("true", "1", "yes")
+            if os.getenv("GATEWAY_ALLOW_ALL_USERS", "").lower() in ("true", "1", "yes"):
+                return self._integration_surface_allowed(source)
+            return False
 
         # Check if user is in any allowlist
         allowed_ids = set()
@@ -1651,7 +1704,7 @@ class GatewayRunner:
         # "*" in any allowlist means allow everyone (consistent with
         # SIGNAL_GROUP_ALLOWED_USERS precedent)
         if "*" in allowed_ids:
-            return True
+            return self._integration_surface_allowed(source)
 
         check_ids = {user_id}
         if "@" in user_id:
@@ -1670,7 +1723,9 @@ class GatewayRunner:
             if normalized_user_id:
                 check_ids.add(normalized_user_id)
 
-        return bool(check_ids & allowed_ids)
+        if not bool(check_ids & allowed_ids):
+            return False
+        return self._integration_surface_allowed(source)
 
     def _get_unauthorized_dm_behavior(self, platform: Optional[Platform]) -> str:
         """Return how unauthorized DMs should be handled for a platform."""
@@ -3599,6 +3654,7 @@ class GatewayRunner:
             user_id=str(user_id),
             user_name=str(user_id),
             chat_type="channel",
+            server_id=str(guild_id),
         )
         if not self._is_user_authorized(source):
             logger.debug("Unauthorized voice input from user %d, ignoring", user_id)

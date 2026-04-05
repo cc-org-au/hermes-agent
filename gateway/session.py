@@ -90,7 +90,8 @@ class SessionSource:
     chat_topic: Optional[str] = None  # Channel topic/description (Discord, Slack)
     user_id_alt: Optional[str] = None  # Signal UUID (alternative to phone number)
     chat_id_alt: Optional[str] = None  # Signal group internal ID
-    
+    server_id: Optional[str] = None  # Discord guild, Slack team/workspace, etc.
+
     @property
     def description(self) -> str:
         """Human-readable description of the source."""
@@ -127,6 +128,8 @@ class SessionSource:
             d["user_id_alt"] = self.user_id_alt
         if self.chat_id_alt:
             d["chat_id_alt"] = self.chat_id_alt
+        if self.server_id:
+            d["server_id"] = self.server_id
         return d
     
     @classmethod
@@ -142,6 +145,7 @@ class SessionSource:
             chat_topic=data.get("chat_topic"),
             user_id_alt=data.get("user_id_alt"),
             chat_id_alt=data.get("chat_id_alt"),
+            server_id=data.get("server_id"),
         )
     
     @classmethod
@@ -756,6 +760,7 @@ class SessionStore:
                 chat_id=source.chat_id,
                 chat_type="dm",
                 user_id=source.user_id,
+                server_id=source.server_id,
                 # no thread_id — this is the parent DM session
             )
             parent_key = self._generate_session_key(parent_source)
