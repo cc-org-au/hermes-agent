@@ -1,5 +1,5 @@
 <!-- policy-read-order-nav:top -->
-> **Governance read order** — step 9 of 58 in the canonical `policies/` sequence (layer map & tables: [`README.md`](README.md)).
+> **Governance read order** — step 9 of 60 in the canonical `policies/` sequence (layer map & tables: [`README.md`](README.md)).
 > **Before this file:** read [core/global-agentic-company-deployment-policy.md](core/global-agentic-company-deployment-policy.md) and everything earlier in that sequence. **Do not** interpret this document as authoritative until those prerequisites are satisfied.
 > **This file:** safe to apply only after the prerequisite above (if any) is complete.
 <!-- policy-read-order-nav:top-end -->
@@ -47,13 +47,14 @@ For runtime deployments, `operations/` should live under `AGENT_HOME/workspace/o
 | A9 | [`core/security-prompts.md`](core/security-prompts.md) | Activation prompts |
 | A10 | [`core/chief-orchestrator-directive.md`](core/chief-orchestrator-directive.md) | Chief orchestrator activation |
 | A11 | [`core/governance/standards/token-model-tool-and-channel-governance-policy.md`](core/governance/standards/token-model-tool-and-channel-governance-policy.md) | Additive token / model / tool / channel governance (after chief activation) |
-| A12 | [`core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md`](core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md) | Implementation prompt for token governance layer |
+| A12 | [`core/hermes-model-delegation-and-tier-runtime.md`](core/hermes-model-delegation-and-tier-runtime.md) | Hermes tier routing, runtime YAML, delegation — implementation map |
+| A13 | [`core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md`](core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md) | Implementation prompt for token governance layer |
 
 ### B — Runtime agent pack
 
 | Step | File | Notes |
 |------|------|--------|
-| B1 | [`core/runtime/agent/BOOTSTRAP.md`](core/runtime/agent/BOOTSTRAP.md) | Then [`AGENTS.md`](core/runtime/agent/AGENTS.md) and the rest of `core/runtime/agent/` (read **after** A11–A12 when the full canonical sequence is required) |
+| B1 | [`core/runtime/agent/BOOTSTRAP.md`](core/runtime/agent/BOOTSTRAP.md) | Then [`AGENTS.md`](core/runtime/agent/AGENTS.md), [`AGENT_CREATION_WORKFLOW.md`](core/runtime/agent/AGENT_CREATION_WORKFLOW.md), and the rest of `core/runtime/agent/` (read **after** A11–A13 when the full canonical sequence is required) |
 
 ### C — Governance
 

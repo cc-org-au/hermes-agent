@@ -1,5 +1,5 @@
 <!-- policy-read-order-nav:top -->
-> **Governance read order** — step 15 of 58 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../../../README.md)).
+> **Governance read order** — step 16 of 60 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../../../README.md)).
 > **Before this file:** read [core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md](../../governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md) and everything earlier in that sequence. **Do not** interpret this document as authoritative until those prerequisites are satisfied.
 > **This file:** safe to apply only after the prerequisite above (if any) is complete.
 <!-- policy-read-order-nav:top-end -->
@@ -91,6 +91,7 @@ Pipeline and artifact layout (read once per deployment or when paths change):
 Workspace operating layer:
 - this file
 - `AGENTS.md`
+- `AGENT_CREATION_WORKFLOW.md` (governed agent creation — three tiers; read before lifecycle/register/profile work)
 - `IDENTITY.md`
 - `USER.md`
 - `SOUL.md`

@@ -1,6 +1,6 @@
 <!-- policy-read-order-nav:top -->
-> **Governance read order** — step 17 of 58 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../../../README.md)).
-> **Before this file:** read [core/runtime/agent/AGENTS.md](AGENTS.md) and everything earlier in that sequence. **Do not** interpret this document as authoritative until those prerequisites are satisfied.
+> **Governance read order** — step 19 of 60 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../../../README.md)).
+> **Before this file:** read [core/runtime/agent/AGENT_CREATION_WORKFLOW.md](AGENT_CREATION_WORKFLOW.md) and everything earlier in that sequence. **Do not** interpret this document as authoritative until those prerequisites are satisfied.
 > **This file:** safe to apply only after the prerequisite above (if any) is complete.
 <!-- policy-read-order-nav:top-end -->
 

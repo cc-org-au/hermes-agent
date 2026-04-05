@@ -1,6 +1,6 @@
 <!-- policy-read-order-nav:top -->
-> **Governance read order** — step 14 of 58 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../../../README.md)).
-> **Before this file:** read [core/governance/standards/token-model-tool-and-channel-governance-policy.md](../standards/token-model-tool-and-channel-governance-policy.md) and everything earlier in that sequence. **Do not** interpret this document as authoritative until those prerequisites are satisfied.
+> **Governance read order** — step 15 of 60 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../../../README.md)).
+> **Before this file:** read [core/hermes-model-delegation-and-tier-runtime.md](../../hermes-model-delegation-and-tier-runtime.md) and everything earlier in that sequence. **Do not** interpret this document as authoritative until those prerequisites are satisfied.
 > **This file:** safe to apply only after the prerequisite above (if any) is complete.
 <!-- policy-read-order-nav:top-end -->
 

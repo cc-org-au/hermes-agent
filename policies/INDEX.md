@@ -1,5 +1,5 @@
 <!-- policy-read-order-nav:top -->
-> **Governance read order** — step 58 of 58 in the canonical `policies/` sequence (layer map & tables: [`README.md`](README.md)).
+> **Governance read order** — step 60 of 60 in the canonical `policies/` sequence (layer map & tables: [`README.md`](README.md)).
 > **Before this file:** read [core/scripts/README.md](core/scripts/README.md) and everything earlier in that sequence. **Do not** interpret this document as authoritative until those prerequisites are satisfied.
 > **This file:** safe to apply only after the prerequisite above (if any) is complete.
 <!-- policy-read-order-nav:top-end -->
@@ -48,8 +48,10 @@ Paths are relative to the repository root.
 - `policies/core/governance/standards/task-state-and-evidence-policy.md`
 - `policies/core/governance/standards/token-model-tool-and-channel-governance-policy.md`
 - `policies/core/governance/standards/worker-specialist-policy-template.md`
+- `policies/core/hermes-model-delegation-and-tier-runtime.md`
 - `policies/core/pipeline-runbook.md`
 - `policies/core/README.md`
+- `policies/core/runtime/agent/AGENT_CREATION_WORKFLOW.md`
 - `policies/core/runtime/agent/AGENTS.md`
 - `policies/core/runtime/agent/BOOTSTRAP.md`
 - `policies/core/runtime/agent/HEARTBEAT.md`

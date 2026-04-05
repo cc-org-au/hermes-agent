@@ -1,5 +1,5 @@
 <!-- policy-read-order-nav:top -->
-> **Governance read order** — step 16 of 58 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../../../README.md)).
+> **Governance read order** — step 17 of 60 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../../../README.md)).
 > **Before this file:** read [core/runtime/agent/BOOTSTRAP.md](BOOTSTRAP.md) and everything earlier in that sequence. **Do not** interpret this document as authoritative until those prerequisites are satisfied.
 > **This file:** safe to apply only after the prerequisite above (if any) is complete.
 <!-- policy-read-order-nav:top-end -->
@@ -49,8 +49,9 @@ On each new session, use this order:
 8. Read `TOOLS.md` only if host/local-environment-specific facts are needed
 9. Use `HEARTBEAT.md` only for periodic human check-ins
 10. Use `README.md` only as a human-facing index/reference if needed
+11. Read `AGENT_CREATION_WORKFLOW.md` before **registering** a new governed agent, changing `AGENT_LIFECYCLE_REGISTER.md` / `ORG_REGISTRY.md` for a new role, or creating a **separate Hermes profile** for a role
 
-If any file is missing, proceed conservatively and offer to recreate it from the pack.
+If any pack file is missing from `WORKSPACE/`, **re-materialize** from the repository (`policies/core/scripts/start_pipeline.py` with `--workspace-root`, or `scripts/materialize_policies_into_hermes_home.sh` for Hermes), or copy the matching file from `POLICY_ROOT/core/runtime/agent/`. **Do not** write placeholder markdown (e.g. “TBD”, “placeholder”, “document missing”) as a substitute for a governed pack file — that breaks audits and contradicts canonical policy.
 
 ---
 
@@ -116,5 +117,5 @@ It is the file that follows `policies/core/runtime/agent/BOOTSTRAP.md`.
 It must always be interpreted inside the broader canonical deployment and security framework.
 
 <!-- policy-read-order-nav:bottom -->
-> **Next step:** continue to [core/runtime/agent/IDENTITY.md](IDENTITY.md) after this file is fully read and applied. Do not skip ahead unless a human operator explicitly directs a narrower scope.
+> **Next step:** continue to [core/runtime/agent/AGENT_CREATION_WORKFLOW.md](AGENT_CREATION_WORKFLOW.md) after this file is fully read and applied. Do not skip ahead unless a human operator explicitly directs a narrower scope.
 <!-- policy-read-order-nav:bottom-end -->

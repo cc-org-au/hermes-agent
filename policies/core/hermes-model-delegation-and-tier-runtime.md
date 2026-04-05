@@ -1,3 +1,9 @@
+<!-- policy-read-order-nav:top -->
+> **Governance read order** — step 14 of 60 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../README.md)).
+> **Before this file:** read [core/governance/standards/token-model-tool-and-channel-governance-policy.md](governance/standards/token-model-tool-and-channel-governance-policy.md) and everything earlier in that sequence. **Do not** interpret this document as authoritative until those prerequisites are satisfied.
+> **This file:** safe to apply only after the prerequisite above (if any) is complete.
+<!-- policy-read-order-nav:top-end -->
+
 # Hermes model delegation, tier routing, and token governance (implementation map)
 
 This note is for **operators and engineers** who need to **reproduce or extend** Hermes cost controls: per-turn tier selection, runtime YAML caps, subagent delegation limits, and optional consultant (router / challenger / chief) deliberation. Canonical product policy remains `policies/core/governance/standards/token-model-tool-and-channel-governance-policy.md`.
@@ -67,3 +73,7 @@ Phased activation places **token governance policy + Hermes runtime YAML** in **
 ## Prompt caching invariant
 
 Do not change toolsets or rewrite past system context mid-conversation; tier/model selection per **new** user message is fine. See `AGENTS.md` (prompt caching).
+
+<!-- policy-read-order-nav:bottom -->
+> **Next step:** continue to [core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md](governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md) after this file is fully read and applied. Do not skip ahead unless a human operator explicitly directs a narrower scope.
+<!-- policy-read-order-nav:bottom-end -->

@@ -1,5 +1,5 @@
 <!-- policy-read-order-nav:top -->
-> **Governance read order** — step 26 of 58 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../../../README.md)).
+> **Governance read order** — step 28 of 60 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../../../README.md)).
 > **Before this file:** read [core/runtime/agent/HEARTBEAT.md](HEARTBEAT.md) and everything earlier in that sequence. **Do not** interpret this document as authoritative until those prerequisites are satisfied.
 > **This file:** safe to apply only after the prerequisite above (if any) is complete.
 <!-- policy-read-order-nav:top-end -->
@@ -34,6 +34,7 @@ The attached markdown pack is the workspace operating layer and is subordinate t
 |------|------|
 | `BOOTSTRAP.md` | Bootstrapping handoff for the attached pack |
 | `AGENTS.md` | Startup order and workspace agent rules |
+| `AGENT_CREATION_WORKFLOW.md` | Governed agent creation (logical / new profile / runbook order); no placeholders |
 | `IDENTITY.md` | Agent persona |
 | `USER.md` | Operator profile template |
 | `SOUL.md` | Voice and continuity |

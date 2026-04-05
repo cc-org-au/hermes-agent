@@ -1,5 +1,5 @@
 <!-- policy-read-order-nav:top -->
-> **Governance read order** — step 13 of 58 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../../../README.md)).
+> **Governance read order** — step 13 of 60 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../../../README.md)).
 > **Before this file:** read [core/chief-orchestrator-directive.md](../../chief-orchestrator-directive.md) and everything earlier in that sequence. **Do not** interpret this document as authoritative until those prerequisites are satisfied.
 > **This file:** safe to apply only after the prerequisite above (if any) is complete.
 <!-- policy-read-order-nav:top-end -->
@@ -809,5 +809,5 @@ The system must prefer:
 The most expensive model is never the default answer to uncertainty.
 
 <!-- policy-read-order-nav:bottom -->
-> **Next step:** continue to [core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md](../role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md) after this file is fully read and applied. Do not skip ahead unless a human operator explicitly directs a narrower scope.
+> **Next step:** continue to [core/hermes-model-delegation-and-tier-runtime.md](../../hermes-model-delegation-and-tier-runtime.md) after this file is fully read and applied. Do not skip ahead unless a human operator explicitly directs a narrower scope.
 <!-- policy-read-order-nav:bottom-end -->
