@@ -4,56 +4,61 @@
 #    (or: ./venv/bin/hermes profile create chief-orchestrator && ./venv/bin/hermes profile use chief-orchestrator)
 #    Bootstrap also runs ./scripts/ensure_chief_orchestrator_profile_env.sh so the profile has
 #    its own ~/.hermes/profiles/chief-orchestrator/.env (Hermes loads only HERMES_HOME/.env).
-#    Re-run that script anytime the profile is missing .env but ~/.hermes/.env or repo .env exists.
 #    Use ./venv/bin/hermes — bare `hermes` is not on PATH unless you add venv/bin.
 # 2. Merge this into ~/.hermes/profiles/chief-orchestrator/config.yaml
 # 3. Put OPENROUTER_API_KEY in that profile's ~/.hermes/profiles/chief-orchestrator/.env
-#    (OpenRouter: https://openrouter.ai/keys — avoids Google AI Studio free-tier caps, e.g. 20 req/day on some models.)
-#    Optional: keep GEMINI_API_KEY for a fallback route via fallback_providers in config.yaml.
+#
+# Token / model governance (Session 6+): do **not** hardcode expensive OpenRouter slugs here.
+# - Copy scripts/templates/hermes_token_governance.runtime.example.yaml to
+#   HERMES_HOME/workspace/operations/hermes_token_governance.runtime.yaml
+# - Edit **tier_models** (A–F) there when pricing changes; keep policy alignment with
+#   workspace/operations/MODEL_ROUTING_REGISTRY.md
+# - Use **tier:D**, **tier:B**, **tier:C** placeholders below; Hermes resolves them at
+#   load_config() time. Each user turn can log "Token governance: this turn Tier X → …"
+#   when dynamic_tier_routing is enabled in that YAML.
 #
 # `scripts/agent-droplet` uses the workstation sticky profile name on the VPS (HERMES_HOME=.../profiles/<name>);
 # if sticky is default/missing it uses chief-orchestrator. Trailing `droplet` on the CLI is not a profile.
 
-# Default model: strong instruction-following + tool use for policy activation and orchestration.
-# Alternatives on OpenRouter: anthropic/claude-sonnet-4.6 (newer), anthropic/claude-haiku-4.5 (cheaper/faster),
-# openai/gpt-5.4-mini (budget). Use ONE default for setup simplicity; split models later only if you tune cost.
 model:
   provider: openrouter
-  default: anthropic/claude-sonnet-4.5
+  default: tier:D
 
-# Context compression summarizer (otherwise may stay on a legacy Gemini slug).
 compression:
   summary_provider: openrouter
-  summary_model: anthropic/claude-sonnet-4.5
+  summary_model: tier:B
 
-# Auxiliary LLM tasks default to OpenRouter Gemini when model is empty; pin Claude for VPS consistency.
 auxiliary:
   vision:
     provider: openrouter
-    model: anthropic/claude-sonnet-4.5
+    model: tier:B
   web_extract:
     provider: openrouter
-    model: anthropic/claude-sonnet-4.5
+    model: tier:B
   compression:
     provider: openrouter
-    model: anthropic/claude-sonnet-4.5
+    model: tier:B
   session_search:
     provider: openrouter
-    model: anthropic/claude-sonnet-4.5
+    model: tier:B
   skills_hub:
     provider: openrouter
-    model: anthropic/claude-sonnet-4.5
+    model: tier:B
   approval:
     provider: openrouter
-    model: anthropic/claude-sonnet-4.5
+    model: tier:B
   mcp:
     provider: openrouter
-    model: anthropic/claude-sonnet-4.5
+    model: tier:B
   flush_memories:
     provider: openrouter
-    model: anthropic/claude-sonnet-4.5
+    model: tier:B
 
-# Activation-only: skip dangerous-terminal approval prompts (gateway + CLI). Same effect as HERMES_YOLO_MODE.
-# Revert to `manual` or `smart` after activation — see website/docs/user-guide/configuration.md (approvals).
+delegation:
+  provider: openrouter
+  model: tier:C
+
+# Skip dangerous-terminal approval prompts (gateway + CLI). Same effect as HERMES_YOLO_MODE.
+# Set to manual/smart when you want interactive approvals again.
 approvals:
   mode: off

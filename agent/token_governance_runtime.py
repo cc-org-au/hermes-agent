@@ -191,6 +191,22 @@ def apply_token_governance_runtime(agent: Any) -> None:
     except Exception:
         logger.debug("token governance: could not refresh prompt caching flags", exc_info=True)
 
+    # One-line visibility: resolved chief baseline after governance (CLI + gateway lifecycle).
+    # Skip for delegated subagents to avoid duplicate lines every child spawn.
+    if (
+        tier_models
+        and (agent.model or "").strip()
+        and getattr(agent, "_delegate_depth", 0) == 0
+    ):
+        try:
+            emit = getattr(agent, "_emit_status", None)
+            if callable(emit):
+                emit(f"Token governance: baseline Tier {chief_tier} → {agent.model}")
+            else:
+                logger.info("Token governance: baseline Tier %s → %s", chief_tier, agent.model)
+        except Exception:
+            logger.info("Token governance: baseline Tier %s → %s", chief_tier, agent.model)
+
 
 def apply_per_turn_tier_model(agent: Any, user_message: str) -> None:
     """Optional per-turn model pick from ``tier_models`` (dynamic tier routing)."""
@@ -208,14 +224,25 @@ def apply_per_turn_tier_model(agent: Any, user_message: str) -> None:
         return
     tier = select_tier_for_message(user_message, cfg)
     mid = tier_models.get(tier)
-    if not mid or mid == agent.model:
+    if not mid:
         return
-    logger.info("Token governance: per-turn tier %s -> model %s", tier, mid)
-    agent.model = mid
+    changed = mid != agent.model
+    if changed:
+        logger.info("Token governance: per-turn tier %s -> model %s", tier, mid)
+        agent.model = mid
+        try:
+            is_openrouter = agent._is_openrouter_url()
+            is_claude = "claude" in (agent.model or "").lower()
+            is_native_anthropic = agent.api_mode == "anthropic_messages"
+            agent._use_prompt_caching = (is_openrouter and is_claude) or is_native_anthropic
+        except Exception:
+            logger.debug("token governance: could not refresh prompt caching flags", exc_info=True)
+    # Always show tier + model for this user turn (even if unchanged).
     try:
-        is_openrouter = agent._is_openrouter_url()
-        is_claude = "claude" in (agent.model or "").lower()
-        is_native_anthropic = agent.api_mode == "anthropic_messages"
-        agent._use_prompt_caching = (is_openrouter and is_claude) or is_native_anthropic
+        emit = getattr(agent, "_emit_status", None)
+        if callable(emit):
+            emit(f"Token governance: this turn Tier {tier} → {mid}")
+        else:
+            logger.info("Token governance: this turn Tier %s → %s", tier, mid)
     except Exception:
-        logger.debug("token governance: could not refresh prompt caching flags", exc_info=True)
+        logger.info("Token governance: this turn Tier %s → %s", tier, mid)

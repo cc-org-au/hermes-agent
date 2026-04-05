@@ -8,6 +8,9 @@
 # In config.yaml use placeholders: `tier:D` (chief default), `tier:B` (auxiliary / summaries), etc.
 # Hermes resolves them via load_config() and per-turn routing (dynamic_tier_routing).
 #
+# Visibility (CLI + gateway): at agent start, "Token governance: baseline Tier D → <model>";
+# each user message, "Token governance: this turn Tier X → <model>" (X from heuristics).
+#
 # Disable enforcement: HERMES_TOKEN_GOVERNANCE_DISABLE=1
 # Allow blocked models through: HERMES_GOVERNANCE_ALLOW_PREMIUM=1
 
