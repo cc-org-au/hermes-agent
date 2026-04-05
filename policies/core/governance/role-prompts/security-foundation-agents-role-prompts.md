@@ -1,5 +1,7 @@
 <!-- policy-read-order-nav:top -->
-> **Combined role prompts** for REM-006 security foundation agents (AG-004, AG-006–AG-013). Use the section that matches the delegated **`hermes_profile`** / AG-ID. **Canonical security standard:** `../standards/canonical-ai-agent-security-policy.md`. **Register:** `workspace/operations/SECURITY_SUBAGENTS_REGISTER.md` (when materialized).
+> **Governance read order** — step 30 of 61 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../../../README.md)).
+> **Before this file:** read [core/governance/standards/canonical-ai-agent-security-policy.md](../standards/canonical-ai-agent-security-policy.md) and everything earlier in that sequence. **Do not** interpret this document as authoritative until those prerequisites are satisfied.
+> **This file:** safe to apply only after the prerequisite above (if any) is complete.
 <!-- policy-read-order-nav:top-end -->
 
 # Security foundation agents — role prompts (combined)
@@ -160,5 +162,5 @@ You are the **Incident Response** security role. Coordinate **triage**, **contai
 - After stabilisation, hand off **post-incident** items to drift/monitoring (AG-006) and directors as needed.
 
 <!-- policy-read-order-nav:bottom -->
-> **Single-file note:** Per-role standalone `security-agent-*.md` files were merged into this document. Bootstrap / manifest reference this path for all `ag-sec-*` profiles.
+> **Next step:** continue to [core/governance/standards/org-mapper-hr-policy.md](../standards/org-mapper-hr-policy.md) after this file is fully read and applied. Do not skip ahead unless a human operator explicitly directs a narrower scope.
 <!-- policy-read-order-nav:bottom-end -->

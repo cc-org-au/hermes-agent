@@ -52,6 +52,7 @@ READ_ORDER_SEQUENCE: tuple[str, ...] = (
     "core/runtime/agent/HEARTBEAT.md",
     "core/runtime/agent/README.md",
     "core/governance/standards/canonical-ai-agent-security-policy.md",
+    "core/governance/role-prompts/security-foundation-agents-role-prompts.md",
     "core/governance/standards/org-mapper-hr-policy.md",
     "core/governance/role-prompts/org-mapper-hr-controller.md",
     "core/governance/standards/functional-director-policy-template.md",

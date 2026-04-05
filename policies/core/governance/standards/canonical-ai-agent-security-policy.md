@@ -1,5 +1,5 @@
 <!-- policy-read-order-nav:top -->
-> **Governance read order** — step 29 of 60 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../../../README.md)).
+> **Governance read order** — step 29 of 61 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../../../README.md)).
 > **Before this file:** read [core/runtime/agent/README.md](../../runtime/agent/README.md) and everything earlier in that sequence. **Do not** interpret this document as authoritative until those prerequisites are satisfied.
 > **This file:** safe to apply only after the prerequisite above (if any) is complete.
 <!-- policy-read-order-nav:top-end -->
@@ -773,5 +773,5 @@ This environment is compliant only if all of the following are true:
 If any one of these conditions fails, the environment is non-compliant.
 
 <!-- policy-read-order-nav:bottom -->
-> **Next step:** continue to [core/governance/standards/org-mapper-hr-policy.md](org-mapper-hr-policy.md) after this file is fully read and applied. Do not skip ahead unless a human operator explicitly directs a narrower scope.
+> **Next step:** continue to [core/governance/role-prompts/security-foundation-agents-role-prompts.md](../role-prompts/security-foundation-agents-role-prompts.md) after this file is fully read and applied. Do not skip ahead unless a human operator explicitly directs a narrower scope.
 <!-- policy-read-order-nav:bottom-end -->

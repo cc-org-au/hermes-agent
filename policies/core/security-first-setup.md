@@ -1,5 +1,5 @@
 <!-- policy-read-order-nav:top -->
-> **Governance read order** — step 1 of 60 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../README.md)).
+> **Governance read order** — step 1 of 61 in the canonical `policies/` sequence (layer map & tables: [`README.md`](../README.md)).
 > **Before this file:** none — this is the **first** document in the sequence. Do not treat later policy files as valid context until this one is understood.
 > **This file:** safe to apply only after the prerequisite above (if any) is complete.
 <!-- policy-read-order-nav:top-end -->
