@@ -5,13 +5,15 @@
 #
 # Usage:
 #   ./scripts/core/droplet_push_hermes_dotfile.sh
-#   HERMES_LOCAL_HERMES_DOTFILE=/path/to/file ./scripts/core/droplet_push_hermes_dotfile.sh
+#   HERMES_LOCAL_HERMES_HOME=/Users/you/.hermes ./scripts/core/droplet_push_hermes_dotfile.sh
+#   HERMES_LOCAL_HERMES_DOTFILE=/path/to/dotfile ./scripts/core/droplet_push_hermes_dotfile.sh
 #
 set -euo pipefail
 
 ENV_FILE="${HERMES_DROPLET_ENV:-${HOME}/.env/.env}"
 KEY_FILE="${SSH_KEY_FILE:-${HOME}/.env/.ssh_key}"
-LOCAL="${HERMES_LOCAL_HERMES_DOTFILE:-${HOME}/.hermes/.hermes}"
+_HH="${HERMES_LOCAL_HERMES_HOME:-${HOME}/.hermes}"
+LOCAL="${HERMES_LOCAL_HERMES_DOTFILE:-${_HH}/.hermes}"
 REMOTE_DOT="/home/hermesuser/.hermes/.hermes"
 
 if [[ ! -f "$LOCAL" ]]; then
