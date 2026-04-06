@@ -799,6 +799,9 @@ def _detect_tool_failure(tool_name: str, result: str | None) -> tuple[bool, str]
     # Generic heuristic for non-terminal tools
     lower = result[:500].lower()
     if '"error"' in lower or '"failed"' in lower or result.startswith("Error"):
+        # Mem0 returns structured JSON errors — not "unknown tool"
+        if tool_name.startswith("mem0_"):
+            return True, " [mem0 api]"
         return True, " [error]"
 
     return False, ""

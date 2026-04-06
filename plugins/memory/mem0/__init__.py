@@ -242,6 +242,10 @@ class Mem0MemoryProvider(MemoryProvider):
         return (
             "# Mem0 Memory\n"
             f"Active. User: {self._user_id}.\n"
+            "Tools mem0_profile, mem0_search, and mem0_conclude are registered "
+            "when this block appears. If a call returns JSON with an \"error\" "
+            "field, the Mem0 Platform API rejected the request (credentials, "
+            "quota, or network)—not a missing tool.\n"
             "Use mem0_search to find memories, mem0_conclude to store facts, "
             "mem0_profile for a full overview."
         )
@@ -324,7 +328,9 @@ class Mem0MemoryProvider(MemoryProvider):
 
         if tool_name == "mem0_profile":
             try:
-                raw = client.get_all(user_id=self._user_id)
+                # v2 POST /v2/memories/ requires a top-level ``filters`` object
+                # (not bare user_id). Same shape as mem0_search.
+                raw = client.get_all(filters=_mem0_search_filters(self._user_id))
                 self._record_success()
                 memories = _normalize_memory_rows(raw)
                 if not memories:

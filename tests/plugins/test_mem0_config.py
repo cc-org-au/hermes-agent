@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -28,6 +29,25 @@ def test_mem0_search_filters_non_empty():
     from plugins.memory.mem0 import _mem0_search_filters
 
     assert _mem0_search_filters("alice") == {"AND": [{"user_id": "alice"}]}
+
+
+def test_mem0_profile_uses_v2_filters_on_get_all():
+    """v2 list memories requires ``filters`` in the JSON body, not bare user_id."""
+    from plugins.memory.mem0 import Mem0MemoryProvider
+
+    prov = Mem0MemoryProvider()
+    prov.initialize("sess-1")
+    mock_client = MagicMock()
+    mock_client.get_all.return_value = {"results": [{"memory": "fact one"}]}
+    with patch.object(prov, "_get_client", return_value=mock_client):
+        out = json.loads(prov.handle_tool_call("mem0_profile", {}))
+
+    mock_client.get_all.assert_called_once()
+    assert mock_client.get_all.call_args.kwargs.get("filters") == {
+        "AND": [{"user_id": prov._user_id}],
+    }
+    assert out["count"] == 1
+    assert "fact one" in out["result"]
 
 
 def test_normalize_memory_rows():
