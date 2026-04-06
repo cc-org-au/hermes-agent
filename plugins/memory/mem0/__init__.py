@@ -836,6 +836,15 @@ class Mem0MemoryProvider(MemoryProvider):
         _scope = f"user_id={self._user_id}, agent_id={self._agent_id}"
         if self._org_id and self._project_id:
             _scope += f", org_id={self._org_id}, project_id={self._project_id}"
+        if not (self._api_key or "").strip():
+            return (
+                "# Mem0 Memory (Platform API)\n"
+                "**Not connected:** `memory.provider` is mem0 but no API key was loaded. "
+                "Set `MEM0_API_KEY` in the active profile `.env` or `api_key` in "
+                "`mem0.json` under HERMES_HOME. The mem0_* tool names are still valid; "
+                "each call will return this error until the key is present.\n"
+                f"Tool names: {_names}."
+            )
         return (
             "# Mem0 Memory (Platform API)\n"
             f"Active. {_scope}.\n"
@@ -871,7 +880,7 @@ class Mem0MemoryProvider(MemoryProvider):
         return f"## Mem0 Memory\n{result}"
 
     def queue_prefetch(self, query: str, *, session_id: str = "") -> None:
-        if self._is_breaker_open():
+        if self._is_breaker_open() or not (self._api_key or "").strip():
             return
 
         def _run():
@@ -899,7 +908,7 @@ class Mem0MemoryProvider(MemoryProvider):
 
     def sync_turn(self, user_content: str, assistant_content: str, *, session_id: str = "") -> None:
         """Send the turn to Mem0 for server-side fact extraction (non-blocking)."""
-        if self._is_breaker_open():
+        if self._is_breaker_open() or not (self._api_key or "").strip():
             return
 
         def _sync():
@@ -998,6 +1007,17 @@ class Mem0MemoryProvider(MemoryProvider):
                 }
             )
 
+        if not (self._api_key or "").strip():
+            return json.dumps(
+                {
+                    "error": (
+                        "Mem0 API key is not configured. Set MEM0_API_KEY in the Hermes profile "
+                        "`.env` (or top-level `~/.hermes/.env`) or add `api_key` to `mem0.json` "
+                        "under HERMES_HOME, then restart the gateway if needed."
+                    )
+                }
+            )
+
         async def _runner():
             from mem0 import AsyncMemoryClient
 
@@ -1029,8 +1049,20 @@ class Mem0MemoryProvider(MemoryProvider):
                 "error": "Mem0 API temporarily unavailable (multiple consecutive failures). Will retry automatically."
             })
 
+        # Async invoke first: operation "chat" is a stub and does not need an API key.
         if tool_name == "mem0_async_invoke":
             return self._handle_mem0_async_invoke(args)
+
+        if not (self._api_key or "").strip():
+            return json.dumps(
+                {
+                    "error": (
+                        "Mem0 API key is not configured. Set MEM0_API_KEY in the Hermes profile "
+                        "`.env` (or top-level `~/.hermes/.env`) or add `api_key` to `mem0.json` "
+                        "under HERMES_HOME, then restart the gateway if needed."
+                    )
+                }
+            )
 
         try:
             client = self._get_client()

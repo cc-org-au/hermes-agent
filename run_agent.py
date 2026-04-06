@@ -891,6 +891,22 @@ class AIAgent:
             self._fallback_chain = [fallback_model]
         else:
             self._fallback_chain = []
+        # Gateway and minimal profiles often omit fallback_* — use hermes_cli defaults
+        # (Gemini Gemma, then Hugging Face with optional per-turn router).
+        # An explicit empty list means "no fallback"; only None/absent uses defaults.
+        if not self._fallback_chain and fallback_model is None:
+            try:
+                from hermes_cli.config import DEFAULT_CONFIG
+
+                _dfb = DEFAULT_CONFIG.get("fallback_providers")
+                if isinstance(_dfb, list):
+                    self._fallback_chain = [
+                        f
+                        for f in _dfb
+                        if isinstance(f, dict) and f.get("provider") and f.get("model")
+                    ]
+            except Exception:
+                pass
         self._fallback_index = 0
         self._fallback_activated = False
         # Legacy attribute kept for backward compat (tests, external callers)
@@ -1121,7 +1137,12 @@ class AIAgent:
                     from plugins.memory import load_memory_provider as _load_mem
                     self._memory_manager = _MemoryManager()
                     _mp = _load_mem(_mem_provider_name)
-                    if _mp and _mp.is_available():
+                    # Register the plugin whenever it loads. is_available() can be false when
+                    # credentials are missing (e.g. MEM0 not in env yet); we still attach tool
+                    # schemas and valid_tool_names so the model does not get "Unknown tool"
+                    # while memory.provider names Mem0 in config. Providers must return a JSON
+                    # error from handle_tool_call when not configured.
+                    if _mp and (_mp.is_available() or _mem_provider_name == "mem0"):
                         self._memory_manager.add_provider(_mp)
                     if self._memory_manager.providers:
                         from hermes_constants import get_hermes_home as _ghh
@@ -4725,6 +4746,29 @@ class AIAgent:
             logger.info("Primary health probe failed: %s", exc)
             return False
 
+    def _error_bypasses_fallback_only_rate_limit(self, api_error: BaseException, error_msg: str) -> bool:
+        """True when fallback should run even if ``only_rate_limit: true`` (first chain entry).
+
+        Invalid model IDs and similar request/config errors won't recover by retrying the
+        same primary — Gemma/HF fallback must be allowed (same class of fix as quota-style).
+        """
+        low = (error_msg or "").lower()
+        if any(
+            p in low
+            for p in (
+                "not a valid model",
+                "invalid model",
+                "model not found",
+                "unknown model",
+                "is not a valid model",
+            )
+        ):
+            return True
+        # OpenRouter / proxies sometimes echo the bad slug in the message body.
+        if "tier:" in low and ("valid" in low or "400" in low):
+            return True
+        return False
+
     def _try_activate_fallback(self, *, triggered_by_rate_limit: bool = False) -> bool:
         """Switch to the next fallback model/provider in the chain.
 
@@ -4754,6 +4798,25 @@ class AIAgent:
         fb_resolve = self._fallback_entry_for_resolve(fb)
         fb_provider = (fb_resolve.get("provider") or "").strip().lower()
         fb_model = (fb_resolve.get("model") or "").strip()
+        if fb.get("hf_router") and fb_provider == "huggingface":
+            import os as _os
+
+            from agent.hf_fallback_router import resolve_hf_routed_model
+
+            _hf_key = (
+                _os.environ.get("HF_TOKEN")
+                or _os.environ.get("HUGGING_FACE_HUB_TOKEN")
+                or ""
+            ).strip()
+            _hf_base = (
+                _os.environ.get("HF_BASE_URL", "").strip() or "https://router.huggingface.co/v1"
+            )
+            if _hf_key:
+                fb_model = resolve_hf_routed_model(
+                    getattr(self, "_last_user_turn_text", "") or "",
+                    api_key=_hf_key,
+                    base_url=_hf_base,
+                )
         if not fb_provider or not fb_model:
             return self._try_activate_fallback(triggered_by_rate_limit=triggered_by_rate_limit)  # skip invalid, try next
 
@@ -6730,6 +6793,9 @@ class AIAgent:
         except Exception:
             logger.debug("hr_consultation hook failed", exc_info=True)
 
+        # For Hugging Face fallback routing (``hf_router``) and diagnostics.
+        self._last_user_turn_text = (user_message or "")[:12000]
+
         # Initialize conversation (copy to avoid mutating the caller's list)
         messages = list(conversation_history) if conversation_history else []
 
@@ -7899,7 +7965,8 @@ class AIAgent:
                         # may not have the same issue (rate limit, auth, etc.)
                         self._emit_status(f"⚠️ Non-retryable error (HTTP {status_code}) — trying fallback...")
                         if self._try_activate_fallback(
-                            triggered_by_rate_limit=is_rate_limited,
+                            triggered_by_rate_limit=is_rate_limited
+                            or self._error_bypasses_fallback_only_rate_limit(api_error, error_msg),
                         ):
                             retry_count = 0
                             continue
@@ -7954,7 +8021,10 @@ class AIAgent:
                             continue
                         # Try fallback before giving up entirely
                         self._emit_status(f"⚠️ Max retries ({max_retries}) exhausted — trying fallback...")
-                        if self._try_activate_fallback(triggered_by_rate_limit=is_rate_limited):
+                        if self._try_activate_fallback(
+                            triggered_by_rate_limit=is_rate_limited
+                            or self._error_bypasses_fallback_only_rate_limit(api_error, error_msg),
+                        ):
                             retry_count = 0
                             continue
                         _final_summary = self._summarize_api_error(api_error)

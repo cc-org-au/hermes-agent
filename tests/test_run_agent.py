@@ -3389,6 +3389,50 @@ class TestMem0AutoProviderActivation:
         assert a._memory_manager is None
         assert "mem0_profile" not in a.valid_tool_names
 
+    def test_mem0_tool_names_when_yaml_provider_without_key(self, tmp_path, monkeypatch):
+        """memory.provider: mem0 must register mem0_* in valid_tool_names even without a key."""
+        hermes_home = tmp_path / ".hermes"
+        hermes_home.mkdir(parents=True)
+        monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        monkeypatch.delenv("MEM0_API_KEY", raising=False)
+
+        fake_cfg = {
+            "memory": {
+                "provider": "mem0",
+                "memory_enabled": False,
+                "user_profile_enabled": False,
+            }
+        }
+        with (
+            patch(
+                "run_agent.get_tool_definitions",
+                return_value=_make_tool_defs("web_search"),
+            ),
+            patch("run_agent.check_toolset_requirements", return_value={}),
+            patch("run_agent.OpenAI"),
+            patch("hermes_cli.config.load_config", return_value=fake_cfg),
+            patch(
+                "plugins.memory.honcho.client.HonchoClientConfig.from_global_config",
+                return_value=SimpleNamespace(enabled=False, api_key="", base_url=""),
+            ),
+        ):
+            a = AIAgent(
+                api_key="test-key-1234567890",
+                model="anthropic/claude-3-haiku",
+                quiet_mode=True,
+                skip_context_files=True,
+                skip_memory=False,
+            )
+
+        assert a._memory_manager is not None
+        assert "mem0_list_entities" in a.valid_tool_names
+        assert "mem0_get_memories" in a.valid_tool_names
+        out = json.loads(
+            a._memory_manager.handle_tool_call("mem0_profile", {})
+        )
+        assert "error" in out
+
 
 class TestMemoryNudgeCounterPersistence:
     """_turns_since_memory must persist across run_conversation calls."""

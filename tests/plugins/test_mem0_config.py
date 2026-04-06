@@ -45,6 +45,7 @@ def test_mem0_delete_all_memories_requires_exact_confirm():
 
     prov = Mem0MemoryProvider()
     prov.initialize("s1")
+    prov._api_key = "test-key-for-delete-all"
     out = json.loads(
         prov.handle_tool_call(
             "mem0_delete_all_memories", {"confirm": "wrong"}
@@ -102,6 +103,7 @@ def test_mem0_profile_uses_v2_filters_on_get_all():
 
     prov = Mem0MemoryProvider()
     prov.initialize("sess-1")
+    prov._api_key = "test-key-for-profile"
     mock_client = MagicMock()
     mock_client.get_all.return_value = {"results": [{"memory": "fact one"}]}
     with patch.object(prov, "_get_client", return_value=mock_client):
