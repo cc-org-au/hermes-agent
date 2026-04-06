@@ -179,6 +179,12 @@ if [[ "$RESTART_GW" == "1" ]]; then
     'cd ~/hermes-agent && ./venv/bin/python -m hermes_cli.main -p chief-orchestrator gateway stop' \
     || true
   sleep 2
+  # Non-systemd `gateway run` orphans (e.g. old nohup) keep Slack/Telegram/WhatsApp scoped locks.
+  env HERMES_DROPLET_REQUIRE_SUDO=0 HERMES_DROPLET_INTERACTIVE=1 \
+    bash "$ROOT/ssh_droplet.sh" --sudo-user hermesuser \
+    'p=$(pgrep -f "venv/bin/python -m hermes_cli.main.*gateway run" || true); for x in $p; do kill -TERM "$x" 2>/dev/null || true; done; sleep 3; p=$(pgrep -f "venv/bin/python -m hermes_cli.main.*gateway run" || true); for x in $p; do kill -KILL "$x" 2>/dev/null || true; done' \
+    || true
+  sleep 1
   echo "Restarting gateway (chief-orchestrator profile) ..."
   env HERMES_DROPLET_REQUIRE_SUDO=0 HERMES_DROPLET_INTERACTIVE=1 \
     bash "$ROOT/ssh_droplet.sh" --sudo-user hermesuser \
