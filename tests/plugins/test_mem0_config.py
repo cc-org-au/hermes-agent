@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -34,7 +34,7 @@ def test_mem0_search_filters_non_empty():
 def test_mem0_tool_schema_registry_count():
     from plugins.memory.mem0 import MEM0_ALL_TOOL_SCHEMAS, Mem0MemoryProvider
 
-    assert len(MEM0_ALL_TOOL_SCHEMAS) == 34
+    assert len(MEM0_ALL_TOOL_SCHEMAS) == 35
     prov = Mem0MemoryProvider()
     names = [s["name"] for s in prov.get_tool_schemas()]
     assert names == [s["name"] for s in MEM0_ALL_TOOL_SCHEMAS]
@@ -61,6 +61,39 @@ def test_mem0_delete_all_memories_requires_exact_confirm():
         )
     mock_client.delete_all.assert_called_once_with(user_id=prov._user_id)
     assert out2.get("message") == "ok"
+
+
+def test_mem0_async_invoke_chat_skips_sync_client():
+    from plugins.memory.mem0 import Mem0MemoryProvider
+
+    prov = Mem0MemoryProvider()
+    prov.initialize("s-async-chat")
+    with patch.object(prov, "_get_client") as gc:
+        out = json.loads(
+            prov.handle_tool_call("mem0_async_invoke", {"operation": "chat"})
+        )
+    gc.assert_not_called()
+    assert "error" in out
+
+
+@patch("mem0.AsyncMemoryClient")
+def test_mem0_async_invoke_delete_all_invalid_confirm(mock_ac):
+    from plugins.memory.mem0 import Mem0MemoryProvider
+
+    prov = Mem0MemoryProvider()
+    prov.initialize("s-async-del")
+    prov._api_key = "test-key"
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=MagicMock())
+    cm.__aexit__ = AsyncMock(return_value=None)
+    mock_ac.return_value = cm
+    out = json.loads(
+        prov.handle_tool_call(
+            "mem0_async_invoke",
+            {"operation": "delete_all", "arguments": {"confirm": "wrong"}},
+        )
+    )
+    assert "error" in out
 
 
 def test_mem0_profile_uses_v2_filters_on_get_all():

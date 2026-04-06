@@ -640,6 +640,37 @@ CHAT_STUB_SCHEMA = {
     "parameters": {"type": "object", "properties": {}, "required": []},
 }
 
+MEM0_ASYNC_INVOKE_SCHEMA = {
+    "name": "mem0_async_invoke",
+    "description": (
+        "Run one Mem0 Platform call via AsyncMemoryClient (async HTTP, fresh client per call). "
+        "Pass operation (snake_case) and arguments object — same fields as the matching sync mem0_* tool. "
+        "Operations: add, get, get_all, search, update, delete, delete_all, history, users, "
+        "list_entities (alias users), delete_users, reset, batch_update, batch_delete, "
+        "create_memory_export, get_memory_export, get_summary, get_webhooks, create_webhook, "
+        "update_webhook, delete_webhook, get_project, legacy_get_project, update_project, "
+        "legacy_update_project, project_get, project_update, project_create, project_delete, "
+        "project_members, project_get_members, project_member_add, project_add_member, "
+        "project_member_update, project_update_member, project_member_remove, project_remove_member. "
+        "Same confirm strings as sync for delete_all, reset, project_delete. "
+        "chat is not supported (returns error)."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "operation": {
+                "type": "string",
+                "description": "Async Mem0 operation name (snake_case), e.g. search, add, project_get.",
+            },
+            "arguments": {
+                "type": "object",
+                "description": "Parameters for that operation (object). Omit or {} if none.",
+            },
+        },
+        "required": ["operation"],
+    },
+}
+
 MEM0_ALL_TOOL_SCHEMAS: List[Dict[str, Any]] = [
     PROFILE_SCHEMA,
     SEARCH_SCHEMA,
@@ -675,6 +706,7 @@ MEM0_ALL_TOOL_SCHEMAS: List[Dict[str, Any]] = [
     LEGACY_PROJECT_GET_SCHEMA,
     LEGACY_PROJECT_UPDATE_SCHEMA,
     CHAT_STUB_SCHEMA,
+    MEM0_ASYNC_INVOKE_SCHEMA,
 ]
 
 
@@ -797,7 +829,8 @@ class Mem0MemoryProvider(MemoryProvider):
             f"Active. {_scope}.\n"
             f"Tools: {_names}.\n"
             "Includes Mem0 MCP memory tools, export/summary, webhooks, project CRUD/members, "
-            "legacy project APIs, account reset, and mem0_chat (SDK stub). "
+            "legacy project APIs, account reset, mem0_async_invoke (AsyncMemoryClient), "
+            "and mem0_chat (SDK stub). "
             "mem0_conclude = verbatim store; mem0_add_memory uses Mem0 extraction when infer=true.\n"
             "If a result JSON has \"error\", the Mem0 API rejected the call—check "
             "credentials, quota, filters, or parameters—not \"missing tools\"."
@@ -907,11 +940,68 @@ class Mem0MemoryProvider(MemoryProvider):
     def get_tool_schemas(self) -> List[Dict[str, Any]]:
         return list(MEM0_ALL_TOOL_SCHEMAS)
 
+    def _asyncio_run_mem0(self, coro):
+        """Run async Mem0 client code from sync handle_tool_call (thread if loop already running)."""
+        import asyncio
+        import concurrent.futures
+
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(coro)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+            return ex.submit(asyncio.run, coro).result(timeout=600)
+
+    def _handle_mem0_async_invoke(self, args: dict) -> str:
+        from plugins.memory.mem0.async_dispatch import mem0_async_dispatch
+
+        op = (args.get("operation") or "").strip().lower().replace("-", "_")
+        raw = args.get("arguments")
+        a = raw if isinstance(raw, dict) else {}
+
+        if op == "chat":
+            return json.dumps(
+                {
+                    "error": (
+                        "MemoryClient.chat / AsyncMemoryClient.chat is not implemented in the mem0ai SDK. "
+                        "Use mem0_search, mem0_add_memory, or mem0_async_invoke with search/add/get_all, etc."
+                    )
+                }
+            )
+
+        async def _runner():
+            from mem0 import AsyncMemoryClient
+
+            kw: Dict[str, Any] = {"api_key": self._api_key}
+            if self._org_id:
+                kw["org_id"] = self._org_id
+            if self._project_id:
+                kw["project_id"] = self._project_id
+            async with AsyncMemoryClient(**kw) as acl:
+                return await mem0_async_dispatch(self, acl, op, a)
+
+        try:
+            raw_out = self._asyncio_run_mem0(_runner())
+        except ImportError:
+            return json.dumps(
+                {"error": "mem0 package not installed. Run: pip install mem0ai"}
+            )
+        except ValueError as e:
+            return json.dumps({"error": str(e)})
+        except Exception as e:
+            self._record_failure()
+            return json.dumps({"error": f"mem0_async_invoke failed: {e}"})
+        self._record_success()
+        return _json_response(raw_out)
+
     def handle_tool_call(self, tool_name: str, args: dict, **kwargs) -> str:
         if self._is_breaker_open():
             return json.dumps({
                 "error": "Mem0 API temporarily unavailable (multiple consecutive failures). Will retry automatically."
             })
+
+        if tool_name == "mem0_async_invoke":
+            return self._handle_mem0_async_invoke(args)
 
         try:
             client = self._get_client()
