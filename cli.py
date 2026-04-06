@@ -1400,7 +1400,11 @@ class HermesCLI:
         return f"[{('█' * filled) + ('░' * max(0, width - filled))}]"
 
     def _get_status_bar_snapshot(self) -> Dict[str, Any]:
-        model_name = self.model or "unknown"
+        agent = getattr(self, "agent", None)
+        if agent and getattr(agent, "model", None):
+            model_name = agent.model
+        else:
+            model_name = self.model or "unknown"
         model_short = model_name.split("/")[-1] if "/" in model_name else model_name
         if model_short.endswith(".gguf"):
             model_short = model_short[:-5]
@@ -1426,7 +1430,6 @@ class HermesCLI:
             "compressions": 0,
         }
 
-        agent = getattr(self, "agent", None)
         if not agent:
             return snapshot
 
@@ -2268,6 +2271,10 @@ class HermesCLI:
                 runtime.get("command"),
                 tuple(runtime.get("args") or ()),
             )
+            # Token governance may replace blocked models at agent init — keep CLI label in sync.
+            _am = getattr(self.agent, "model", None)
+            if _am:
+                self.model = _am
 
             if self._pending_title and self._session_db:
                 try:
@@ -6101,6 +6108,12 @@ class HermesCLI:
                     agent_thread.join(0.1)
 
             agent_thread.join()  # Ensure agent thread completes
+
+            try:
+                if self.agent and getattr(self.agent, "model", None):
+                    self.model = self.agent.model
+            except Exception:
+                pass
 
             # Proactively clean up async clients whose event loop is dead.
             # The agent thread may have created AsyncOpenAI clients bound

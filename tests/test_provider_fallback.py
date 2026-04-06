@@ -168,6 +168,16 @@ class TestQuotaStyleApiFailure:
             RuntimeError("Error: insufficient credits on OpenRouter")
         ) is True
 
+    def test_403_openrouter_key_limit_with_body(self):
+        class _E(Exception):
+            status_code = 403
+            body = {
+                "message": "Key limit exceeded (total limit). Manage it using https://openrouter.ai/settings/keys",
+                "code": 403,
+            }
+
+        assert AIAgent._quota_style_api_failure(_E()) is True
+
 
 class TestOnlyRateLimitFallback:
     def test_only_rate_limit_skips_without_rate_limit_flag(self):

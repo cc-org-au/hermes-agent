@@ -4534,11 +4534,47 @@ class AIAgent:
         and similar aggregators often return 402 or credit-related messages when the
         account has no balance — treat like quota so ``only_rate_limit`` fallback can
         switch to a direct provider (e.g. Gemini/Gemma).
+
+        HTTP 403 is usually auth — except aggregators that return 403 for **key/credit
+        limits** (e.g. OpenRouter ``Key limit exceeded (total limit)``).  Those are
+        included here so we do not hit the non-retryable 403 path with fallback disabled.
         """
         status = getattr(exc, "status_code", None)
         if status in (402, 429):
             return True
-        msg = str(exc).lower()
+
+        chunks: list[str] = [str(exc)]
+        body = getattr(exc, "body", None)
+        if body is not None:
+            chunks.append(str(body))
+        resp = getattr(exc, "response", None)
+        if resp is not None:
+            for attr in ("text", "content", "body"):
+                raw = getattr(resp, attr, None)
+                if raw is not None:
+                    chunks.append(str(raw))
+                    break
+        msg = " ".join(chunks).lower()
+
+        if status == 403:
+            if any(
+                s in msg
+                for s in (
+                    "key limit",
+                    "limit exceeded",
+                    "total limit",
+                    "credit limit",
+                    "insufficient credits",
+                    "no credits",
+                    "quota",
+                    "payment required",
+                    "exceeded your",
+                    "settings/credits",
+                    "settings/keys",
+                )
+            ):
+                return True
+
         return any(
             s in msg
             for s in (
