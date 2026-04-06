@@ -1137,7 +1137,7 @@ Run **`direnv allow`** once in the clone. Do **not** reorder those lines: `HERME
 
 - **Pull + code update (automation):** Prefer **`ssh_droplet.sh --sudo-user hermesuser 'cd ~/hermes-agent && git pull --ff-only origin main'`** (resolve stash/commit conflicts on **`policies/.pipeline_state/`** if needed).  
 - **Restart gateway:** As **`hermesuser`**: **`cd ~/hermes-agent && nohup ./venv/bin/hermes -p chief-orchestrator gateway run --replace >> ~/.hermes/profiles/chief-orchestrator/logs/gateway-restart.log 2>&1 &`** (adjust log path if you standardize elsewhere).  
-- **Verify:** **`./venv/bin/hermes -p chief-orchestrator gateway watchdog-check`** — expect exit **0** and at least one **`connected=`** platform when Slack/Telegram (etc.) are configured.
+- **Verify:** **`./venv/bin/hermes -p chief-orchestrator gateway watchdog-check`** — expect exit **0**. By default the check allows **≥1** **`connected=`** platform when Slack/Telegram (etc.) are configured. If **`messaging.watchdog_require_all_platforms: true`** (or **`HERMES_GATEWAY_WATCHDOG_REQUIRE_ALL_PLATFORMS=1`**), expect **`all_connected=`** with **every** configured adapter — see **`policies/core/gateway-watchdog.md`** *Repeat implementation checklist*.
 
 **Policy materialization:** run **`policies/core/scripts/start_pipeline.py`** (or your materialize helper) on the server before expecting updated policy trees; the `droplet` suffix only changes **where** the CLI runs.
 

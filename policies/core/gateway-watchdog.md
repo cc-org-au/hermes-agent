@@ -22,6 +22,58 @@ Implementation references in the Hermes Agent codebase:
 
 ---
 
+## Repeat implementation checklist (operators)
+
+Use this when standing up or cloning a production gateway so **watchdog semantics** and **strict multi-channel** behavior match the reference deployment.
+
+### 1. Choose health mode
+
+| Mode | When to use | Config |
+|------|-------------|--------|
+| **Default** | At least one messaging adapter up is enough; one flaky bridge should not force restarts | (omit flag or set false) |
+| **Strict** | Every configured platform (Slack, Telegram, WhatsApp, …) must be `connected` before `watchdog-check` passes | `messaging.watchdog_require_all_platforms: true` in merged gateway config, **or** `HERMES_GATEWAY_WATCHDOG_REQUIRE_ALL_PLATFORMS=1` in the environment of `watchdog-check` / the watchdog script |
+
+Strict mode is implemented in `gateway/status.py` (`_resolve_watchdog_require_all_platforms`, `GatewayConfig.get_connected_platforms()`). Env overrides config when set to a truthy/falsey string.
+
+### 2. Merge config on the profile (`HERMES_HOME`)
+
+Under the active profile (e.g. `~/.hermes/profiles/chief-orchestrator/config.yaml`), merge a `messaging` block without dropping existing keys:
+
+```yaml
+messaging:
+  watchdog_require_all_platforms: true
+```
+
+The repo template `scripts/templates/chief-orchestrator-profile.example.yaml` documents the same block.
+
+### 3. External supervisor
+
+- Copy or symlink `scripts/core/gateway-watchdog.sh` per `website/docs/user-guide/messaging/gateway-watchdog.md`.
+- Ensure the loop runs as the **same Unix user** as the gateway and with the same **`HERMES_HOME`** / **`-p <profile>`** as production.
+- Optional env for automation: **`HERMES_GATEWAY_WATCHDOG_REQUIRE_ALL_PLATFORMS`** (documented in the script header).
+
+### 4. Verification
+
+```bash
+# From repo venv, profile explicit:
+./venv/bin/python -m hermes_cli.main -p chief-orchestrator gateway watchdog-check && echo OK
+```
+
+- **Default:** success message indicates at least one connected platform.
+- **Strict:** success message includes `all_connected=` listing every configured adapter (or passes with “no messaging platforms configured” if none are enabled).
+
+### 5. Tests and docs (reimplementation in code)
+
+- `tests/gateway/test_status.py` — strict vs default `runtime_status_watchdog_healthy` behavior
+- `AGENTS.md` — gateway watchdog summary
+- `website/docs/user-guide/messaging/gateway-watchdog.md` — operator-facing detail
+
+### 6. VPS automation note
+
+Non-interactive steps as **`hermesuser`** often use **`scripts/core/droplet_run.sh --droplet-require-sudo --sudo-user hermesuser '…'`** with **`SSH_SUDO_PASSWORD`** in the same **`~/.env/.env`** as **`SSH_*`** (see script headers). Use that for `git pull`, editing `config.yaml`, and `gateway restart` without delegating manual SSH to the operator when credentials are available.
+
+---
+
 ## Requirements
 
 1. **Health definition** — External automation MUST use **`hermes gateway watchdog-check`** (or equivalent logic). Healthy means: valid **`gateway.pid`** process, **`gateway_state=running`** in `gateway_state.json`, and messaging uptime per mode:

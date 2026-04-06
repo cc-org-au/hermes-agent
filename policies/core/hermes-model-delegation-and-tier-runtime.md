@@ -66,6 +66,68 @@ This note is for **operators and engineers** who need to **reproduce or extend**
 - `tests/tools/test_delegate.py` (delegation cap interaction)
 - Auxiliary client tests may need `pytest -n0` if flaky under xdist
 
+---
+
+## Provider fallback chain (OpenRouter limits → direct Gemini / Gemma)
+
+**Goal:** When OpenRouter returns **rate limits**, **402-style billing**, or **403 “key limit / credits”** style errors, optionally switch the running agent to a **direct** provider (e.g. **Google Gemini API** with **Gemma**) without requiring a manual model change, then **probe the primary** when configured.
+
+### Policy alignment
+
+- Stays within **Priority 5 — Provider safety**: fallback is for **documented** account/key limits and rate limits, not for evading fair-use rules across parallel “spray” (see `token-model-tool-and-channel-governance-policy.md` §6).
+- Prefer **one primary path** (OpenRouter) with a **single** configured fallback chain, not ad-hoc multi-provider duplication per request.
+
+### Configuration (profile `config.yaml`)
+
+- **`fallback_model`** — single dict, or **`fallback_model`** as a **list** (`fallback_providers`) for an ordered chain.
+- Hermes-only keys on each entry (stripped before router resolution):
+  - **`only_rate_limit: true`** — activate this entry only for **quota-style** failures (rate limit, 402, OpenRouter key/credit limit messages, specific 403 bodies). Do **not** rely on generic non-retryable 403 without the quota classifier.
+  - **`restore_health_check: true`** — after fallback, periodically **ping** the primary before restoring (optional **`health_check_message`**).
+- **`provider` + `model`** on each entry — must resolve via `agent/auxiliary_client.resolve_provider_client` (e.g. `provider: gemini`, `model: gemma-4-31b-it`, **`GEMINI_API_KEY`** in profile `.env`).
+
+See **`scripts/templates/chief-orchestrator-profile.example.yaml`** and inline comments on **`fallback_model`**.
+
+### Code map (must stay consistent when reimplementing)
+
+| Behavior | Location |
+|----------|-----------|
+| Quota / billing / key-limit classification | `run_agent.py` — `AIAgent._quota_style_api_failure()` (includes OpenRouter **403** + “key limit”, “settings/keys”, etc.; infers **402/403/429** from message text when `status_code` is missing on the exception) |
+| Eager fallback on classified errors | `run_agent.py` — retry loop: if classified and fallback chain non-empty, **`_try_activate_fallback(triggered_by_rate_limit=True)`** unless the **credential pool** may still recover — pool blocks **only** **`status_code == 429`**, not 402/403 (rotating pooled keys does not fix account key caps) |
+| Non-retryable 4xx path | Same loop: **`_try_activate_fallback(triggered_by_rate_limit=is_rate_limited)`** so **`only_rate_limit`** fallbacks still activate after quota-style errors that hit the client-error branch |
+| Fallback activation / chain advance | `run_agent.py` — `_try_activate_fallback()`, `_fallback_entry_for_resolve()` |
+| Primary health probe | `run_agent.py` — `_probe_primary_healthy()` |
+| Tests | `tests/test_provider_fallback.py` (`TestQuotaStyleApiFailure`, `TestOnlyRateLimitFallback`, etc.) |
+
+### Verification
+
+1. Configure **`fallback_model`** with **`only_rate_limit: true`** and a working direct provider key.
+2. Induce an OpenRouter **key limit** or **402** (or use a test double): agent should log **quota / fallback** and continue on the fallback model.
+3. Run **`pytest tests/test_provider_fallback.py`**.
+
+---
+
+## Gemma / Gemini `<thought>` tags in assistant text
+
+Some models (notably **Gemma** via the **Google API**) emit **`<thought>…</thought>`** (or similar) **inside** `message.content` instead of separate reasoning fields.
+
+### Expected Hermes behavior
+
+- **User-visible** assistant text and **conversation history** **`content`** must **not** include raw `<thought>` XML; inner text may be captured as **`reasoning`** when extracted.
+- **Streaming (CLI):** treat `<thought>` like other reasoning tags — **suppress** from the response panel by default; if the operator enables **`/reasoning`**, stream inner text into the **dim reasoning** box (see `cli.py` **`_stream_delta`** **`_OPEN_TAGS` / `_CLOSE_TAGS`**).
+- **Resume / history display:** strip common reasoning tags in **`_strip_reasoning`** when showing past turns.
+
+### Code map
+
+| Area | Module |
+|------|--------|
+| Strip paired blocks + orphan tags | `run_agent.py` — `_strip_think_blocks()`, `_has_content_after_think_block()` |
+| Extract inline reasoning | `run_agent.py` — `_extract_reasoning()`, `_build_assistant_message()` (stores **stripped** `content`, preserves **`reasoning`**) |
+| Stream filter | `cli.py` — `_stream_delta`, `_strip_reasoning` |
+| Auxiliary extraction | `agent/auxiliary_client.py` — `extract_content_or_reasoning()` |
+| Tests | `tests/test_run_agent.py` — `TestStripThinkBlocks` (e.g. `test_thought_block_removed`) |
+
+---
+
 ## Activation sequence (policy pack)
 
 Phased activation places **token governance policy + Hermes runtime YAML** in **Sessions 1–2** so enforcement is active **before** the full runtime-activation audit (**Session 3**). See `policies/core/deployment-handoff.md` § Session-by-session prompt order and `scripts/templates/activation_sessions_cumulative_cover_2_20.txt`.

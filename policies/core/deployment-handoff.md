@@ -49,7 +49,7 @@ Use this order:
 
 Do not skip `BOOTSTRAP.md`. It is required because it instigates and explains use of the full agent markdown pack.
 
-For **Hermes Agent** deployments that rely on the **messaging gateway** in production (always-on process, external users on Slack/Telegram/etc.), read [`gateway-watchdog.md`](gateway-watchdog.md) **after** this handoff — it states policy for gateway uptime, `watchdog-check`, and automated recovery (`doctor --fix`), with the user-facing runbook linked from that file.
+For **Hermes Agent** deployments that rely on the **messaging gateway** in production (always-on process, external users on Slack/Telegram/etc.), read [`gateway-watchdog.md`](gateway-watchdog.md) **after** this handoff — it states policy for gateway uptime, `watchdog-check`, and automated recovery (`doctor --fix`), with the user-facing runbook linked from that file. That policy file also includes a **Repeat implementation checklist** for **default** (≥1 connected platform) vs **strict** (every configured platform connected) messaging health.
 
 ---
 
