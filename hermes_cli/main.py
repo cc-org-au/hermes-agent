@@ -3827,6 +3827,7 @@ def cmd_profile(args):
                     "profile_router": {
                         "enabled": True,
                         "only_when_current_profiles": only_when,
+                        "confidence_threshold": 0.65,
                     }
                 }
             }

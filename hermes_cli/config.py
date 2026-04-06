@@ -247,7 +247,9 @@ DEFAULT_CONFIG = {
         # delegate_task before the main agent loop (off by default — extra cost/latency).
         "profile_router": {
             "enabled": False,
-            "confidence_threshold": 0.72,
+            # Slightly below 0.72 so clear specialist queries still route when the
+            # router model is conservative (no security-specific hardcoding in code).
+            "confidence_threshold": 0.65,
             "min_message_chars": 12,
             "exclude_current_profile": True,
             # If non-empty, only run the router when get_active_profile_name() is listed.

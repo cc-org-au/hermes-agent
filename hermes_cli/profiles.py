@@ -1205,3 +1205,16 @@ def resolve_profile_env(profile_name: str) -> str:
         )
 
     return str(profile_dir)
+
+
+def activate_profile_runtime_env(profile_name: str) -> str:
+    """Point ``HERMES_HOME`` at *profile_name* for the **current process**.
+
+    Sticky ``active_profile`` should already be updated (e.g. via
+    :func:`set_active_profile`) when switching from the CLI. Without this,
+    ``get_active_profile_name()`` and all tools keep using the old home until
+    the process exits.
+    """
+    path = resolve_profile_env(profile_name)
+    os.environ["HERMES_HOME"] = path
+    return path

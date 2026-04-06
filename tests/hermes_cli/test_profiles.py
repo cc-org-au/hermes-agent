@@ -17,6 +17,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from hermes_cli.profiles import (
+    activate_profile_runtime_env,
     validate_profile_name,
     get_profile_dir,
     create_profile,
@@ -110,6 +111,13 @@ class TestGetProfileDir:
         tmp_path = profile_env
         result = get_profile_dir("coder")
         assert result == tmp_path / ".hermes" / "profiles" / "coder"
+
+
+class TestActivateProfileRuntimeEnv:
+    def test_sets_hermes_home_in_process(self, profile_env):
+        create_profile("coder", no_alias=True)
+        activate_profile_runtime_env("coder")
+        assert os.environ["HERMES_HOME"] == str(get_profile_dir("coder"))
 
 
 # ===================================================================

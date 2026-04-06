@@ -100,11 +100,14 @@ def classify_profile_for_prompt(
     provider_override = (router_cfg.get("router_provider") or "").strip() or None
 
     system = (
-        "You route user messages to Hermes profile slugs. Reply with ONLY valid JSON, no markdown.\n"
+        "You route user turns to Hermes profile slugs (each profile is an isolated agent runtime). "
+        "Reply with ONLY valid JSON, no markdown.\n"
         'Schema: {"profile": "<exact slug from list or null>", "confidence": number 0-1, "reason": "brief"}\n'
-        "Choose a profile only when the message clearly needs that specialist's isolated runtime.\n"
-        "If unsure, use profile null with low confidence.\n"
-        "Never invent slugs; profile must be one of the listed names or null."
+        "When the user's request clearly fits a specialist (infer from slug words: security, legal, "
+        "hr, finance, infra, director, product, compliance, preflight, audit, etc.), choose that slug "
+        "with confidence 0.7–1.0.\n"
+        "Use profile null with confidence below 0.5 when the orchestrator should answer or no slug fits.\n"
+        "Never invent slugs; profile must be exactly one of the listed names or null."
     )
     user = (
         f"Current session profile: {current_profile!r}\n"

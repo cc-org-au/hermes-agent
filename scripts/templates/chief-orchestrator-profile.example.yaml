@@ -39,6 +39,7 @@
 agent:
   profile_router:
     enabled: true
+    confidence_threshold: 0.65
     only_when_current_profiles:
       - chief-orchestrator
   org_automation:

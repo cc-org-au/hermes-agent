@@ -1251,11 +1251,14 @@ class HermesCLI:
             invalid = [t for t in toolsets if not validate_toolset(t)]
             if invalid:
                 self.console.print(f"[bold red]Warning: Unknown toolsets: {', '.join(invalid)}[/]")
-        
+        # When False, /profile switch may refresh toolsets from the new profile's config.yaml.
+        self._toolsets_cli_pinned = toolsets is not None
+
         # Filesystem checkpoints: CLI flag > config
         cp_cfg = CLI_CONFIG.get("checkpoints", {})
         if isinstance(cp_cfg, bool):
             cp_cfg = {"enabled": cp_cfg}
+        self._cli_checkpoints_arg = bool(checkpoints)
         self.checkpoints_enabled = checkpoints or cp_cfg.get("enabled", False)
         self.checkpoint_max_snapshots = cp_cfg.get("max_snapshots", 50)
         self.pass_session_id = pass_session_id
@@ -3038,10 +3041,23 @@ class HermesCLI:
             except (ValueError, FileNotFoundError) as e:
                 print(f"\n  Error: {e}\n")
                 return
-            print(
-                f"\n  Sticky profile set to: {arg}\n"
-                "  Exit and restart the TUI (or run `hermes` again) so this session uses that profile.\n"
-            )
+            try:
+                from hermes_cli.profiles import activate_profile_runtime_env
+                from hermes_constants import display_hermes_home
+
+                self.new_session(silent=True)
+                activate_profile_runtime_env(arg)
+                self._rebind_runtime_to_current_hermes_home()
+                _dhh = display_hermes_home()
+                print(
+                    f"\n  Sticky + runtime profile: {arg}\n"
+                    f"  HERMES_HOME: {_dhh}\n"
+                    "  New session started (transcript is not carried across profiles).\n"
+                )
+                self._invalidate(min_interval=0.0)
+            except Exception as e:
+                print(f"\n  Error applying profile in-process: {e}\n")
+                print("  Sticky file was updated; restart Hermes if this persists.\n")
             return
 
         if sub == "list":
@@ -3081,10 +3097,23 @@ class HermesCLI:
             except (ValueError, FileNotFoundError) as e:
                 print(f"\n  Error: {e}\n")
                 return
-            print(
-                f"\n  Sticky profile set to: {chosen}\n"
-                "  Exit and restart the TUI (or run `hermes` again) so this session uses that profile.\n"
-            )
+            try:
+                from hermes_cli.profiles import activate_profile_runtime_env
+                from hermes_constants import display_hermes_home
+
+                self.new_session(silent=True)
+                activate_profile_runtime_env(chosen)
+                self._rebind_runtime_to_current_hermes_home()
+                _dhh = display_hermes_home()
+                print(
+                    f"\n  Sticky + runtime profile: {chosen}\n"
+                    f"  HERMES_HOME: {_dhh}\n"
+                    "  New session started (transcript is not carried across profiles).\n"
+                )
+                self._invalidate(min_interval=0.0)
+            except Exception as e:
+                print(f"\n  Error applying profile in-process: {e}\n")
+                print("  Sticky file was updated; restart Hermes if this persists.\n")
             return
 
         # Default: show current
@@ -3115,6 +3144,132 @@ class HermesCLI:
             return
         name = raw[1].strip()
         self._handle_profile_command(f"/profile use {name}")
+
+    def _rebind_runtime_to_current_hermes_home(self) -> None:
+        """After ``HERMES_HOME`` changes in-process, reload config, env, session DB, and skin."""
+        global _hermes_home, CLI_CONFIG
+
+        from hermes_constants import get_hermes_home
+        from hermes_cli.skin_engine import init_skin_from_config
+        from agent.display import set_tool_preview_max_len
+
+        _hermes_home = get_hermes_home()
+        load_hermes_dotenv(hermes_home=_hermes_home, project_env=_project_env)
+        CLI_CONFIG = load_cli_config()
+        self.config = CLI_CONFIG
+
+        _raw_tp = CLI_CONFIG["display"].get("tool_progress", "all")
+        self.tool_progress_mode = "off" if _raw_tp is False else str(_raw_tp)
+        self.resume_display = CLI_CONFIG["display"].get("resume_display", "full")
+        self.bell_on_complete = CLI_CONFIG["display"].get("bell_on_complete", False)
+        self.show_reasoning = CLI_CONFIG["display"].get("show_reasoning", False)
+        _bim = CLI_CONFIG["display"].get("busy_input_mode", "interrupt")
+        self.busy_input_mode = "queue" if str(_bim).strip().lower() == "queue" else "interrupt"
+        self.streaming_enabled = CLI_CONFIG["display"].get("streaming", False)
+        self._inline_diffs_enabled = CLI_CONFIG["display"].get("inline_diffs", True)
+
+        _model_config = CLI_CONFIG.get("model", {})
+        _config_model = (
+            (_model_config.get("default") or _model_config.get("model") or "")
+            if isinstance(_model_config, dict)
+            else (_model_config or "")
+        )
+        if _config_model:
+            self.model = _config_model
+
+        self.requested_provider = (
+            CLI_CONFIG["model"].get("provider")
+            or os.getenv("HERMES_INFERENCE_PROVIDER")
+            or "auto"
+        )
+        self.provider = self.requested_provider
+        self.base_url = (
+            CLI_CONFIG["model"].get("base_url", "")
+            or os.getenv("OPENROUTER_BASE_URL", "")
+        ) or None
+        if self.base_url and "openrouter.ai" in self.base_url:
+            self.api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
+        else:
+            self.api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY")
+
+        if CLI_CONFIG["agent"].get("max_turns"):
+            self.max_turns = CLI_CONFIG["agent"]["max_turns"]
+        elif CLI_CONFIG.get("max_turns"):
+            self.max_turns = CLI_CONFIG["max_turns"]
+
+        _scf = CLI_CONFIG["agent"].get("skip_context_files", False)
+        if isinstance(_scf, bool):
+            self.skip_context_files = _scf
+        else:
+            self.skip_context_files = str(_scf).strip().lower() in ("1", "true", "yes", "on")
+        _env_scf = os.getenv("HERMES_SKIP_CONTEXT_FILES", "").strip().lower()
+        if _env_scf in ("1", "true", "yes", "on"):
+            self.skip_context_files = True
+        elif _env_scf in ("0", "false", "no", "off"):
+            self.skip_context_files = False
+
+        if not self._toolsets_cli_pinned:
+            from hermes_cli.tools_config import _get_platform_tools
+            from hermes_cli.config import load_config as _load_hermes_config
+
+            self.enabled_toolsets = _get_platform_tools(_load_hermes_config(), "cli")
+
+        cp_cfg = CLI_CONFIG.get("checkpoints", {})
+        if isinstance(cp_cfg, bool):
+            cp_cfg = {"enabled": cp_cfg}
+        self.checkpoints_enabled = self._cli_checkpoints_arg or cp_cfg.get("enabled", False)
+        self.checkpoint_max_snapshots = cp_cfg.get("max_snapshots", 50)
+
+        self.prefill_messages = _load_prefill_messages(
+            CLI_CONFIG["agent"].get("prefill_messages_file", "")
+        )
+        self.reasoning_config = _parse_reasoning_config(
+            CLI_CONFIG["agent"].get("reasoning_effort", "")
+        )
+        self.system_prompt = (
+            os.getenv("HERMES_EPHEMERAL_SYSTEM_PROMPT", "")
+            or CLI_CONFIG["agent"].get("system_prompt", "")
+        )
+        self.personalities = CLI_CONFIG["agent"].get("personalities", {})
+
+        pr = CLI_CONFIG.get("provider_routing", {}) or {}
+        self._provider_sort = pr.get("sort")
+        self._providers_only = pr.get("only")
+        self._providers_ignore = pr.get("ignore")
+        self._providers_order = pr.get("order")
+        self._provider_require_params = pr.get("require_parameters", False)
+        self._provider_data_collection = pr.get("data_collection")
+
+        fb = CLI_CONFIG.get("fallback_providers") or CLI_CONFIG.get("fallback_model") or []
+        if isinstance(fb, dict):
+            fb = [fb] if fb.get("provider") and fb.get("model") else []
+        self._fallback_model = fb
+        self._smart_model_routing = CLI_CONFIG.get("smart_model_routing", {}) or {}
+
+        self._history_file = _hermes_home / ".hermes_history"
+
+        try:
+            _tpl = CLI_CONFIG.get("display", {}).get("tool_preview_length", 0)
+            set_tool_preview_max_len(int(_tpl) if _tpl else 0)
+        except Exception:
+            pass
+
+        try:
+            init_skin_from_config(CLI_CONFIG)
+        except Exception:
+            pass
+
+        self._config_mcp_servers = dict(CLI_CONFIG.get("mcp_servers") or {})
+
+        try:
+            from hermes_state import SessionDB
+
+            self._session_db = SessionDB(_hermes_home / "state.db")
+        except Exception as e:
+            logger.warning("SessionDB rebind failed: %s", e)
+
+        self.agent = None
+        self._active_agent_route_signature = None
 
     def show_config(self):
         """Display current configuration with kawaii ASCII art."""
