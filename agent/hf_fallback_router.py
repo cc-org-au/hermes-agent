@@ -29,6 +29,87 @@ def _flatten_tier_models(tiers: List[Dict[str, Any]]) -> List[str]:
     return out
 
 
+def first_tier_hub_fallback(tiers: List[Dict[str, Any]], router_model: str) -> str:
+    """First hub id in tier order; else *router_model*."""
+    flat = _flatten_tier_models(tiers)
+    return flat[0] if flat else router_model
+
+
+def resolve_gemini_routed_model(
+    user_text: str,
+    *,
+    router_model: str,
+    tiers: List[Dict[str, Any]],
+) -> str:
+    """Pick one hub id from *tiers* using Google AI (Gemini / Gemma API) *router_model*.
+
+    Uses ``GEMINI_API_KEY`` or ``GOOGLE_API_KEY``. Same JSON shape as the HF router path.
+    """
+    if os.environ.get("HERMES_HF_ROUTER_DISABLE", "").strip().lower() in ("1", "true", "yes"):
+        return first_tier_hub_fallback(tiers, router_model)
+
+    if not tiers:
+        return router_model
+
+    flat = _flatten_tier_models(tiers)
+    fallback = first_tier_hub_fallback(tiers, router_model)
+    if not router_model.strip():
+        return fallback
+
+    tier_lines: List[str] = []
+    for i, t in enumerate(tiers):
+        tid = str(t.get("id") or f"tier-{i}")
+        desc = str(t.get("description") or "").strip()
+        models = t.get("models") or []
+        mstr = ", ".join(models)
+        extra = f" — {desc}" if desc else ""
+        tier_lines.append(f"Tier {i} [{tid}]{extra}: {mstr}")
+
+    tiers_blob = "\n".join(tier_lines)
+    sys_msg = (
+        "You route the user message to exactly one Hugging Face hub model id. "
+        "These ids refer to checkpoints served locally or on Hugging Face — pick the best fit for this prompt. "
+        "Tiers are ordered: lower index = lighter tasks; higher index = heavier reasoning, "
+        "math, code, or long agentic work when the prompt requires it. "
+        "Pick the minimal tier that fits, then choose the best model id **within that tier** for this specific prompt.\n"
+        f"{tiers_blob}\n"
+        "Reply with a single JSON object only, no markdown: "
+        '{"tier": <int>, "model": "<hub_model_id>"} '
+        "The model must appear in that tier's list. tier is the tier index (0-based)."
+    )
+    user_msg = (user_text or "")[:12000] or "hello"
+
+    try:
+        from agent.auxiliary_client import call_llm, extract_content_or_reasoning
+    except Exception:
+        logger.warning("hf_fallback_router: auxiliary client unavailable")
+        return fallback
+
+    try:
+        resp = call_llm(
+            provider="gemini",
+            model=router_model.strip(),
+            messages=[
+                {"role": "system", "content": sys_msg},
+                {"role": "user", "content": user_msg},
+            ],
+            temperature=0.45,
+            max_tokens=200,
+        )
+        content = extract_content_or_reasoning(resp)
+    except Exception as exc:
+        logger.info("hf_fallback_router: Gemini router call failed: %s", exc)
+        return fallback
+
+    picked = _parse_tier_model_json(content, tiers, flat)
+    if picked:
+        return picked
+    for c in flat:
+        if c in content:
+            return c
+    return fallback
+
+
 def resolve_hf_routed_model(
     user_text: str,
     *,

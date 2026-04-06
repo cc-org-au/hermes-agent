@@ -1,8 +1,10 @@
 """Build ``fallback_providers`` from ``free_model_routing`` in config.yaml.
 
-Synthesized order (HF “Inference Providers” policy hop removed — use Kimi tier router only):
+Synthesized order (HF “Inference Providers” policy hop removed):
 
-1. **Kimi tiered router** — router model picks one hub id from configured tiers.
+1. **Tiered router** — ``kimi_router.router_model`` picks one hub id from ``tiers``.
+   Use ``router_provider: huggingface`` (default) with the HF router API, or
+   ``router_provider: gemini`` with ``router_model: gemma-4-31b-it`` (Google AI) to choose among local checkpoints.
 2. **Optional Gemini** — last-resort hosted Gemma if ``optional_gemini`` is enabled.
 """
 
@@ -86,12 +88,20 @@ def build_free_fallback_chain(config: Optional[Dict[str, Any]]) -> List[Dict[str
             if not flat:
                 logger.warning("free_model_routing.kimi_router: tiers have no model ids — skipping Kimi tier")
             else:
+                rprov = _strip(kr.get("router_provider") or "huggingface").lower()
+                if rprov not in ("huggingface", "gemini"):
+                    logger.warning(
+                        "free_model_routing.kimi_router: unknown router_provider %r — using huggingface",
+                        rprov,
+                    )
+                    rprov = "huggingface"
                 chain.append(
                     {
                         "provider": "huggingface",
                         "model": router_model,
                         "hf_router": True,
                         "hf_router_tiers": tiers,
+                        "router_provider": rprov,
                     }
                 )
         elif router_model and not tiers:

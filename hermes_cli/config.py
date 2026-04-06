@@ -231,30 +231,16 @@ DEFAULT_CONFIG = {
         "enabled": True,
         # Kimi tier router (HF hub) → optional Gemini. No separate HF Inference Providers hop.
         "kimi_router": {
-            "router_model": "moonshotai/Kimi-K2-Thinking",
+            # "huggingface" = Kimi on HF router API; "gemini" = Google AI (e.g. gemma-4-31b-it) picks among tiers.
+            "router_provider": "gemini",
+            "router_model": "gemma-4-31b-it",
             "tiers": [
                 {
-                    "id": "general",
-                    "description": "General and multimodal",
+                    "id": "local",
+                    "description": "Locally served HF hub checkpoints (HERMES_LOCAL_INFERENCE_BASE_URL + local_models/hub)",
                     "models": [
                         "MiniMaxAI/MiniMax-M2.5",
-                        "google/gemma-3-27b-it",
-                    ],
-                },
-                {
-                    "id": "reasoning",
-                    "description": "Heavy reasoning, math, and code",
-                    "models": [
-                        "deepseek-ai/DeepSeek-R1",
                         "openai/gpt-oss-120b",
-                        "Qwen/QwQ-32B",
-                    ],
-                },
-                {
-                    "id": "router_thinking",
-                    "description": "Long CoT and agentic tasks",
-                    "models": [
-                        "moonshotai/Kimi-K2-Thinking",
                     ],
                 },
             ],

@@ -1,27 +1,12 @@
-# Hugging Face model repos aligned with DEFAULT_CONFIG free_model_routing.kimi_router tiers.
-# The download script resolves remote sizes and fills up to budget_gb (default 200).
-#
-# optional_gemini model gemma-4-31b-it is Google API–hosted — not downloaded from HF here.
-# Add optional entries below; priority lower = sooner in greedy pack after sorting by size.
+# HF repos for local vLLM/TGI weights. Sizes are measured at download time; greedy pack
+# fills up to budget_gb. MiniMax (~214 GiB) + gpt-oss-120b (~182 GiB) need ~396 GiB total.
 
 version: 1
-budget_gb: 200
-max_workers: 32
+budget_gb: 420
+max_workers: 64
 
-# Relative to repo root: local_models/hub/<slug>
 repos:
-  - id: google/gemma-3-27b-it
-    priority: 10
-    note: "Tier general; gated on HF — export HF_TOKEN and accept license on the model page"
-  - id: Qwen/QwQ-32B
-    priority: 20
   - id: MiniMaxAI/MiniMax-M2.5
-    priority: 30
-  - id: moonshotai/Kimi-K2-Thinking
-    priority: 40
-    note: "Router + tier; often very large"
+    priority: 10
   - id: openai/gpt-oss-120b
-    priority: 50
-  - id: deepseek-ai/DeepSeek-R1
-    priority: 60
-    note: "Often hundreds of GB — may not fit 200GB budget"
+    priority: 20

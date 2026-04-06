@@ -336,16 +336,18 @@ def _call_profile_router_llm(
     messages: List[Dict[str, Any]],
     router_cfg: Dict[str, Any],
 ) -> Any:
-    """Run the profile-router JSON classifier via Kimi tier routing.
+    """Run the profile-router JSON classifier via tier routing.
 
     Order (when ``use_free_model_routing`` is true, the default):
 
     1. Optional pinned ``router_provider``/``router_model`` if both are set to
        ``huggingface`` + a hub id (tried first; on failure, continue).
-    2. ``free_model_routing.kimi_router`` — router picks one hub id from *tiers*, then that
-       model runs the JSON classification.
+    2. ``free_model_routing.kimi_router`` — router picks one hub id from *tiers* (HF API or
+       ``router_provider: gemini`` + ``router_model`` e.g. ``gemma-4-31b-it``), then that
+       hub model runs the JSON classification (local OpenAI base if configured).
 
-    Requires ``HF_TOKEN``, ``HUGGING_FACE_HUB_TOKEN``, or ``HUGGINGFACE_API_KEY``.
+    Credentials: HF token for ``huggingface`` router; ``GEMINI_API_KEY`` / ``GOOGLE_API_KEY``
+    for ``gemini`` router; pinned HF hub calls still need an HF token.
     """
     from agent.auxiliary_client import call_llm
 
@@ -374,16 +376,11 @@ def _call_profile_router_llm(
         or ""
     ).strip()
     base = (os.environ.get("HF_BASE_URL", "").strip() or "https://router.huggingface.co/v1").rstrip("/")
-    if not tok:
-        raise RuntimeError(
-            "Profile router requires HF_TOKEN, HUGGING_FACE_HUB_TOKEN, or HUGGINGFACE_API_KEY for Hugging Face Inference — "
-            "set in ~/.hermes/.env or the profile .env (shared parent .env is loaded for profiles).",
-        )
 
     from hermes_cli.config import load_config
 
     from agent.free_model_routing import normalize_kimi_tiers
-    from agent.hf_fallback_router import resolve_hf_routed_model
+    from agent.hf_fallback_router import resolve_gemini_routed_model, resolve_hf_routed_model
 
     cfg = load_config()
     fmr = (cfg.get("free_model_routing") or {}) if isinstance(cfg, dict) else {}
@@ -393,6 +390,11 @@ def _call_profile_router_llm(
     user_text = _user_text_from_messages(messages)
 
     if explicit_p == "huggingface" and explicit_m:
+        if not tok:
+            raise RuntimeError(
+                "Profile router: pinned huggingface router_model requires HF_TOKEN, "
+                "HUGGING_FACE_HUB_TOKEN, or HUGGINGFACE_API_KEY.",
+            )
         try:
             _set_router_telemetry("hf_inference_pinned", explicit_m)
             logger.info("profile_router: HF inference (pinned) model=%s", explicit_m)
@@ -406,24 +408,58 @@ def _call_profile_router_llm(
     kr = fmr.get("kimi_router") if isinstance(fmr.get("kimi_router"), dict) else {}
     router_model = str(kr.get("router_model") or "").strip()
     tiers = normalize_kimi_tiers(kr.get("tiers"))
+    router_prov = str(kr.get("router_provider") or "huggingface").strip().lower()
     if router_model and tiers:
-        try:
-            picked = resolve_hf_routed_model(
-                user_text,
-                api_key=tok,
-                base_url=base,
-                router_model=router_model,
-                tiers=tiers,
-            )
-            _set_router_telemetry("hf_kimi_tier_pick", picked)
-            logger.info(
-                "profile_router: Kimi router model=%s → picked hub id=%s for classification JSON",
-                router_model,
-                picked,
-            )
-            return call_llm(provider="huggingface", model=picked, **kwargs)
-        except Exception as exc:
-            logger.warning("profile_router: Kimi tier pick failed: %s", exc)
+        if router_prov == "gemini":
+            gem = (
+                os.environ.get("GEMINI_API_KEY")
+                or os.environ.get("GOOGLE_API_KEY")
+                or ""
+            ).strip()
+            if not gem:
+                raise RuntimeError(
+                    "profile_router: free_model_routing.kimi_router.router_provider=gemini requires "
+                    "GEMINI_API_KEY or GOOGLE_API_KEY (set in ~/.hermes/.env or profile .env).",
+                )
+            try:
+                picked = resolve_gemini_routed_model(
+                    user_text,
+                    router_model=router_model,
+                    tiers=tiers,
+                )
+                _set_router_telemetry("gemini_tier_pick", picked)
+                logger.info(
+                    "profile_router: Gemini router model=%s → picked hub id=%s for classification JSON",
+                    router_model,
+                    picked,
+                )
+                return call_llm(provider="huggingface", model=picked, **kwargs)
+            except Exception as exc:
+                logger.warning("profile_router: Gemini tier pick failed: %s", exc)
+        else:
+            if not tok:
+                raise RuntimeError(
+                    "Profile router requires HF_TOKEN, HUGGING_FACE_HUB_TOKEN, or HUGGINGFACE_API_KEY "
+                    "for kimi_router (router_provider=huggingface) — "
+                    "set in ~/.hermes/.env or the profile .env.",
+                )
+            try:
+                picked = resolve_hf_routed_model(
+                    user_text,
+                    api_key=tok,
+                    base_url=base,
+                    router_model=router_model,
+                    tiers=tiers,
+                )
+                _set_router_telemetry("hf_kimi_tier_pick", picked)
+                logger.info(
+                    "profile_router: Kimi router model=%s → picked hub id=%s for classification JSON",
+                    router_model,
+                    picked,
+                )
+                return call_llm(provider="huggingface", model=picked, **kwargs)
+            except Exception as exc:
+                logger.warning("profile_router: Kimi tier pick failed: %s", exc)
 
     raise RuntimeError(
         "profile_router: set free_model_routing.kimi_router (router_model + tiers), "

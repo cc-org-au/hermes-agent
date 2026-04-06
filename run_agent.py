@@ -4839,6 +4839,8 @@ class AIAgent:
 
             from agent.hf_fallback_router import (
                 env_flat_candidates,
+                first_tier_hub_fallback,
+                resolve_gemini_routed_model,
                 resolve_hf_routed_model,
                 resolve_hf_routed_model_flat_candidates,
             )
@@ -4854,9 +4856,34 @@ class AIAgent:
             )
             _router = fb_model
             _tiers = fb.get("hf_router_tiers") or []
-            if _hf_key and _tiers:
+            _router_prov = (fb.get("router_provider") or "huggingface").strip().lower()
+            _user_turn = getattr(self, "_last_user_turn_text", "") or ""
+
+            if _router_prov == "gemini" and _tiers:
+                _gem = (
+                    _os.environ.get("GEMINI_API_KEY")
+                    or _os.environ.get("GOOGLE_API_KEY")
+                    or ""
+                ).strip()
+                if _gem:
+                    try:
+                        fb_model = resolve_gemini_routed_model(
+                            _user_turn,
+                            router_model=_router,
+                            tiers=_tiers,
+                        )
+                    except Exception as _exc:
+                        logging.warning("Gemini tier router failed: %s", _exc)
+                        fb_model = first_tier_hub_fallback(_tiers, _router)
+                else:
+                    logging.warning(
+                        "free fallback: router_provider=gemini but no GEMINI_API_KEY/GOOGLE_API_KEY — "
+                        "using first tier hub id",
+                    )
+                    fb_model = first_tier_hub_fallback(_tiers, _router)
+            elif _hf_key and _tiers:
                 fb_model = resolve_hf_routed_model(
-                    getattr(self, "_last_user_turn_text", "") or "",
+                    _user_turn,
                     api_key=_hf_key,
                     base_url=_hf_base,
                     router_model=_router,
@@ -4866,7 +4893,7 @@ class AIAgent:
                 _flat = env_flat_candidates()
                 if _flat:
                     fb_model = resolve_hf_routed_model_flat_candidates(
-                        getattr(self, "_last_user_turn_text", "") or "",
+                        _user_turn,
                         api_key=_hf_key,
                         base_url=_hf_base,
                         router_model=_router,

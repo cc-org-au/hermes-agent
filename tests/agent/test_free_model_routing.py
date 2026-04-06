@@ -40,8 +40,26 @@ def test_build_chain_kimi_then_optional_gemini():
     assert len(ch) == 2
     assert ch[0]["hf_router"] is True
     assert ch[0]["model"] == "org/router"
+    assert ch[0].get("router_provider") == "huggingface"
     assert len(ch[0]["hf_router_tiers"]) == 1
     assert ch[1]["provider"] == "gemini"
+
+
+def test_build_chain_router_provider_gemini():
+    cfg = {
+        "free_model_routing": {
+            "enabled": True,
+            "kimi_router": {
+                "router_provider": "gemini",
+                "router_model": "gemma-4-31b-it",
+                "tiers": [{"id": "t", "models": ["org/a", "org/b"]}],
+            },
+        },
+    }
+    ch = build_free_fallback_chain(cfg)
+    assert len(ch) == 1
+    assert ch[0]["router_provider"] == "gemini"
+    assert ch[0]["model"] == "gemma-4-31b-it"
 
 
 def test_resolve_explicit_fallback_providers_wins():

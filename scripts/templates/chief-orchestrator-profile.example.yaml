@@ -43,7 +43,8 @@ agent:
     min_message_chars: 12
     only_when_current_profiles:
       - chief-orchestrator
-    # Router LLM: Kimi tier pick from ``free_model_routing.kimi_router``. Requires HF_TOKEN / HUGGINGFACE_API_KEY in .env.
+    # Router LLM: tier pick from ``free_model_routing.kimi_router`` (default: gemma-4-31b-it via Gemini API).
+    # Set GEMINI_API_KEY / GOOGLE_API_KEY for routing; HF_TOKEN only if you use router_provider: huggingface.
     use_free_model_routing: true
     # Optional: pin a hub id before the free_model_routing chain (same provider as main HF path):
     # router_provider: huggingface
@@ -107,24 +108,16 @@ delegation:
 # Gemma on Gemini API: https://ai.google.dev/gemma/docs/core/gemma_on_gemini_api
 free_model_routing:
   enabled: true
+  # Tier router: gemma-4-31b-it on Google AI picks between MiniMax and gpt-oss served locally (see local_models/).
   kimi_router:
-    router_model: moonshotai/Kimi-K2-Thinking
+    router_provider: gemini
+    router_model: gemma-4-31b-it
     tiers:
-      - id: general
-        description: "General and multimodal"
+      - id: local
+        description: "Locally served HF checkpoints (HERMES_LOCAL_INFERENCE_BASE_URL)"
         models:
           - MiniMaxAI/MiniMax-M2.5
-          - google/gemma-3-27b-it
-      - id: reasoning
-        description: "Heavy reasoning, math, and code"
-        models:
-          - deepseek-ai/DeepSeek-R1
           - openai/gpt-oss-120b
-          - Qwen/QwQ-32B
-      - id: router_thinking
-        description: "Long CoT and agentic tasks"
-        models:
-          - moonshotai/Kimi-K2-Thinking
   optional_gemini:
     enabled: true
     model: gemma-4-31b-it

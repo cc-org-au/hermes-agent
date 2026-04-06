@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 import time
 import traceback
@@ -55,6 +56,40 @@ def _write_state(
     tmp = STATE.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     tmp.replace(STATE)
+
+
+def _verify_repo_snapshot(dest: Path) -> bool:
+    """True if the snapshot looks complete (config + weight shards or index)."""
+    if not dest.is_dir():
+        return False
+    if not (dest / "config.json").is_file():
+        return False
+    if (dest / "model.safetensors.index.json").is_file():
+        return True
+    for p in dest.glob("*.safetensors"):
+        if p.is_file() and p.stat().st_size > 1_000_000:
+            return True
+    for p in dest.glob("*.gguf"):
+        if p.is_file() and p.stat().st_size > 1_000_000:
+            return True
+    for name in ("pytorch_model.bin", "pytorch_model.bin.index.json"):
+        if (dest / name).is_file() and (dest / name).stat().st_size > 1_000_000:
+            return True
+    return False
+
+
+def _run_sync_to_droplet() -> None:
+    sync_sh = REPO_ROOT / "scripts" / "local_models" / "sync_to_droplet.sh"
+    if not sync_sh.is_file():
+        print(f"sync: missing {sync_sh}", flush=True)
+        raise FileNotFoundError(str(sync_sh))
+    print(f"\n>>> Running {sync_sh}", flush=True)
+    subprocess.run(
+        ["/bin/bash", str(sync_sh)],
+        cwd=str(REPO_ROOT),
+        check=True,
+        env=os.environ.copy(),
+    )
 
 
 def _ensure_hf() -> None:
@@ -114,6 +149,11 @@ def main() -> int:
     ap.add_argument("--max-workers", type=int, default=32)
     ap.add_argument("--manifest", type=Path, default=LOCAL / "manifest.yaml")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument(
+        "--no-sync-droplet",
+        action="store_true",
+        help="Do not rsync local_models/hub to the droplet after successful verified downloads.",
+    )
     args = ap.parse_args()
 
     import yaml
@@ -208,6 +248,29 @@ def main() -> int:
     if failures:
         print(f"WARNING: {len(failures)} failure(s) appended to {FAILURES}", flush=True)
         return 2
+
+    # Verify each planned repo path, then optional droplet sync
+    verify_ok = True
+    for rid, sz, _ in chosen:
+        slug = rid.replace("/", "__")
+        dest = HUB / slug
+        if not _verify_repo_snapshot(dest):
+            print(f"VERIFY FAIL: {rid} at {dest} — expected config + weight shards", flush=True)
+            verify_ok = False
+    if not verify_ok:
+        print("Verification failed — skipping droplet sync.", flush=True)
+        return 3
+
+    if not args.no_sync_droplet and chosen:
+        try:
+            _run_sync_to_droplet()
+        except subprocess.CalledProcessError as exc:
+            print(f"sync_to_droplet failed (exit {exc.returncode})", flush=True)
+            return 4
+        except OSError as exc:
+            print(f"sync_to_droplet failed: {exc}", flush=True)
+            return 4
+
     return 0
 
 
