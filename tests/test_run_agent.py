@@ -3346,9 +3346,10 @@ class TestMem0AutoProviderActivation:
             )
 
         assert a._memory_manager is not None
-        assert "mem0_profile" in a.valid_tool_names
-        assert "mem0_search" in a.valid_tool_names
-        assert "mem0_conclude" in a.valid_tool_names
+        from plugins.memory.mem0 import MEM0_ALL_TOOL_SCHEMAS
+
+        for _schema in MEM0_ALL_TOOL_SCHEMAS:
+            assert _schema["name"] in a.valid_tool_names
 
     def test_no_mem0_auto_without_credentials(self, tmp_path, monkeypatch):
         hermes_home = tmp_path / ".hermes"

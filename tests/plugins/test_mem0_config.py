@@ -31,6 +31,38 @@ def test_mem0_search_filters_non_empty():
     assert _mem0_search_filters("alice") == {"AND": [{"user_id": "alice"}]}
 
 
+def test_mem0_tool_schema_registry_count():
+    from plugins.memory.mem0 import MEM0_ALL_TOOL_SCHEMAS, Mem0MemoryProvider
+
+    assert len(MEM0_ALL_TOOL_SCHEMAS) == 15
+    prov = Mem0MemoryProvider()
+    names = [s["name"] for s in prov.get_tool_schemas()]
+    assert names == [s["name"] for s in MEM0_ALL_TOOL_SCHEMAS]
+
+
+def test_mem0_delete_all_memories_requires_exact_confirm():
+    from plugins.memory.mem0 import Mem0MemoryProvider, _DELETE_ALL_CONFIRM
+
+    prov = Mem0MemoryProvider()
+    prov.initialize("s1")
+    out = json.loads(
+        prov.handle_tool_call(
+            "mem0_delete_all_memories", {"confirm": "wrong"}
+        )
+    )
+    assert "error" in out
+    mock_client = MagicMock()
+    mock_client.delete_all.return_value = {"message": "ok"}
+    with patch.object(prov, "_get_client", return_value=mock_client):
+        out2 = json.loads(
+            prov.handle_tool_call(
+                "mem0_delete_all_memories", {"confirm": _DELETE_ALL_CONFIRM}
+            )
+        )
+    mock_client.delete_all.assert_called_once_with(user_id=prov._user_id)
+    assert out2.get("message") == "ok"
+
+
 def test_mem0_profile_uses_v2_filters_on_get_all():
     """v2 list memories requires ``filters`` in the JSON body, not bare user_id."""
     from plugins.memory.mem0 import Mem0MemoryProvider

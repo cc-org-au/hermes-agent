@@ -32,6 +32,17 @@ logger = logging.getLogger(__name__)
 _BREAKER_THRESHOLD = 5
 _BREAKER_COOLDOWN_SECS = 120
 
+# Required exact string for mem0_delete_all_memories (destructive).
+_DELETE_ALL_CONFIRM = "YES_DELETE_ALL_MY_MEM0_MEMORIES"
+
+
+def _json_response(data: Any) -> str:
+    """Serialize API payloads for tool results."""
+    try:
+        return json.dumps(data, default=str)
+    except TypeError:
+        return json.dumps({"result": str(data)})
+
 
 # ---------------------------------------------------------------------------
 # Config
@@ -140,6 +151,234 @@ CONCLUDE_SCHEMA = {
     },
 }
 
+# Additional tools aligned with Mem0 Platform MCP (https://docs.mem0.ai/platform/mem0-mcp)
+# and Python MemoryClient (mem0ai).
+
+ADD_MEMORY_SCHEMA = {
+    "name": "mem0_add_memory",
+    "description": (
+        "Add memory via Mem0 Platform (same as MCP add_memory). Sends text or "
+        "conversation messages; with infer=true Mem0 runs server-side extraction "
+        "and deduplication. Use mem0_conclude instead for a single verbatim fact."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "content": {
+                "type": "string",
+                "description": "Plain text to store (converted to a user message). Ignored if messages is set.",
+            },
+            "messages": {
+                "type": "array",
+                "description": "OpenAI-style messages [{role, content}, ...]. Overrides content when set.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "role": {"type": "string"},
+                        "content": {"type": "string"},
+                    },
+                },
+            },
+            "infer": {
+                "type": "boolean",
+                "description": "If true (default), Mem0 extracts/merges facts. If false, raw add like conclude.",
+            },
+        },
+        "required": [],
+    },
+}
+
+GET_MEMORIES_SCHEMA = {
+    "name": "mem0_get_memories",
+    "description": (
+        "List memories with v2 filters and pagination (MCP get_memories). Scoped to "
+        "the configured Mem0 user. Use for large profiles; prefer mem0_profile for a quick full dump."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "page": {"type": "integer", "description": "Page number (default 1)."},
+            "page_size": {
+                "type": "integer",
+                "description": "Page size (default 50, max 100).",
+            },
+        },
+        "required": [],
+    },
+}
+
+GET_MEMORY_SCHEMA = {
+    "name": "mem0_get_memory",
+    "description": "Fetch one memory by id (MCP get_memory).",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "memory_id": {"type": "string", "description": "Mem0 memory id."},
+        },
+        "required": ["memory_id"],
+    },
+}
+
+UPDATE_MEMORY_SCHEMA = {
+    "name": "mem0_update_memory",
+    "description": "Update a memory's text, metadata, and/or timestamp (MCP update_memory).",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "memory_id": {"type": "string"},
+            "text": {"type": "string", "description": "New memory text."},
+            "metadata": {
+                "type": "object",
+                "description": "Metadata object to merge/replace per API.",
+            },
+            "timestamp": {
+                "type": "string",
+                "description": "ISO 8601 or Unix epoch string for memory time.",
+            },
+        },
+        "required": ["memory_id"],
+    },
+}
+
+DELETE_MEMORY_SCHEMA = {
+    "name": "mem0_delete_memory",
+    "description": "Delete a single memory by id (MCP delete_memory).",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "memory_id": {"type": "string"},
+        },
+        "required": ["memory_id"],
+    },
+}
+
+DELETE_ALL_MEMORIES_SCHEMA = {
+    "name": "mem0_delete_all_memories",
+    "description": (
+        "Bulk-delete all memories for the configured Mem0 user_id only (MCP delete_all_memories). "
+        "Requires confirm exactly: YES_DELETE_ALL_MY_MEM0_MEMORIES"
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "confirm": {
+                "type": "string",
+                "description": "Must be the exact phrase YES_DELETE_ALL_MY_MEM0_MEMORIES",
+            },
+        },
+        "required": ["confirm"],
+    },
+}
+
+LIST_ENTITIES_SCHEMA = {
+    "name": "mem0_list_entities",
+    "description": (
+        "List users, agents, apps, and runs that have memories (MCP list_entities). "
+        "Read-only."
+    ),
+    "parameters": {"type": "object", "properties": {}, "required": []},
+}
+
+DELETE_ENTITIES_SCHEMA = {
+    "name": "mem0_delete_entities",
+    "description": (
+        "Delete one entity and its memories (MCP delete_entities). Only the configured "
+        "Hermes mem0 user_id or agent_id may be deleted (safety)."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "user_id": {"type": "string", "description": "Must match the active Mem0 user_id."},
+            "agent_id": {"type": "string", "description": "Must match the active Mem0 agent_id."},
+            "app_id": {"type": "string"},
+            "run_id": {"type": "string"},
+        },
+        "required": [],
+    },
+}
+
+MEMORY_HISTORY_SCHEMA = {
+    "name": "mem0_memory_history",
+    "description": "Return edit history for a memory id (MemoryClient.history).",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "memory_id": {"type": "string"},
+        },
+        "required": ["memory_id"],
+    },
+}
+
+FEEDBACK_SCHEMA = {
+    "name": "mem0_feedback",
+    "description": (
+        "Send quality feedback for a memory (POSITIVE, NEGATIVE, VERY_NEGATIVE). "
+        "See Mem0 feedback mechanism docs."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "memory_id": {"type": "string"},
+            "feedback": {
+                "type": "string",
+                "description": "One of: POSITIVE, NEGATIVE, VERY_NEGATIVE",
+            },
+            "feedback_reason": {"type": "string", "description": "Optional explanation."},
+        },
+        "required": ["memory_id", "feedback"],
+    },
+}
+
+BATCH_UPDATE_SCHEMA = {
+    "name": "mem0_batch_update_memories",
+    "description": "Batch-update memories (memory_id + optional text/metadata each).",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "memories": {
+                "type": "array",
+                "items": {"type": "object"},
+                "description": "List of {memory_id, text?, metadata?}",
+            },
+        },
+        "required": ["memories"],
+    },
+}
+
+BATCH_DELETE_SCHEMA = {
+    "name": "mem0_batch_delete_memories",
+    "description": "Batch-delete by memory ids.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "memory_ids": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Mem0 memory ids to delete.",
+            },
+        },
+        "required": ["memory_ids"],
+    },
+}
+
+MEM0_ALL_TOOL_SCHEMAS: List[Dict[str, Any]] = [
+    PROFILE_SCHEMA,
+    SEARCH_SCHEMA,
+    CONCLUDE_SCHEMA,
+    ADD_MEMORY_SCHEMA,
+    GET_MEMORIES_SCHEMA,
+    GET_MEMORY_SCHEMA,
+    UPDATE_MEMORY_SCHEMA,
+    DELETE_MEMORY_SCHEMA,
+    DELETE_ALL_MEMORIES_SCHEMA,
+    LIST_ENTITIES_SCHEMA,
+    DELETE_ENTITIES_SCHEMA,
+    MEMORY_HISTORY_SCHEMA,
+    FEEDBACK_SCHEMA,
+    BATCH_UPDATE_SCHEMA,
+    BATCH_DELETE_SCHEMA,
+]
+
 
 # ---------------------------------------------------------------------------
 # MemoryProvider implementation
@@ -239,15 +478,17 @@ class Mem0MemoryProvider(MemoryProvider):
         self._keyword_search = self._config.get("keyword_search", False)
 
     def system_prompt_block(self) -> str:
+        _names = ", ".join(s["name"] for s in MEM0_ALL_TOOL_SCHEMAS)
         return (
-            "# Mem0 Memory\n"
-            f"Active. User: {self._user_id}.\n"
-            "Tools mem0_profile, mem0_search, and mem0_conclude are registered "
-            "when this block appears. If a call returns JSON with an \"error\" "
-            "field, the Mem0 Platform API rejected the request (credentials, "
-            "quota, or network)—not a missing tool.\n"
-            "Use mem0_search to find memories, mem0_conclude to store facts, "
-            "mem0_profile for a full overview."
+            "# Mem0 Memory (Platform API)\n"
+            f"Active. user_id={self._user_id}, agent_id={self._agent_id}.\n"
+            f"Tools: {_names}.\n"
+            "Parity with Mem0 MCP: add/list/get/update/delete memories, list/delete "
+            "entities, history, feedback, batch update/delete. "
+            "mem0_conclude stores one verbatim fact (infer off); mem0_add_memory uses "
+            "Mem0 extraction when infer is true (default).\n"
+            "If a result JSON has \"error\", the Mem0 API rejected the call—check "
+            "credentials, quota, filters, or parameters—not \"missing tools\"."
         )
 
     def prefetch(self, query: str, *, session_id: str = "") -> str:
@@ -313,7 +554,7 @@ class Mem0MemoryProvider(MemoryProvider):
         self._sync_thread.start()
 
     def get_tool_schemas(self) -> List[Dict[str, Any]]:
-        return [PROFILE_SCHEMA, SEARCH_SCHEMA, CONCLUDE_SCHEMA]
+        return list(MEM0_ALL_TOOL_SCHEMAS)
 
     def handle_tool_call(self, tool_name: str, args: dict, **kwargs) -> str:
         if self._is_breaker_open():
@@ -384,6 +625,216 @@ class Mem0MemoryProvider(MemoryProvider):
             except Exception as e:
                 self._record_failure()
                 return json.dumps({"error": f"Failed to store: {e}"})
+
+        elif tool_name == "mem0_add_memory":
+            msgs = args.get("messages")
+            content = (args.get("content") or "").strip()
+            infer = bool(args.get("infer", True))
+            if msgs is not None:
+                if not isinstance(msgs, list) or not msgs:
+                    return json.dumps({"error": "messages must be a non-empty list"})
+                messages_input: Any = msgs
+            elif content:
+                messages_input = content
+            else:
+                return json.dumps({"error": "Provide content or messages"})
+            try:
+                raw = client.add(
+                    messages_input,
+                    user_id=self._user_id,
+                    agent_id=self._agent_id,
+                    infer=infer,
+                )
+                self._record_success()
+                return _json_response(raw)
+            except Exception as e:
+                self._record_failure()
+                return json.dumps({"error": f"add_memory failed: {e}"})
+
+        elif tool_name == "mem0_get_memories":
+            page = int(args.get("page") or 1)
+            page_size = min(max(int(args.get("page_size") or 50), 1), 100)
+            try:
+                raw = client.get_all(
+                    filters=_mem0_search_filters(self._user_id),
+                    page=page,
+                    page_size=page_size,
+                )
+                self._record_success()
+                return _json_response(raw)
+            except Exception as e:
+                self._record_failure()
+                return json.dumps({"error": f"get_memories failed: {e}"})
+
+        elif tool_name == "mem0_get_memory":
+            mid = (args.get("memory_id") or "").strip()
+            if not mid:
+                return json.dumps({"error": "memory_id required"})
+            try:
+                raw = client.get(mid)
+                self._record_success()
+                return _json_response(raw)
+            except Exception as e:
+                self._record_failure()
+                return json.dumps({"error": f"get_memory failed: {e}"})
+
+        elif tool_name == "mem0_update_memory":
+            mid = (args.get("memory_id") or "").strip()
+            if not mid:
+                return json.dumps({"error": "memory_id required"})
+            text = args.get("text")
+            metadata = args.get("metadata")
+            if isinstance(metadata, str) and metadata.strip():
+                try:
+                    metadata = json.loads(metadata)
+                except json.JSONDecodeError:
+                    return json.dumps({"error": "metadata must be JSON object or object"})
+            timestamp = args.get("timestamp")
+            if text is None and metadata is None and timestamp is None:
+                return json.dumps(
+                    {"error": "Provide at least one of text, metadata, timestamp"}
+                )
+            try:
+                raw = client.update(
+                    mid,
+                    text=text,
+                    metadata=metadata if isinstance(metadata, dict) else None,
+                    timestamp=timestamp,
+                )
+                self._record_success()
+                return _json_response(raw)
+            except Exception as e:
+                self._record_failure()
+                return json.dumps({"error": f"update_memory failed: {e}"})
+
+        elif tool_name == "mem0_delete_memory":
+            mid = (args.get("memory_id") or "").strip()
+            if not mid:
+                return json.dumps({"error": "memory_id required"})
+            try:
+                raw = client.delete(mid)
+                self._record_success()
+                return _json_response(raw)
+            except Exception as e:
+                self._record_failure()
+                return json.dumps({"error": f"delete_memory failed: {e}"})
+
+        elif tool_name == "mem0_delete_all_memories":
+            if (args.get("confirm") or "").strip() != _DELETE_ALL_CONFIRM:
+                return json.dumps(
+                    {
+                        "error": "Refused: set confirm to the exact string "
+                        f"{_DELETE_ALL_CONFIRM!r} (deletes all memories for this user_id)."
+                    }
+                )
+            try:
+                raw = client.delete_all(user_id=self._user_id)
+                self._record_success()
+                return _json_response(raw)
+            except Exception as e:
+                self._record_failure()
+                return json.dumps({"error": f"delete_all_memories failed: {e}"})
+
+        elif tool_name == "mem0_list_entities":
+            try:
+                raw = client.users()
+                self._record_success()
+                return _json_response(raw)
+            except Exception as e:
+                self._record_failure()
+                return json.dumps({"error": f"list_entities failed: {e}"})
+
+        elif tool_name == "mem0_delete_entities":
+            uid = (args.get("user_id") or "").strip()
+            aid = (args.get("agent_id") or "").strip()
+            app_id = (args.get("app_id") or "").strip()
+            run_id = (args.get("run_id") or "").strip()
+            if app_id or run_id:
+                return json.dumps(
+                    {"error": "Deleting app_id/run_id from Hermes is disabled; use user_id or agent_id."}
+                )
+            if uid and uid != self._user_id:
+                return json.dumps(
+                    {"error": f"user_id must match configured Mem0 user ({self._user_id!r})."}
+                )
+            if aid and aid != self._agent_id:
+                return json.dumps(
+                    {"error": f"agent_id must match configured Mem0 agent ({self._agent_id!r})."}
+                )
+            if not uid and not aid:
+                return json.dumps(
+                    {"error": "Provide user_id or agent_id matching this Hermes Mem0 scope."}
+                )
+            try:
+                if uid:
+                    raw = client.delete_users(user_id=uid)
+                else:
+                    raw = client.delete_users(agent_id=aid)
+                self._record_success()
+                return _json_response(raw)
+            except Exception as e:
+                self._record_failure()
+                return json.dumps({"error": f"delete_entities failed: {e}"})
+
+        elif tool_name == "mem0_memory_history":
+            mid = (args.get("memory_id") or "").strip()
+            if not mid:
+                return json.dumps({"error": "memory_id required"})
+            try:
+                raw = client.history(mid)
+                self._record_success()
+                return _json_response(raw)
+            except Exception as e:
+                self._record_failure()
+                return json.dumps({"error": f"memory_history failed: {e}"})
+
+        elif tool_name == "mem0_feedback":
+            mid = (args.get("memory_id") or "").strip()
+            fb = (args.get("feedback") or "").strip()
+            reason = args.get("feedback_reason")
+            if not mid or not fb:
+                return json.dumps({"error": "memory_id and feedback required"})
+            try:
+                raw = client.feedback(
+                    mid, feedback=fb, feedback_reason=reason
+                )
+                self._record_success()
+                return _json_response(raw)
+            except Exception as e:
+                self._record_failure()
+                return json.dumps({"error": f"feedback failed: {e}"})
+
+        elif tool_name == "mem0_batch_update_memories":
+            memories = args.get("memories")
+            if not isinstance(memories, list) or not memories:
+                return json.dumps({"error": "memories must be a non-empty list"})
+            for i, m in enumerate(memories):
+                if not isinstance(m, dict) or not m.get("memory_id"):
+                    return json.dumps(
+                        {"error": f"memories[{i}] must be an object with memory_id"}
+                    )
+            try:
+                raw = client.batch_update(memories)
+                self._record_success()
+                return _json_response(raw)
+            except Exception as e:
+                self._record_failure()
+                return json.dumps({"error": f"batch_update failed: {e}"})
+
+        elif tool_name == "mem0_batch_delete_memories":
+            ids = args.get("memory_ids")
+            if not isinstance(ids, list) or not ids:
+                return json.dumps({"error": "memory_ids must be a non-empty list"})
+            payload = [{"memory_id": str(x)} for x in ids if x]
+            if len(payload) != len(ids):
+                return json.dumps({"error": "memory_ids must be non-empty strings"})
+            try:
+                raw = client.batch_delete(payload)
+                self._record_success()
+                return _json_response(raw)
+            except Exception as e:
+                self._record_failure()
+                return json.dumps({"error": f"batch_delete failed: {e}"})
 
         return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
