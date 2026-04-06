@@ -34,6 +34,8 @@ class StreamConsumerConfig:
     edit_interval: float = 0.3
     buffer_threshold: int = 40
     cursor: str = " ▉"
+    # Token-model §14: exact role display name (no leading ``--``); appended on final edit.
+    disclosure_label: Optional[str] = None
 
 
 class GatewayStreamConsumer:
@@ -139,9 +141,17 @@ class GatewayStreamConsumer:
                     self._last_edit_time = time.monotonic()
 
                 if got_done:
-                    # Final edit without cursor
+                    # Final edit without cursor (append §14 disclosure once on human-visible surfaces)
                     if self._accumulated and self._message_id:
-                        await self._send_or_edit(self._accumulated)
+                        _final = self._accumulated
+                        if self.cfg.disclosure_label:
+                            from gateway.messaging_role import append_token_model_disclosure_line
+
+                            _final = append_token_model_disclosure_line(
+                                _final, self.cfg.disclosure_label
+                            )
+                        if _final != self._last_sent_text:
+                            await self._send_or_edit(_final)
                     return
 
                 await asyncio.sleep(0.05)  # Small yield to not busy-loop
@@ -150,7 +160,12 @@ class GatewayStreamConsumer:
             # Best-effort final edit on cancellation
             if self._accumulated and self._message_id:
                 try:
-                    await self._send_or_edit(self._accumulated)
+                    _txt = self._accumulated
+                    if self.cfg.disclosure_label:
+                        from gateway.messaging_role import append_token_model_disclosure_line
+
+                        _txt = append_token_model_disclosure_line(_txt, self.cfg.disclosure_label)
+                    await self._send_or_edit(_txt)
                 except Exception:
                     pass
         except Exception as e:

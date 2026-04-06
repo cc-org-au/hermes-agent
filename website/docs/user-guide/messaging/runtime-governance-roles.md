@@ -21,7 +21,26 @@ hermes workspace governance path     # print absolute paths
 hermes workspace governance show     # print key fields (sanitized)
 ```
 
-Templates live in the git checkout: `scripts/templates/runtime_governance.runtime.example.yaml` and `scripts/templates/role_assignments.example.yaml`.
+Templates live in the git checkout: `scripts/templates/runtime_governance.runtime.example.yaml`, `scripts/templates/role_assignments.example.yaml`, and `scripts/templates/messaging_channel_role_map.example.yaml`.
+
+### Sync routing from `.env` allowlists
+
+After `workspace governance init`, edit `workspace/operations/messaging_channel_role_map.yaml` (Slack `C…` → role slug, etc.), then:
+
+```bash
+hermes workspace governance sync-messaging   # writes role_assignments + messaging_role_routing.yaml
+```
+
+The gateway **merges** `workspace/operations/messaging_role_routing.yaml` into `messaging.role_routing` on top of `config.yaml` (overlay wins for `channels` / `chats` / `threads` maps). Restart the gateway after syncing.
+
+### Token-model §14 disclosure (automatic)
+
+For human-visible messaging surfaces, the gateway appends a final line `--<Exact Role Name>` using the **Display name** from `role_assignments.yaml` for the routed role (streaming and non-streaming paths). Set `messaging.disclosure_line_append: false` in `config.yaml` to disable, or `messaging.disclosure_fallback_display_name` when role routing is off but you still want a fixed label.
+
+### Singleton audit
+
+- `hermes gateway audit-singleton` — list gateway-like PIDs and user `hermes-gateway*.service` units.
+- `hermes doctor` includes a heuristic **multiple gateway process** warning.
 
 Chief / HR (or IT automation) edit the YAML under **`HERMES_HOME`**; changes apply on the **next** new CLI session or the **next** gateway agent construction (gateway may reuse a cached agent per chat until `/new` / reset).
 

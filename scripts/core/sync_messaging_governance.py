@@ -27,6 +27,7 @@ import yaml
 STANDARD_POLICY_READS = [
     "POLICY_ROOT/core/governance/standards/token-model-tool-and-channel-governance-policy.md",
     "POLICY_ROOT/core/governance/standards/channel-architecture-policy.md",
+    "POLICY_ROOT/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md",
 ]
 
 

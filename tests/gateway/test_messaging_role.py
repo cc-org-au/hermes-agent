@@ -7,8 +7,11 @@ import yaml
 
 from gateway.config import Platform
 from gateway.messaging_role import (
+    append_token_model_disclosure_line,
     build_messaging_role_ephemeral,
+    intersect_toolsets_with_messaging_role,
     load_role_allowed_toolsets,
+    resolve_messaging_disclosure_label,
     resolve_messaging_role_slug,
 )
 from gateway.session import SessionSource
@@ -62,6 +65,46 @@ def test_build_ephemeral_with_assignments(tmp_path):
     assert "AGENTS.md" in block
     assert "delegate_task" in block or "hermes_profile" in block
     assert "token-model" in block or "§14" in block
+
+
+def test_append_token_model_disclosure_line():
+    t = append_token_model_disclosure_line("Hello", "Chief Orchestrator")
+    assert t.endswith("--Chief Orchestrator")
+    assert append_token_model_disclosure_line(t, "Chief Orchestrator") == t
+
+
+def test_resolve_messaging_disclosure_label(tmp_path):
+    ops = tmp_path / "workspace" / "operations"
+    ops.mkdir(parents=True)
+    doc = {
+        "roles": {
+            "chief_orchestrator": {"display_name": "Chief Orchestrator"},
+        },
+    }
+    (ops / "role_assignments.yaml").write_text(yaml.safe_dump(doc), encoding="utf-8")
+    cfg = {"enabled": True, "default_role": "chief_orchestrator"}
+    src = SessionSource(platform=Platform.TELEGRAM, chat_id="1", chat_type="private")
+    messaging = {"role_routing": cfg}
+    label = resolve_messaging_disclosure_label(src, messaging, hermes_home=tmp_path)
+    assert label == "Chief Orchestrator"
+
+
+def test_intersect_toolsets_with_messaging_role(tmp_path):
+    ops = tmp_path / "workspace" / "operations"
+    ops.mkdir(parents=True)
+    doc = {
+        "roles": {
+            "r1": {"allowed_toolsets": ["terminal", "file"]},
+        },
+    }
+    (ops / "role_assignments.yaml").write_text(yaml.safe_dump(doc), encoding="utf-8")
+    src = SessionSource(platform=Platform.SLACK, chat_id="C1", chat_type="channel")
+    rr = {"enabled": True, "default_role": "r1", "slack": {"channels": {"C1": "r1"}}}
+    uc = {"messaging": {"role_routing": rr}}
+    out = intersect_toolsets_with_messaging_role(
+        ["terminal", "file", "web"], src, uc, hermes_home=tmp_path
+    )
+    assert out == ["file", "terminal"]
 
 
 def test_load_role_allowed_toolsets(tmp_path):

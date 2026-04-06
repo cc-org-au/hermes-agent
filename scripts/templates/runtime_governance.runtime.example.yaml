@@ -27,6 +27,10 @@ concise_directives:
 read_order_paths:
   - "HERMES_HOME/.hermes.md"
   - "WORKSPACE/AGENTS.md"
+  # Canonical deployment order (see policies/core/deployment-handoff.md, policies/core/runtime/agent/AGENTS.md):
+  - "POLICY_ROOT/core/governance/standards/token-model-tool-and-channel-governance-policy.md"
+  - "POLICY_ROOT/core/governance/standards/channel-architecture-policy.md"
+  - "POLICY_ROOT/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md"
   - "WORKSPACE/operations/hermes_token_governance.runtime.yaml"
 
 notes: |

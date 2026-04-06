@@ -17,6 +17,7 @@ roles:
     policy_reads:
       - "POLICY_ROOT/core/governance/standards/token-model-tool-and-channel-governance-policy.md"
       - "POLICY_ROOT/core/governance/standards/channel-architecture-policy.md"
+      - "POLICY_ROOT/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md"
       - "POLICY_ROOT/core/chief-orchestrator-directive.md"
       - "WORKSPACE/operations/ORG_REGISTRY.md"
     hermes_profile_for_delegation: chief-orchestrator

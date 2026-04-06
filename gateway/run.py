@@ -2751,6 +2751,10 @@ class GatewayRunner:
                         display_reasoning = last_reasoning.strip()
                     response = f"💭 **Reasoning:**\n```\n{display_reasoning}\n```\n\n{response}"
 
+            # Token-model §14 — exact role disclosure on human-visible assistant text
+            if response:
+                response = self._apply_gateway_disclosure(response, source)
+
             # Emit agent:end hook
             await self.hooks.emit("agent:end", {
                 **hook_ctx,
@@ -3987,6 +3991,12 @@ class GatewayRunner:
 
             from hermes_cli.tools_config import _get_platform_tools
             enabled_toolsets = sorted(_get_platform_tools(user_config, platform_key))
+            from hermes_constants import get_hermes_home as _gh_bg
+            from gateway.messaging_role import intersect_toolsets_with_messaging_role
+
+            enabled_toolsets = intersect_toolsets_with_messaging_role(
+                enabled_toolsets, source, user_config, hermes_home=_gh_bg()
+            )
 
             pr = self._provider_routing
             max_iterations = int(os.getenv("HERMES_MAX_ITERATIONS", "90"))
@@ -4037,15 +4047,21 @@ class GatewayRunner:
                 header = f'✅ Background task complete\nPrompt: "{preview}"\n\n'
 
                 if text_content:
+                    _bg_out = self._apply_gateway_disclosure(
+                        header + text_content, source
+                    )
                     await adapter.send(
                         chat_id=source.chat_id,
-                        content=header + text_content,
+                        content=_bg_out,
                         metadata=_thread_metadata,
                     )
                 elif not images and not media_files:
+                    _bg_empty = self._apply_gateway_disclosure(
+                        header + "(No response generated)", source
+                    )
                     await adapter.send(
                         chat_id=source.chat_id,
-                        content=header + "(No response generated)",
+                        content=_bg_empty,
                         metadata=_thread_metadata,
                     )
 
@@ -4213,15 +4229,21 @@ class GatewayRunner:
             header = f'💬 /btw: "{preview}"\n\n'
 
             if text_content:
+                _btw_out = self._apply_gateway_disclosure(
+                    header + text_content, source
+                )
                 await adapter.send(
                     chat_id=source.chat_id,
-                    content=header + text_content,
+                    content=_btw_out,
                     metadata=_thread_meta,
                 )
             elif not images and not media_files:
+                _btw_empty = self._apply_gateway_disclosure(
+                    header + "(No response generated)", source
+                )
                 await adapter.send(
                     chat_id=source.chat_id,
-                    content=header + "(No response generated)",
+                    content=_btw_empty,
                     metadata=_thread_meta,
                 )
 
@@ -5357,6 +5379,33 @@ class GatewayRunner:
             with _lock:
                 self._agent_cache.pop(session_key, None)
 
+    def _apply_gateway_disclosure(self, text: Optional[str], source: SessionSource) -> str:
+        """Append token-model §14 disclosure for human-visible messaging surfaces."""
+        if not text or not isinstance(text, str) or not text.strip():
+            return text or ""
+        try:
+            from hermes_constants import get_hermes_home
+
+            from gateway.messaging_role import (
+                append_token_model_disclosure_line,
+                messaging_disclosure_applies,
+                resolve_messaging_disclosure_label,
+            )
+
+            _mc = getattr(self.config, "messaging", None) or {}
+            if not isinstance(_mc, dict) or _mc.get("disclosure_line_append", True) is False:
+                return text
+            if not messaging_disclosure_applies(source.platform):
+                return text
+            label = resolve_messaging_disclosure_label(
+                source, _mc, hermes_home=get_hermes_home()
+            )
+            if not label:
+                return text
+            return append_token_model_disclosure_line(text, label)
+        except Exception:
+            return text
+
     async def _run_agent(
         self,
         message: str,
@@ -5389,39 +5438,12 @@ class GatewayRunner:
         from hermes_cli.tools_config import _get_platform_tools
         enabled_toolsets = sorted(_get_platform_tools(user_config, platform_key))
 
-        # Per-routed-role tool authority: role_assignments.yaml ``allowed_toolsets`` ∩ platform.
-        try:
-            from hermes_constants import get_hermes_home as _gh_toolcap
-            from gateway.messaging_role import (
-                load_role_allowed_toolsets,
-                resolve_messaging_role_slug,
-            )
+        from hermes_constants import get_hermes_home as _gh_toolcap
+        from gateway.messaging_role import intersect_toolsets_with_messaging_role
 
-            _msg_cfg = user_config.get("messaging") or {}
-            _rr = _msg_cfg.get("role_routing") if isinstance(_msg_cfg, dict) else None
-            _slug_cap = None
-            if isinstance(_rr, dict):
-                _slug_cap = resolve_messaging_role_slug(
-                    source, _rr, hermes_home=_gh_toolcap()
-                )
-            _allowed_ts = (
-                load_role_allowed_toolsets(_slug_cap, hermes_home=_gh_toolcap())
-                if _slug_cap
-                else None
-            )
-            if _allowed_ts:
-                _allow_set = set(_allowed_ts)
-                _inter_ts = [t for t in enabled_toolsets if t in _allow_set]
-                if _inter_ts:
-                    enabled_toolsets = sorted(_inter_ts)
-                else:
-                    logger.warning(
-                        "Messaging role %r: allowed_toolsets ∩ platform toolsets is empty; "
-                        "keeping platform toolsets",
-                        _slug_cap,
-                    )
-        except Exception as _toolcap_exc:
-            logger.debug("Messaging role toolset cap skipped: %s", _toolcap_exc)
+        enabled_toolsets = intersect_toolsets_with_messaging_role(
+            enabled_toolsets, source, user_config, hermes_home=_gh_toolcap()
+        )
 
         # Apply tool preview length config (0 = no limit)
         try:
@@ -5743,12 +5765,33 @@ class GatewayRunner:
             if _scfg.enabled and _scfg.transport != "off":
                 try:
                     from gateway.stream_consumer import GatewayStreamConsumer, StreamConsumerConfig
+                    from hermes_constants import get_hermes_home as _gh_stream_disc
+
+                    from gateway.messaging_role import (
+                        messaging_disclosure_applies,
+                        resolve_messaging_disclosure_label,
+                    )
+
                     _adapter = self.adapters.get(source.platform)
                     if _adapter:
+                        _disc_label = None
+                        try:
+                            _mctx = user_config.get("messaging") or {}
+                            if (
+                                isinstance(_mctx, dict)
+                                and _mctx.get("disclosure_line_append", True) is not False
+                                and messaging_disclosure_applies(source.platform)
+                            ):
+                                _disc_label = resolve_messaging_disclosure_label(
+                                    source, _mctx, hermes_home=_gh_stream_disc()
+                                )
+                        except Exception:
+                            _disc_label = None
                         _consumer_cfg = StreamConsumerConfig(
                             edit_interval=_scfg.edit_interval,
                             buffer_threshold=_scfg.buffer_threshold,
                             cursor=_scfg.cursor,
+                            disclosure_label=_disc_label,
                         )
                         _stream_consumer = GatewayStreamConsumer(
                             adapter=_adapter,
@@ -6201,8 +6244,13 @@ class GatewayRunner:
                     first_response = result.get("final_response", "")
                     if first_response and not _already_streamed:
                         try:
-                            await adapter.send(source.chat_id, first_response,
-                                               metadata=getattr(event, "metadata", None))
+                            _qmeta = {"thread_id": source.thread_id} if source.thread_id else None
+                            _qtext = self._apply_gateway_disclosure(first_response, source)
+                            await adapter.send(
+                                source.chat_id,
+                                _qtext,
+                                metadata=_qmeta,
+                            )
                         except Exception as e:
                             logger.warning("Failed to send first response before queued message: %s", e)
                 # else: interrupted — discard the interrupted response ("Operation
