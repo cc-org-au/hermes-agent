@@ -3085,15 +3085,39 @@ class GatewayRunner:
         return header
     
     async def _handle_profile_command(self, event: MessageEvent) -> str:
-        """Handle /profile — show active profile name and home directory."""
+        """Handle /profile — show active profile, optional list / use (sticky)."""
         from hermes_constants import get_hermes_home, display_hermes_home
         from pathlib import Path
+        from hermes_cli.profiles import list_profiles, set_active_profile, get_active_profile_name
+
+        text = (event.text or "").strip()
+        parts = text.split()
+        sub = parts[1].lower() if len(parts) > 1 else ""
+        arg = parts[2].strip() if len(parts) > 2 else ""
+
+        if sub == "list":
+            profiles = list_profiles()
+            active = get_active_profile_name()
+            rows = [f"Active (sticky inference): `{active}`", ""]
+            for p in profiles:
+                mark = "◆ " if (p.name == active or (active == "default" and p.is_default)) else "• "
+                rows.append(f"{mark}`{p.name}` — gw {'up' if p.gateway_running else 'down'}")
+            return "\n".join(rows)
+
+        if sub in ("use", "switch") and arg:
+            try:
+                set_active_profile(arg)
+            except (ValueError, FileNotFoundError) as e:
+                return f"⚠️ Could not set profile: {e}"
+            return (
+                f"✅ Sticky profile set to `{arg}`.\n"
+                "Restart the gateway (or next process start) so new sessions pick this up."
+            )
 
         home = get_hermes_home()
         display = display_hermes_home()
 
         # Detect profile name from HERMES_HOME path
-        # Profile paths look like: ~/.hermes/profiles/<name>
         profiles_parent = Path.home() / ".hermes" / "profiles"
         try:
             rel = home.relative_to(profiles_parent)
@@ -3111,7 +3135,10 @@ class GatewayRunner:
                 "👤 **Profile:** default",
                 f"📂 **Home:** `{display}`",
             ]
-
+        lines.extend([
+            "",
+            "Try: `/profile list`, `/profile use <slug>`",
+        ])
         return "\n".join(lines)
 
     async def _handle_status_command(self, event: MessageEvent) -> str:

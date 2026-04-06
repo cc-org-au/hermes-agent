@@ -3009,13 +3009,85 @@ class HermesCLI:
         print("  Example: python cli.py --toolsets web,terminal")
         print()
     
-    def _handle_profile_command(self):
-        """Display active profile name and home directory."""
+    def _handle_profile_command(self, cmd_original: str = ""):
+        """Show / list / menu-select / use sticky profile (see /profile help)."""
+        from hermes_cli.profiles import list_profiles, set_active_profile, get_active_profile_name
         from hermes_constants import get_hermes_home, display_hermes_home
 
+        line = (cmd_original or "").strip().lstrip("/")
+        parts = line.split()
+        sub = parts[1].lower() if len(parts) > 1 else ""
+        arg = parts[2].strip() if len(parts) > 2 else ""
+
+        if sub in ("help", "-h", "--help"):
+            print("\n  /profile              — show active profile + paths")
+            print("  /profile list         — list installed profiles")
+            print("  /profile menu         — interactive picker (arrow keys)")
+            print("  /profile use <name>   — set sticky default (~/.hermes/active_profile)")
+            print("  /profile-use <name>   — same as /profile use <name>\n")
+            return
+
+        if sub in ("use", "switch"):
+            if not arg:
+                print("\n  Usage: /profile use <profile-name>\n")
+                return
+            try:
+                set_active_profile(arg)
+            except (ValueError, FileNotFoundError) as e:
+                print(f"\n  Error: {e}\n")
+                return
+            print(
+                f"\n  Sticky profile set to: {arg}\n"
+                "  Exit and restart the TUI (or run `hermes` again) so this session uses that profile.\n"
+            )
+            return
+
+        if sub == "list":
+            profiles = list_profiles()
+            active = get_active_profile_name()
+            print()
+            if not profiles:
+                print("  No profiles under ~/.hermes/profiles/")
+                print()
+                return
+            print(f"  {'Profile':<22} {'Model':<26} {'Gateway':<10}")
+            print(f"  {'─' * 21}  {'─' * 25}  {'─' * 9}")
+            for p in profiles:
+                mark = "◆" if (p.name == active or (active == "default" and p.is_default)) else " "
+                nm = p.name + (" (default)" if p.is_default else "")
+                model = (p.model or "—")[:24]
+                gw = "up" if p.gateway_running else "down"
+                print(f" {mark} {nm:<20} {model:<26} {gw:<10}")
+            print()
+            return
+
+        if sub in ("menu", "pick", "select"):
+            profiles = [p for p in list_profiles() if not p.is_default]
+            labels = [p.name for p in profiles]
+            if not labels:
+                print("\n  No named profiles to pick. Create one: hermes profile create <slug>\n")
+                return
+            from hermes_cli.tools_config import _prompt_choice
+            display_labels = labels + ["(cancel)"]
+            idx = _prompt_choice("Select profile (sticky default):", display_labels, default=0)
+            if idx >= len(labels):
+                print("  Cancelled.")
+                return
+            chosen = labels[idx]
+            try:
+                set_active_profile(chosen)
+            except (ValueError, FileNotFoundError) as e:
+                print(f"\n  Error: {e}\n")
+                return
+            print(
+                f"\n  Sticky profile set to: {chosen}\n"
+                "  Exit and restart the TUI (or run `hermes` again) so this session uses that profile.\n"
+            )
+            return
+
+        # Default: show current
         home = get_hermes_home()
         display = display_hermes_home()
-
         profiles_parent = Path.home() / ".hermes" / "profiles"
         try:
             rel = home.relative_to(profiles_parent)
@@ -3029,28 +3101,19 @@ class HermesCLI:
         else:
             print("  Profile: default")
         print(f"  Home:    {display}")
+        print(f"  Sticky:  {get_active_profile_name()} (see ~/.hermes/active_profile)")
+        print("  Tip: /profile list | /profile menu | /profile use <slug>")
         print()
 
     def _handle_profile_use_command(self, cmd_original: str):
-        """Set sticky profile (~/.hermes/active_profile); restart TUI to apply in this process."""
-        from hermes_cli.profiles import set_active_profile
-
-        raw = (cmd_original or "").strip()
-        parts = raw.split()
-        if len(parts) < 2:
+        """Set sticky profile — forwards to /profile use."""
+        raw = (cmd_original or "").strip().split()
+        if len(raw) < 2:
             print("\n  Usage: /profile-use <profile-name>")
-            print("  Same as: hermes profile use <name>\n")
+            print("  Same as: /profile use <name>\n")
             return
-        name = parts[1].strip()
-        try:
-            set_active_profile(name)
-        except (ValueError, FileNotFoundError) as e:
-            print(f"\n  Error: {e}\n")
-            return
-        print(
-            f"\n  Sticky profile set to: {name}\n"
-            "  Exit and restart the TUI (or run `hermes` again) so this session uses that profile.\n"
-        )
+        name = raw[1].strip()
+        self._handle_profile_command(f"/profile use {name}")
 
     def show_config(self):
         """Display current configuration with kawaii ASCII art."""
@@ -3898,7 +3961,7 @@ class HermesCLI:
         elif canonical == "help":
             self.show_help()
         elif canonical == "profile":
-            self._handle_profile_command()
+            self._handle_profile_command(cmd_original)
         elif canonical == "profile-use":
             self._handle_profile_use_command(cmd_original)
         elif canonical == "tools":
@@ -5957,6 +6020,54 @@ class HermesCLI:
         if isinstance(message, str):
             from run_agent import _sanitize_surrogates
             message = _sanitize_surrogates(message)
+
+        routed_resp = None
+        if isinstance(message, str) and self.agent is not None:
+            pr_cfg = (self.config.get("agent") or {}).get("profile_router") or {}
+            if pr_cfg.get("enabled"):
+                try:
+                    from agent.profile_router import route_and_delegate_if_configured
+                    from hermes_cli.profiles import get_active_profile_name
+
+                    routed_resp = route_and_delegate_if_configured(
+                        user_message=message,
+                        parent_agent=self.agent,
+                        agent_config=pr_cfg,
+                        current_profile=get_active_profile_name(),
+                    )
+                except Exception as exc:
+                    logging.debug("profile_router skipped: %s", exc)
+                    routed_resp = None
+
+        if routed_resp is not None:
+            self.conversation_history.append({"role": "user", "content": message})
+            self.conversation_history.append({"role": "assistant", "content": routed_resp})
+            ChatConsole().print(f"[{_accent_hex()}]{'─' * 40}[/]")
+            print(flush=True)
+            try:
+                from hermes_cli.skin_engine import get_active_skin
+                _skin = get_active_skin()
+                label = _skin.get_branding("response_label", "⚕ Hermes")
+                _resp_color = _skin.get_color("response_border", "#CD7F32")
+                _resp_text = _skin.get_color("banner_text", "#FFF8DC")
+            except Exception:
+                label = "⚕ Hermes"
+                _resp_color = "#CD7F32"
+                _resp_text = "#FFF8DC"
+            _cc_route = ChatConsole()
+            _cc_route.print(Panel(
+                _rich_text_from_ansi(routed_resp),
+                title=f"[{_resp_color} bold]{label}[/]",
+                title_align="left",
+                border_style=_resp_color,
+                style=_resp_text,
+                box=rich_box.HORIZONTALS,
+                padding=(1, 2),
+            ))
+            if self.bell_on_complete:
+                sys.stdout.write("\a")
+                sys.stdout.flush()
+            return routed_resp
 
         # Add user message to history
         self.conversation_history.append({"role": "user", "content": message})

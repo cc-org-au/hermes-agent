@@ -23,6 +23,7 @@ from tools.delegate_tool import (
     MAX_DEPTH,
     check_delegate_requirements,
     delegate_task,
+    hand_off_to_profile,
     _build_child_agent,
     _build_child_system_prompt,
     _strip_blocked_tools,
@@ -540,12 +541,28 @@ class TestDelegateObservability(unittest.TestCase):
 
 class TestBlockedTools(unittest.TestCase):
     def test_blocked_tools_constant(self):
-        for tool in ["delegate_task", "clarify", "memory", "send_message", "execute_code"]:
+        for tool in [
+            "delegate_task",
+            "hand_off_to_profile",
+            "clarify",
+            "memory",
+            "send_message",
+            "execute_code",
+        ]:
             self.assertIn(tool, DELEGATE_BLOCKED_TOOLS)
 
     def test_constants(self):
         self.assertEqual(MAX_CONCURRENT_CHILDREN, 3)
         self.assertEqual(MAX_DEPTH, 2)
+
+
+class TestHandOffProfile(unittest.TestCase):
+    def test_hand_off_requires_fields(self):
+        parent = _make_mock_parent(depth=0)
+        err = json.loads(hand_off_to_profile("", "req", parent_agent=parent))
+        self.assertIn("error", err)
+        err2 = json.loads(hand_off_to_profile("p", "", parent_agent=parent))
+        self.assertIn("error", err2)
 
 
 class TestDelegationCredentialResolution(unittest.TestCase):

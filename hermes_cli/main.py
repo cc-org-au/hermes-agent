@@ -3567,10 +3567,17 @@ def cmd_profile(args):
         get_active_profile, set_active_profile, get_active_profile_name,
         check_alias_collision, create_wrapper_script, remove_wrapper_script,
         _is_wrapper_dir_in_path, _get_wrapper_dir,
+        audit_profile_lifecycle_report,
     )
     from hermes_constants import display_hermes_home
 
     action = getattr(args, "profile_action", None)
+
+    if action == "lifecycle-audit":
+        days = int(getattr(args, "idle_days", 90) or 90)
+        for ln in audit_profile_lifecycle_report(idle_days=days):
+            print(ln)
+        return
 
     if action is None:
         # Bare `hermes profile` — show current profile status
@@ -5394,6 +5401,18 @@ For more help on a command:
         "--refresh-config",
         action="store_true",
         help="Re-merge toolsets/max_turns from manifest into existing role profiles",
+    )
+
+    profile_lifecycle = profile_subparsers.add_parser(
+        "lifecycle-audit",
+        help="Report profiles with unknown or stale usage (advisory; no deletes)",
+    )
+    profile_lifecycle.add_argument(
+        "--idle-days",
+        type=int,
+        default=90,
+        metavar="N",
+        help="Flag profiles with no usage record older than N days (default: 90)",
     )
 
     profile_parser.set_defaults(func=cmd_profile)

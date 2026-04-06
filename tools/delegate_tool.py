@@ -33,6 +33,7 @@ _HERMES_PROFILE_DELEGATE_LOCK = threading.RLock()
 # Tools that children must never have access to
 DELEGATE_BLOCKED_TOOLS = frozenset([
     "delegate_task",   # no recursive delegation
+    "hand_off_to_profile",
     "clarify",         # no user interaction
     "memory",          # no writes to shared MEMORY.md
     "send_message",    # no cross-platform side effects
@@ -648,10 +649,44 @@ def delegate_task(
 
     total_duration = round(time.monotonic() - overall_start, 2)
 
+    if hp:
+        try:
+            from hermes_cli.profiles import record_profile_usage
+
+            record_profile_usage(hp, kind="delegate")
+        except Exception:
+            pass
+
     return json.dumps({
         "results": results,
         "total_duration_seconds": total_duration,
     }, ensure_ascii=False)
+
+
+def hand_off_to_profile(
+    profile_name: str,
+    user_request: str,
+    context_summary: str = "",
+    parent_agent=None,
+) -> str:
+    """Model-facing alias: run a single delegated task under another Hermes profile.
+
+    Same isolation as ``delegate_task`` with ``hermes_profile`` — use when the
+    current role should pass work to a specialist profile without asking the
+    operator to switch ``active_profile``.
+    """
+    pn = (profile_name or "").strip()
+    if not pn:
+        return json.dumps({"error": "profile_name is required"})
+    ur = (user_request or "").strip()
+    if not ur:
+        return json.dumps({"error": "user_request is required"})
+    return delegate_task(
+        goal=ur,
+        context=(context_summary or "").strip(),
+        hermes_profile=pn,
+        parent_agent=parent_agent,
+    )
 
 
 def _resolve_delegation_credentials(
@@ -813,6 +848,8 @@ DELEGATE_TASK_SCHEMA = {
         "- Optional hermes_profile: run the subagent under that named Hermes profile's "
         "HERMES_HOME (toolsets, keys, gateway state isolated). Single-task only; "
         "create profiles with scripts/core/bootstrap_org_agent_profiles.py.\n"
+        "- Prefer ``hand_off_to_profile`` when explicitly handing off to another role profile "
+        "(same mechanics as hermes_profile delegation).\n"
         "- Results are always returned as an array, one entry per task."
     ),
     "parameters": {
@@ -891,6 +928,37 @@ DELEGATE_TASK_SCHEMA = {
 # --- Registry ---
 from tools.registry import registry
 
+HAND_OFF_PROFILE_SCHEMA = {
+    "name": "hand_off_to_profile",
+    "description": (
+        "Hand off the user's request to another Hermes profile (separate HERMES_HOME). "
+        "Use when the task clearly belongs to a different org role (e.g. security review → "
+        "security-focused profile). Runs one delegated subagent with that profile's "
+        "config and toolsets; returns the specialist's summary to you. "
+        "Does not change the operator's sticky profile — same as delegate_task with "
+        "hermes_profile. Profile slug must exist under ~/.hermes/profiles/<name>."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "profile_name": {
+                "type": "string",
+                "description": "Target profile slug (kebab-case), e.g. chief-security-governor",
+            },
+            "user_request": {
+                "type": "string",
+                "description": "What the specialist should do (the substantive ask).",
+            },
+            "context_summary": {
+                "type": "string",
+                "description": "Optional: constraints, file paths, prior findings for the specialist.",
+            },
+        },
+        "required": ["profile_name", "user_request"],
+    },
+}
+
+
 registry.register(
     name="delegate_task",
     toolset="delegation",
@@ -905,4 +973,18 @@ registry.register(
         parent_agent=kw.get("parent_agent")),
     check_fn=check_delegate_requirements,
     emoji="🔀",
+)
+
+registry.register(
+    name="hand_off_to_profile",
+    toolset="delegation",
+    schema=HAND_OFF_PROFILE_SCHEMA,
+    handler=lambda args, **kw: hand_off_to_profile(
+        profile_name=args.get("profile_name", ""),
+        user_request=args.get("user_request", ""),
+        context_summary=args.get("context_summary", ""),
+        parent_agent=kw.get("parent_agent"),
+    ),
+    check_fn=check_delegate_requirements,
+    emoji="🎯",
 )

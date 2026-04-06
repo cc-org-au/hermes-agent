@@ -28,9 +28,107 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from typing import List, Optional
+import threading
+import time
+from typing import Any, Dict, List, Optional
+
+from utils import atomic_json_write
 
 _PROFILE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+
+_PROFILE_USAGE_LOCK = threading.Lock()
+
+
+def _profile_usage_path() -> Path:
+    """Machine-local usage timestamps for lifecycle reporting (not synced across hosts)."""
+    return _get_default_hermes_home() / ".profile_usage.json"
+
+
+def record_profile_usage(name: str, *, kind: str = "touch") -> None:
+    """Record last-use epoch for *name* (best-effort; ignores invalid names)."""
+    if not name or name == "default":
+        return
+    if not _PROFILE_ID_RE.match(name):
+        return
+    path = _profile_usage_path()
+    with _PROFILE_USAGE_LOCK:
+        data: Dict[str, Any] = {}
+        try:
+            if path.is_file():
+                data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            data = {}
+        if not isinstance(data, dict):
+            data = {}
+        touches = data.get("touches")
+        if not isinstance(touches, dict):
+            touches = {}
+        touches[name] = int(time.time())
+        data["touches"] = touches
+        data["last_kind"] = kind
+        try:
+            atomic_json_write(path, data)
+        except OSError:
+            pass
+
+
+def audit_profile_lifecycle_report(*, idle_days: int = 90) -> List[str]:
+    """Return human-readable lines about profiles with no recent usage record.
+
+    This is **advisory only** — it does not delete or archive anything.
+    """
+    lines: List[str] = []
+    root = _get_profiles_root()
+    if not root.is_dir():
+        lines.append("No profiles directory.")
+        return lines
+
+    path = _profile_usage_path()
+    touches: Dict[str, Any] = {}
+    try:
+        if path.is_file():
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            t = raw.get("touches") if isinstance(raw, dict) else None
+            if isinstance(t, dict):
+                touches = t
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        pass
+
+    cutoff = time.time() - max(1, int(idle_days)) * 86400
+    protected = frozenset({"chief-orchestrator"})
+
+    names = sorted(p.name for p in root.iterdir() if p.is_dir() and not p.name.startswith("."))
+    idle: List[str] = []
+    unknown: List[str] = []
+    for n in names:
+        ts = touches.get(n)
+        if ts is None:
+            unknown.append(n)
+        else:
+            try:
+                if float(ts) < cutoff:
+                    idle.append(n)
+            except (TypeError, ValueError):
+                unknown.append(n)
+
+    lines.append(f"Profile lifecycle audit (idle ≥ {idle_days}d, usage file: {path})")
+    lines.append("")
+    if unknown:
+        lines.append("No recorded usage (install Hermes ≥ this version or run profiles):")
+        for n in unknown:
+            mark = " (protected)" if n in protected else ""
+            lines.append(f"  • {n}{mark}")
+        lines.append("")
+    if idle:
+        lines.append(f"Idle longer than {idle_days} days (per .profile_usage.json):")
+        for n in idle:
+            mark = " (protected — manual review only)" if n in protected else ""
+            lines.append(f"  • {n}{mark}")
+        lines.append("")
+    if not unknown and not idle:
+        lines.append("No idle or unknown-usage profiles by this heuristic.")
+    lines.append("This report does not delete profiles. Chief/orchestrator approves retirements per policy.")
+    return lines
 
 # Directories bootstrapped inside every new profile
 _PROFILE_DIRS = [
@@ -732,6 +830,9 @@ def set_active_profile(name: str) -> None:
         tmp = path.with_suffix(".tmp")
         tmp.write_text(name + "\n")
         tmp.replace(path)
+
+    if name != "default":
+        record_profile_usage(name, kind="sticky")
 
 
 def get_active_profile_name() -> str:
