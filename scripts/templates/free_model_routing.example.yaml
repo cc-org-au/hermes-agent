@@ -1,24 +1,15 @@
 # Free-model fallback when paid APIs fail (merge into ~/.hermes/config.yaml).
-# Hermes seeds defaults in DEFAULT_CONFIG (``_config_version`` 18+); override here as needed.
+# Hermes seeds defaults in DEFAULT_CONFIG (``_config_version`` 19+); override here as needed.
 #
-# Default order after primary failure:
-#   1) kimi_router — Kimi router model picks one hub id from tiers by prompt (HF router API)
+# Order after primary failure:
+#   1) kimi_router — Kimi router model picks one hub id from tiers (HF hub OpenAI-compatible API)
 #   2) optional_gemini — optional last resort (hosted Gemma/Gemini API)
-#
-# Optional (opt-in): HF Inference Providers policy hop — set inference.enabled: true and model/policy.
-# That route uses included HF Inference credits quickly; prefer Kimi-only unless you know you need it.
 #
 # If you prefer a fully explicit chain instead, set ``fallback_providers: [ ... ]``
 # and omit or disable ``free_model_routing``.
 
 free_model_routing:
   enabled: true
-  inference:
-    enabled: false
-    # Opt-in only (uses HF Inference Provider credits):
-    # enabled: true
-    # model: MiniMaxAI/MiniMax-M2.5
-    # policy: fastest                 # fastest | cheapest | preferred
   kimi_router:
     router_model: moonshotai/Kimi-K2-Thinking
     tiers:
@@ -49,5 +40,6 @@ free_model_routing:
 # Or full manual override (disables synthesis from free_model_routing):
 # fallback_providers:
 #   - provider: huggingface
-#     model: your-org/your-model
-#     hf_inference_policy: fastest
+#     model: moonshotai/Kimi-K2-Thinking
+#     hf_router: true
+#     hf_router_tiers: [ ... ]

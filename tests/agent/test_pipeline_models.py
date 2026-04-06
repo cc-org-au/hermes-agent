@@ -8,7 +8,6 @@ def test_collect_pipeline_models_order_and_dedupe():
         "model": {"default": "anthropic/claude-sonnet-4"},
         "free_model_routing": {
             "enabled": True,
-            "inference": {"model": "MiniMaxAI/MiniMax-M2.5", "policy": "fastest"},
             "kimi_router": {
                 "router_model": "moonshotai/Kimi-K2-Thinking",
                 "tiers": [
@@ -27,7 +26,7 @@ def test_collect_pipeline_models_order_and_dedupe():
     }
     rows = collect_pipeline_models(cfg)
     models = [r["model"] for r in rows]
-    # Primary first; MiniMax once (inference + tier deduped); router; tier other; gemini
+    # Primary first; MiniMax once (tier dedupe); router; tier other; gemini
     assert models[0] == "anthropic/claude-sonnet-4"
     assert models.count("MiniMaxAI/MiniMax-M2.5") == 1
     assert "moonshotai/Kimi-K2-Thinking" in models
@@ -39,19 +38,18 @@ def test_collect_pipeline_models_order_and_dedupe():
 def test_collect_pipeline_models_disabled():
     cfg = {
         "model": {"default": "x"},
-        "free_model_routing": {"enabled": False, "inference": {"model": "y/z"}},
+        "free_model_routing": {"enabled": False},
     }
     rows = collect_pipeline_models(cfg)
     assert len(rows) == 1
     assert rows[0]["model"] == "x"
 
 
-def test_collect_pipeline_models_skips_inference_when_disabled():
+def test_collect_pipeline_models_kimi_tiers():
     cfg = {
         "model": {"default": "anthropic/claude-sonnet-4"},
         "free_model_routing": {
             "enabled": True,
-            "inference": {"enabled": False, "model": "skip/this"},
             "kimi_router": {
                 "router_model": "moonshotai/Kimi-K2-Thinking",
                 "tiers": [{"id": "g", "models": ["only-tier-model"]}],
@@ -60,5 +58,4 @@ def test_collect_pipeline_models_skips_inference_when_disabled():
     }
     rows = collect_pipeline_models(cfg)
     models = [r["model"] for r in rows]
-    assert "skip/this" not in models
     assert "only-tier-model" in models

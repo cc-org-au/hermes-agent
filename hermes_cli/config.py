@@ -229,11 +229,7 @@ DEFAULT_CONFIG = {
     "fallback_providers": None,
     "free_model_routing": {
         "enabled": True,
-        # Opt-in only: HF Inference Providers (router.huggingface.co policy suffix) burn
-        # included credits quickly. Default chain is Kimi tier router → optional Gemini.
-        "inference": {
-            "enabled": False,
-        },
+        # Kimi tier router (HF hub) → optional Gemini. No separate HF Inference Providers hop.
         "kimi_router": {
             "router_model": "moonshotai/Kimi-K2-Thinking",
             "tiers": [
@@ -302,8 +298,7 @@ DEFAULT_CONFIG = {
             "exclude_profiles": [],
             "router_model": "",
             "router_provider": "",
-            # When true (default), profile routing uses ``free_model_routing.kimi_router``
-            # first; HF Inference Providers are opt-in (``free_model_routing.inference.enabled``).
+            # When true (default), profile routing uses ``free_model_routing.kimi_router``.
             "use_free_model_routing": True,
         },
         # When enabled, the ``sync_org_automation`` tool may run manifest bootstrap +
@@ -662,7 +657,7 @@ DEFAULT_CONFIG = {
     },
 
     # Config schema version - bump this when adding new required fields
-    "_config_version": 18,
+    "_config_version": 19,
 }
 
 # =============================================================================
@@ -1682,6 +1677,35 @@ def migrate_config(interactive: bool = True, quiet: bool = False) -> Dict[str, A
             if not quiet:
                 print(f"  ⚠ v18 free_model_routing migration skipped: {e}")
             results["warnings"].append(f"v18 migration: {e}")
+
+    # ── Version 18 → 19: remove free_model_routing.inference (HF Inference Providers hop) ──
+    if current_ver < 19:
+        try:
+            path = get_config_path()
+            raw_user: Dict[str, Any] = {}
+            if path.exists():
+                try:
+                    with open(path, encoding="utf-8") as f:
+                        raw_user = yaml.safe_load(f) or {}
+                except Exception:
+                    raw_user = {}
+            if not isinstance(raw_user, dict):
+                raw_user = {}
+            fmr = raw_user.get("free_model_routing")
+            if not isinstance(fmr, dict):
+                fmr = {}
+            fmr = dict(fmr)
+            fmr.pop("inference", None)
+            merge_user_config_yaml({"free_model_routing": fmr, "_config_version": 19})
+            results["config_added"].append("free_model_routing: removed inference block (v19)")
+            if not quiet:
+                print(
+                    "  ✓ v19: Removed free_model_routing.inference — use kimi_router + optional_gemini only"
+                )
+        except Exception as e:
+            if not quiet:
+                print(f"  ⚠ v19 free_model_routing migration skipped: {e}")
+            results["warnings"].append(f"v19 migration: {e}")
 
     if current_ver < latest_ver and not quiet:
         print(f"Config version: {current_ver} → {latest_ver}")

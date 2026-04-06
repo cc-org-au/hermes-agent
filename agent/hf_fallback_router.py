@@ -1,7 +1,6 @@
-"""Hugging Face Inference Providers fallbacks (router.huggingface.co).
+"""Kimi tier routing on the Hugging Face hub OpenAI-compatible API (router.huggingface.co).
 
-Model IDs come from configuration (``free_model_routing`` / ``fallback_providers``),
-not from hardcoded lists in this module.
+Model IDs come from configuration (``free_model_routing`` / ``fallback_providers``).
 
 Set ``HERMES_HF_ROUTER_DISABLE=1`` to skip the Kimi tiered router and use that
 entry's ``model`` field as-is.
@@ -16,19 +15,6 @@ import re
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
-
-
-def apply_hf_inference_policy(model: str, policy: str | None) -> str:
-    """Append ``:fastest`` / ``:cheapest`` / ``:preferred`` when *model* has no ``:`` yet."""
-    if not model or not policy:
-        return model
-    p = str(policy).strip().lower()
-    if p not in ("fastest", "cheapest", "preferred"):
-        return model
-    m = str(model).strip()
-    if not m or ":" in m:
-        return m
-    return f"{m}:{p}"
 
 
 def _flatten_tier_models(tiers: List[Dict[str, Any]]) -> List[str]:

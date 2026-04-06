@@ -343,11 +343,6 @@ class TestFallbackInit:
             "fallback_providers": None,
             "free_model_routing": {
                 "enabled": True,
-                "inference": {
-                    "enabled": True,
-                    "model": "test/inf",
-                    "policy": "fastest",
-                },
                 "kimi_router": {
                     "router_model": "test/router",
                     "tiers": [{"models": ["test/a"]}],
@@ -360,7 +355,7 @@ class TestFallbackInit:
         assert agent._fallback_model is not None
         assert agent._fallback_model["provider"] == "huggingface"
         assert agent._fallback_model.get("hf_router") is True
-        assert len(agent._fallback_chain) == 2
+        assert len(agent._fallback_chain) == 1
         assert agent._fallback_activated is False
 
     def test_fallback_none_for_non_dict(self):

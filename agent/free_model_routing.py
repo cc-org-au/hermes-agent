@@ -1,14 +1,9 @@
 """Build ``fallback_providers`` from ``free_model_routing`` in config.yaml.
 
-Default (v18+): **Kimi tier router first** → optional HF Inference Providers (explicit
-opt-in) → optional Gemini. The Inference Providers hop must set ``inference.enabled: true``
-or it is skipped (legacy YAML with only ``model``/``policy`` no longer runs first).
+Synthesized order (HF “Inference Providers” policy hop removed — use Kimi tier router only):
 
-Order when synthesized:
-
-1. **Kimi tiered router** — router model picks one id from configured tiers by prompt.
-2. **Inference routing** (optional) — only if ``inference.enabled`` is **true** and ``model`` is set.
-3. **Optional Gemini** — last-resort hosted Gemma if enabled (optional_gemini).
+1. **Kimi tiered router** — router model picks one hub id from configured tiers.
+2. **Optional Gemini** — last-resort hosted Gemma if ``optional_gemini`` is enabled.
 """
 
 from __future__ import annotations
@@ -105,18 +100,6 @@ def build_free_fallback_chain(config: Optional[Dict[str, Any]]) -> List[Dict[str
                 "configure kimi_router.tiers for tiered routing",
             )
 
-    inf = fmr.get("inference") or {}
-    if isinstance(inf, dict) and inf.get("enabled") is True:
-        mid = _strip(inf.get("model"))
-        pol = _strip(inf.get("policy"))
-        if mid:
-            entry: Dict[str, Any] = {"provider": "huggingface", "model": mid}
-            if pol in ("fastest", "cheapest", "preferred"):
-                entry["hf_inference_policy"] = pol
-            elif pol:
-                logger.warning("free_model_routing.inference: unknown policy %r — omitting suffix", pol)
-            chain.append(entry)
-
     og = fmr.get("optional_gemini") or {}
     if isinstance(og, dict) and og.get("enabled") and _strip(og.get("model")):
         chain.append(
@@ -131,25 +114,29 @@ def build_free_fallback_chain(config: Optional[Dict[str, Any]]) -> List[Dict[str
     return chain
 
 
-def _prefer_synth_over_plain_hf_first(synth: List[Dict[str, Any]], first_fb: Dict[str, Any]) -> bool:
-    """True when *synth* starts with Kimi ``hf_router`` but *first_fb* is plain HF (Inference API style)."""
-    if not synth or not isinstance(first_fb, dict):
+def _is_plain_hf_without_router(entry: Dict[str, Any]) -> bool:
+    """Legacy Inference-Providers-style row: huggingface + hub id, no ``hf_router``."""
+    if not isinstance(entry, dict):
         return False
-    if not synth[0].get("hf_router"):
+    if str(entry.get("provider") or "").strip().lower() != "huggingface":
         return False
-    prov = str(first_fb.get("provider") or "").strip().lower()
-    return prov == "huggingface" and not first_fb.get("hf_router")
+    if entry.get("hf_router"):
+        return False
+    return bool(str(entry.get("model") or "").strip())
+
+
+def _drop_plain_hf_without_router(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return [e for e in entries if not _is_plain_hf_without_router(e)]
 
 
 def resolve_fallback_providers(config: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Resolve ``fallback_providers`` with ``free_model_routing`` when appropriate.
 
     - If ``fallback_providers`` is ``[]`` → no fallback (explicit opt-out).
-    - If ``fallback_providers`` is a non-empty list → use as-is **unless** the first entry is a
-      plain ``huggingface`` hub id (no ``hf_router``) while ``free_model_routing`` synthesizes
-      a Kimi tier router first — then use the synthesized chain (fixes legacy YAML that pinned
-      Inference Providers before Kimi).
-    - Legacy ``fallback_model`` single dict → same Kimi-vs-plain-HF rule, else one-element list.
+    - Non-empty ``fallback_providers`` → entries that look like legacy plain HF hub ids
+      (no ``hf_router``) are **dropped**; Kimi routing uses ``hf_router`` rows only.
+      If nothing remains, use the synthesized chain.
+    - Legacy ``fallback_model`` single dict: plain HF without router is ignored in favor of synthesis.
     - If ``fallback_providers`` is missing or ``None`` → build from ``free_model_routing``.
     """
     if not config or not isinstance(config, dict):
@@ -160,14 +147,13 @@ def resolve_fallback_providers(config: Optional[Dict[str, Any]]) -> List[Dict[st
         return []
     if isinstance(fp, list) and len(fp) > 0:
         cleaned = [x for x in fp if isinstance(x, dict) and x.get("provider") and x.get("model")]
+        cleaned = _drop_plain_hf_without_router(cleaned)
         if not cleaned:
-            return synth
-        if _prefer_synth_over_plain_hf_first(synth, cleaned[0]):
             return synth
         return cleaned
     fm = config.get("fallback_model")
     if isinstance(fm, dict) and fm.get("provider") and fm.get("model"):
-        if _prefer_synth_over_plain_hf_first(synth, fm):
+        if _is_plain_hf_without_router(fm):
             return synth
         return [fm]
     return synth

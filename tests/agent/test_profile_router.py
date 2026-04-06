@@ -178,17 +178,12 @@ def test_classify_keyword_security_skips_llm():
     assert "keyword" in reason.lower()
 
 
-def test_call_profile_router_llm_prefers_kimi_when_inference_not_explicitly_enabled(monkeypatch):
-    """Legacy YAML often had inference.model without enabled:true — must not hit Inference Providers."""
+def test_call_profile_router_llm_uses_kimi_tier_pick(monkeypatch):
     monkeypatch.setenv("HF_TOKEN", "fake-token-for-test")
     from agent import profile_router as pr
 
     fake_fmr = {
         "enabled": True,
-        "inference": {
-            "model": "MiniMaxAI/MiniMax-M2.5",
-            "policy": "fastest",
-        },
         "kimi_router": {
             "router_model": "moonshotai/Kimi-K2-Thinking",
             "tiers": [

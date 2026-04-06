@@ -43,9 +43,7 @@ agent:
     min_message_chars: 12
     only_when_current_profiles:
       - chief-orchestrator
-    # Router LLM: Kimi tier pick from ``free_model_routing.kimi_router`` (default). Optional
-    # ``free_model_routing.inference`` (HF Inference Providers policy hop) is opt-in — burns credits.
-    # Requires HF_TOKEN / HUGGINGFACE_API_KEY in .env.
+    # Router LLM: Kimi tier pick from ``free_model_routing.kimi_router``. Requires HF_TOKEN / HUGGINGFACE_API_KEY in .env.
     use_free_model_routing: true
     # Optional: pin a hub id before the free_model_routing chain (same provider as main HF path):
     # router_provider: huggingface
@@ -98,20 +96,17 @@ auxiliary:
     provider: openrouter
     model: tier:D
   # CLI profile routing does not use auxiliary.profile_router — it uses agent.profile_router
-  # + free_model_routing (Kimi tier pick first; HF Inference Providers only if inference.enabled: true).
+  # + free_model_routing.kimi_router (tier pick).
 
 delegation:
   provider: openrouter
   model: tier:dynamic
 
 # Free-model pipeline when paid/OpenRouter paths fail (do not set legacy ``fallback_model`` here —
-# it overrides this entire chain). Default order: Kimi tiered router → optional Gemini.
-# HF Inference Providers policy hop (inference.model + :fastest) is opt-in via inference.enabled: true.
+# it overrides this entire chain). Order: Kimi tiered router → optional Gemini.
 # Gemma on Gemini API: https://ai.google.dev/gemma/docs/core/gemma_on_gemini_api
 free_model_routing:
   enabled: true
-  inference:
-    enabled: false
   kimi_router:
     router_model: moonshotai/Kimi-K2-Thinking
     tiers:
