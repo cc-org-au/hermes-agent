@@ -49,7 +49,7 @@ The repo ships `scripts/core/gateway-watchdog.sh`: a loop that:
 
 Copy it to `$HERMES_HOME/bin/gateway-watchdog.sh`, `chmod +x`, and run it under **systemd**, **tmux**, or a **cron** `@reboot` job as the **same user** that owns the gateway (so `HERMES_HOME` and `gateway.pid` match).
 
-**SSH / automation:** Prefer `scripts/core/install_and_restart_gateway_watchdog.sh` (run as the gateway user from the repo checkout). It copies the watchdog into `$HERMES_HOME/bin`, stops prior instances by matching **that** path only, and starts one `nohup` process. Inlining `pkill -f gateway-watchdog` in a remote `bash -c '…'` often matches the supervisor’s own command line and drops the session before `nohup` runs.
+**SSH / automation:** Prefer `scripts/core/install_and_restart_gateway_watchdog.sh` (run as the gateway user from the repo checkout). It copies the watchdog into `$HERMES_HOME/bin`, stops prior instances by matching that path **and** (when different) the legacy **`$HERMES_PROFILE_BASE/bin/gateway-watchdog.sh`** copy, then starts one `nohup` process. Inlining `pkill -f gateway-watchdog` in a remote `bash -c '…'` often matches the supervisor’s own command line and drops the session before `nohup` runs.
 
 ### Environment variables
 
