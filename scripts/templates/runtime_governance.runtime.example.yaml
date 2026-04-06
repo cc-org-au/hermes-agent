@@ -23,6 +23,8 @@ concise_directives:
   - "Read POLICY_ROOT/core/deployment-handoff.md from disk when planning activation — do not ask the operator to paste it."
   - "Handoff (A/B numbered) before Verification when executing phased activation sessions."
   - "Use delegate_task with hermes_profile when work must run under another isolated profile."
+  # Per-session paste prompts (install via scripts/core/install_runtime_activation_sessions_into_hermes_home.sh):
+  - "Phased activation session prompts live under sessions/runtime-activation-sessions/ (session-1- through session-20-*.md); read the file that matches activation_session above."
 
 read_order_paths:
   - "HERMES_HOME/.hermes.md"
@@ -32,6 +34,7 @@ read_order_paths:
   - "POLICY_ROOT/core/governance/standards/channel-architecture-policy.md"
   - "POLICY_ROOT/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md"
   - "WORKSPACE/operations/hermes_token_governance.runtime.yaml"
+  - "sessions/runtime-activation-sessions/session-init-token-model-tool-channel-governance-policy.md"
 
 notes: |
   IT/Security may tighten watchdog + gateway singleton policy; see gateway-watchdog docs.
