@@ -417,6 +417,48 @@ class GatewayConfig:
         return self.unauthorized_dm_behavior
 
 
+def _merge_role_routing_overlay(base: dict, overlay: dict) -> dict:
+    """Merge ``role_routing`` overlay into base (from config.yaml).
+
+    Top-level ``enabled``, ``default_role``, and ``default_slug`` from the overlay
+    win when present. Per-platform blocks merge; ``channels``, ``chats``, and
+    ``threads`` mappings from the overlay replace the same key entirely when present
+    so generated routing files stay authoritative for ID→slug bindings.
+    """
+    out = dict(base)
+    for key in ("enabled", "default_role", "default_slug"):
+        if key in overlay and overlay[key] is not None:
+            out[key] = overlay[key]
+    plat_keys = (
+        "slack",
+        "telegram",
+        "whatsapp",
+        "discord",
+        "signal",
+        "mattermost",
+        "matrix",
+        "feishu",
+        "wecom",
+    )
+    for plat in plat_keys:
+        ov_plat = overlay.get(plat)
+        if not isinstance(ov_plat, dict):
+            continue
+        base_plat = out.get(plat)
+        if not isinstance(base_plat, dict):
+            base_plat = {}
+        merged = dict(base_plat)
+        for subk, subv in ov_plat.items():
+            if subk in ("channels", "chats", "threads") and isinstance(subv, dict):
+                merged[subk] = dict(subv)
+            elif isinstance(subv, dict) and isinstance(merged.get(subk), dict):
+                merged[subk] = {**merged[subk], **subv}
+            else:
+                merged[subk] = subv
+        out[plat] = merged
+    return out
+
+
 def load_gateway_config() -> GatewayConfig:
     """
     Load gateway configuration from multiple sources.
@@ -424,8 +466,9 @@ def load_gateway_config() -> GatewayConfig:
     Priority (highest to lowest):
     1. Environment variables
     2. ~/.hermes/config.yaml (primary user-facing config)
-    3. ~/.hermes/gateway.json (legacy — provides defaults under config.yaml)
-    4. Built-in defaults
+    3. workspace/operations/messaging_role_routing.yaml (overlay for ``messaging.role_routing``)
+    4. ~/.hermes/gateway.json (legacy — provides defaults under config.yaml)
+    5. Built-in defaults
     """
     _home = get_hermes_home()
     gw_data: dict = {}
@@ -584,6 +627,33 @@ def load_gateway_config() -> GatewayConfig:
             "Failed to process config.yaml — falling back to .env / gateway.json values. "
             "Check %s for syntax errors. Error: %s",
             _home / "config.yaml",
+            e,
+        )
+
+    # Optional overlay: workspace/operations/messaging_role_routing.yaml
+    # (from `hermes workspace governance sync-messaging`).
+    _overlay_path = _home / "workspace" / "operations" / "messaging_role_routing.yaml"
+    try:
+        import yaml as _yaml_rr
+
+        if _overlay_path.is_file():
+            with open(_overlay_path, encoding="utf-8") as f:
+                _ov_doc = _yaml_rr.safe_load(f) or {}
+            if isinstance(_ov_doc, dict):
+                _ov_rr = _ov_doc.get("role_routing")
+                if isinstance(_ov_rr, dict):
+                    _msg = gw_data.get("messaging")
+                    if not isinstance(_msg, dict):
+                        _msg = {}
+                    _base_rr = _msg.get("role_routing")
+                    if not isinstance(_base_rr, dict):
+                        _base_rr = {}
+                    _msg["role_routing"] = _merge_role_routing_overlay(_base_rr, _ov_rr)
+                    gw_data["messaging"] = _msg
+    except Exception as e:
+        logger.warning(
+            "Failed to merge messaging role routing overlay %s: %s",
+            _overlay_path,
             e,
         )
 

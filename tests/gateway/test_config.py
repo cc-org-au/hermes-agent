@@ -10,6 +10,7 @@ from gateway.config import (
     PlatformConfig,
     SessionResetPolicy,
     _apply_env_overrides,
+    _merge_role_routing_overlay,
     load_gateway_config,
 )
 
@@ -268,3 +269,31 @@ class TestHomeChannelEnvOverrides:
             home = config.platforms[platform].home_channel
             assert home is not None, f"{platform.value}: home_channel should not be None"
             assert (home.chat_id, home.name) == expected, platform.value
+
+
+class TestMergeRoleRoutingOverlay:
+    def test_overlay_replaces_channel_map(self):
+        base = {
+            "enabled": False,
+            "default_role": "old",
+            "slack": {
+                "channels": {"C1": "a", "C2": "b"},
+                "threads": {"T1": "x"},
+            },
+        }
+        overlay = {
+            "enabled": True,
+            "default_role": "chief_orchestrator",
+            "slack": {"channels": {"C1": "fd-engineering"}},
+        }
+        merged = _merge_role_routing_overlay(base, overlay)
+        assert merged["enabled"] is True
+        assert merged["default_role"] == "chief_orchestrator"
+        assert merged["slack"]["channels"] == {"C1": "fd-engineering"}
+        assert merged["slack"]["threads"] == {"T1": "x"}
+
+    def test_overlay_adds_platform(self):
+        base = {"default_role": "chief_orchestrator"}
+        overlay = {"telegram": {"chats": {"99": "chief_orchestrator"}}}
+        merged = _merge_role_routing_overlay(base, overlay)
+        assert merged["telegram"]["chats"] == {"99": "chief_orchestrator"}

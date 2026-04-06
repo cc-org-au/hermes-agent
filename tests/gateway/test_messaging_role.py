@@ -8,6 +8,7 @@ import yaml
 from gateway.config import Platform
 from gateway.messaging_role import (
     build_messaging_role_ephemeral,
+    load_role_allowed_toolsets,
     resolve_messaging_role_slug,
 )
 from gateway.session import SessionSource
@@ -60,3 +61,23 @@ def test_build_ephemeral_with_assignments(tmp_path):
     assert "r1" in block
     assert "AGENTS.md" in block
     assert "delegate_task" in block or "hermes_profile" in block
+    assert "token-model" in block or "§14" in block
+
+
+def test_load_role_allowed_toolsets(tmp_path):
+    ops = tmp_path / "workspace" / "operations"
+    ops.mkdir(parents=True)
+    doc = {
+        "roles": {
+            "fd-engineering": {"allowed_toolsets": ["terminal", "file", "web"]},
+            "no_cap": {"display_name": "X"},
+        },
+    }
+    (ops / "role_assignments.yaml").write_text(yaml.safe_dump(doc), encoding="utf-8")
+    assert load_role_allowed_toolsets("fd-engineering", hermes_home=tmp_path) == [
+        "terminal",
+        "file",
+        "web",
+    ]
+    assert load_role_allowed_toolsets("no_cap", hermes_home=tmp_path) is None
+    assert load_role_allowed_toolsets(None, hermes_home=tmp_path) is None

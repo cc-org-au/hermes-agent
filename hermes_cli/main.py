@@ -4099,6 +4099,13 @@ For more help on a command:
             "and ≥1 platform connected (for external watchdogs)"
         ),
     )
+    gateway_subparsers.add_parser(
+        "audit-singleton",
+        help=(
+            "List gateway-like PIDs and user systemd units matching hermes-gateway* "
+            "(expect one supervised instance per HERMES_HOME)"
+        ),
+    )
     
     # gateway install
     gateway_install = gateway_subparsers.add_parser("install", help="Install gateway as service")
@@ -5414,12 +5421,22 @@ For more help on a command:
         "path",
         help="Print absolute paths to governance files",
     )
+    gov_sub.add_parser(
+        "sync-messaging",
+        help=(
+            "Regenerate messaging_role_routing.yaml and role_assignments from .env, "
+            "messaging_channel_role_map.yaml, and org_agent_profiles_manifest.yaml"
+        ),
+    )
 
     def cmd_workspace(args):
         from hermes_cli.workspace_governance import workspace_governance_command
 
         if getattr(args, "workspace_action", None) != "governance":
-            print("Use: hermes workspace governance {init|show|path}", file=sys.stderr)
+            print(
+                "Use: hermes workspace governance {init|show|path|sync-messaging}",
+                file=sys.stderr,
+            )
             sys.exit(2)
         workspace_governance_command(args)
 

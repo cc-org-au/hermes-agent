@@ -24,6 +24,49 @@ logger = logging.getLogger(__name__)
 _ASSIGNMENTS_REL = Path("workspace") / "operations" / "role_assignments.yaml"
 
 
+def load_role_allowed_toolsets(
+    slug: Optional[str],
+    *,
+    hermes_home: Path,
+) -> Optional[List[str]]:
+    """Return allowed toolset names for this messaging role slug, or None for no cap.
+
+    When ``role_assignments.yaml`` defines ``allowed_toolsets`` for the slug, the
+    gateway intersects that list with the platform's configured toolsets so each
+    routed persona matches org manifest / policy tool authority.
+    """
+    if not slug or not str(slug).strip():
+        return None
+    path = hermes_home / _ASSIGNMENTS_REL
+    if not path.is_file():
+        return None
+    try:
+        import yaml
+
+        doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.debug("role_assignments: load failed %s: %s", path, exc)
+        return None
+    if not isinstance(doc, dict):
+        return None
+    roles = doc.get("roles")
+    if not isinstance(roles, dict):
+        return None
+    entry = roles.get(slug) or roles.get(str(slug).replace("-", "_"))
+    if not isinstance(entry, dict):
+        return None
+    raw = entry.get("allowed_toolsets")
+    if raw is None:
+        return None
+    if not isinstance(raw, list):
+        return None
+    out: List[str] = []
+    for item in raw:
+        if isinstance(item, str) and item.strip():
+            out.append(item.strip())
+    return out or None
+
+
 def resolve_messaging_role_slug(
     source: SessionSource,
     role_routing_cfg: Dict[str, Any],
@@ -107,6 +150,19 @@ def load_role_assignment_block(
     if isinstance(dn, str) and dn.strip():
         lines.append(f"- **Display name:** {dn.strip()}")
 
+    # Token-model §14 — disclosure line (exact role name = Display name when set).
+    role_label = (dn.strip() if isinstance(dn, str) and dn.strip() else slug.replace("_", " ").title())
+    lines.extend(
+        [
+            "",
+            "### Human-visible disclosure (token-model §14)",
+            "",
+            f"End every reply the operator can see with a final line exactly: `--{role_label}` "
+            f"(use the **Display name** above verbatim when it is set).",
+            "",
+        ]
+    )
+
     scope = entry.get("scope") or entry.get("mission")
     if isinstance(scope, str) and scope.strip():
         lines.extend(["", "### Scope", "", scope.strip(), ""])
@@ -125,6 +181,17 @@ def load_role_assignment_block(
         lines.append(
             f"- **Delegation:** For work that must run under another Hermes profile, "
             f"use `delegate_task` with `hermes_profile=\"{hp.strip()}\"` when appropriate."
+        )
+        lines.append("")
+
+    ats = entry.get("allowed_toolsets")
+    if isinstance(ats, list) and ats:
+        lines.append("### Tool authority (this surface)")
+        lines.append("")
+        lines.append(
+            "Only the following toolsets are enabled for this routed role on this gateway "
+            "(intersection with platform config): "
+            + ", ".join(f"`{x}`" for x in ats if isinstance(x, str) and x.strip())
         )
         lines.append("")
 

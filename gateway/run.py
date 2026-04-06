@@ -5389,6 +5389,40 @@ class GatewayRunner:
         from hermes_cli.tools_config import _get_platform_tools
         enabled_toolsets = sorted(_get_platform_tools(user_config, platform_key))
 
+        # Per-routed-role tool authority: role_assignments.yaml ``allowed_toolsets`` ∩ platform.
+        try:
+            from hermes_constants import get_hermes_home as _gh_toolcap
+            from gateway.messaging_role import (
+                load_role_allowed_toolsets,
+                resolve_messaging_role_slug,
+            )
+
+            _msg_cfg = user_config.get("messaging") or {}
+            _rr = _msg_cfg.get("role_routing") if isinstance(_msg_cfg, dict) else None
+            _slug_cap = None
+            if isinstance(_rr, dict):
+                _slug_cap = resolve_messaging_role_slug(
+                    source, _rr, hermes_home=_gh_toolcap()
+                )
+            _allowed_ts = (
+                load_role_allowed_toolsets(_slug_cap, hermes_home=_gh_toolcap())
+                if _slug_cap
+                else None
+            )
+            if _allowed_ts:
+                _allow_set = set(_allowed_ts)
+                _inter_ts = [t for t in enabled_toolsets if t in _allow_set]
+                if _inter_ts:
+                    enabled_toolsets = sorted(_inter_ts)
+                else:
+                    logger.warning(
+                        "Messaging role %r: allowed_toolsets ∩ platform toolsets is empty; "
+                        "keeping platform toolsets",
+                        _slug_cap,
+                    )
+        except Exception as _toolcap_exc:
+            logger.debug("Messaging role toolset cap skipped: %s", _toolcap_exc)
+
         # Apply tool preview length config (0 = no limit)
         try:
             from agent.display import set_tool_preview_max_len

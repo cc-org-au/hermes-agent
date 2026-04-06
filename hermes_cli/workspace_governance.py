@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -19,21 +20,23 @@ def _ops_dir() -> Path:
     return get_hermes_home() / "workspace" / "operations"
 
 
-def _templates() -> tuple[Path, Path]:
+def _templates() -> tuple[Path, Path, Path]:
     root = _repo_root()
     return (
         root / "scripts" / "templates" / "runtime_governance.runtime.example.yaml",
         root / "scripts" / "templates" / "role_assignments.example.yaml",
+        root / "scripts" / "templates" / "messaging_channel_role_map.example.yaml",
     )
 
 
 def cmd_workspace_governance_init(_args) -> None:
     ops = _ops_dir()
     ops.mkdir(parents=True, exist_ok=True)
-    gov, roles = _templates()
+    gov, roles, chmap = _templates()
     for src, name in (
         (gov, "runtime_governance.runtime.yaml"),
         (roles, "role_assignments.yaml"),
+        (chmap, "messaging_channel_role_map.yaml"),
     ):
         dest = ops / name
         if dest.exists():
@@ -72,8 +75,19 @@ def cmd_workspace_governance_show(_args) -> None:
 
 def cmd_workspace_governance_paths(_args) -> None:
     home = get_hermes_home()
-    print(f"runtime_governance: {home / 'workspace' / 'operations' / 'runtime_governance.runtime.yaml'}")
-    print(f"role_assignments:   {home / 'workspace' / 'operations' / 'role_assignments.yaml'}")
+    print(f"runtime_governance:       {home / 'workspace' / 'operations' / 'runtime_governance.runtime.yaml'}")
+    print(f"role_assignments:         {home / 'workspace' / 'operations' / 'role_assignments.yaml'}")
+    print(f"messaging_channel_role_map: {home / 'workspace' / 'operations' / 'messaging_channel_role_map.yaml'}")
+    print(f"messaging_role_routing:     {home / 'workspace' / 'operations' / 'messaging_role_routing.yaml'}")
+
+
+def cmd_workspace_governance_sync_messaging(_args) -> None:
+    script = _repo_root() / "scripts" / "core" / "sync_messaging_governance.py"
+    if not script.is_file():
+        print(f"Missing {script}", file=sys.stderr)
+        sys.exit(1)
+    r = subprocess.run([sys.executable, str(script)], check=False)
+    raise SystemExit(r.returncode)
 
 
 def workspace_governance_command(args) -> None:
@@ -84,6 +98,11 @@ def workspace_governance_command(args) -> None:
         cmd_workspace_governance_show(args)
     elif action == "path":
         cmd_workspace_governance_paths(args)
+    elif action == "sync-messaging":
+        cmd_workspace_governance_sync_messaging(args)
     else:
-        print("Usage: hermes workspace governance {init|show|path}", file=sys.stderr)
+        print(
+            "Usage: hermes workspace governance {init|show|path|sync-messaging}",
+            file=sys.stderr,
+        )
         sys.exit(2)

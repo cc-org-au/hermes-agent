@@ -1,0 +1,41 @@
+# Copy to: HERMES_HOME/workspace/operations/messaging_channel_role_map.yaml
+# Install: hermes workspace governance init   (copies this if missing)
+#
+# Maps allowlisted IDs from .env (SLACK_ALLOWED_CHANNELS, TELEGRAM_ALLOWED_CHATS,
+# WHATSAPP_ALLOWED_CHATS, DISCORD_ALLOWED_CHANNELS) to role slugs defined in
+# role_assignments.yaml. Unlisted IDs inherit defaults.* (typically chief for
+# WhatsApp/Telegram per token-model §14).
+#
+# After editing, run:  hermes workspace governance sync-messaging
+# Then restart the gateway.
+
+version: 1
+
+# Fallback when an allowlisted ID has no explicit row under slack_channels / etc.
+default_role: chief_orchestrator
+
+defaults:
+  slack: chief_orchestrator
+  telegram: chief_orchestrator
+  whatsapp: chief_orchestrator
+  discord: chief_orchestrator
+
+# Explicit bindings: key = exact chat/channel id string from .env allowlist.
+# Value = role slug (must exist under role_assignments.yaml roles.*).
+slack_channels:
+  # "C01234567890": fd-engineering
+  # "C0ABCDEF": fd-product
+
+telegram_chats:
+  # "123456789": chief_orchestrator
+
+whatsapp_chats:
+  # "15551234567": chief_orchestrator
+
+discord_channels:
+  # "9876543210": chief_orchestrator
+
+# Optional Slack thread overrides (thread id / ts → role slug), e.g.:
+# slack_threads:
+#   "1740123456.000999": fd-engineering
+slack_threads: {}

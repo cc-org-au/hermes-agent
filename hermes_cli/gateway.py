@@ -1882,6 +1882,52 @@ def gateway_setup():
 
 
 # =============================================================================
+# Singleton audit (operator / policy)
+# =============================================================================
+
+
+def gateway_audit_singleton() -> None:
+    """Best-effort scan for duplicate gateway processes or competing user services."""
+    pids = find_gateway_pids()
+    print(f"Gateway-like processes (heuristic): {len(pids)}")
+    for pid in sorted(pids):
+        print(f"  pid {pid}")
+    if not pids:
+        print("  (none matched ps patterns — gateway may be stopped or use a different argv)")
+
+    if is_linux():
+        udir = Path.home() / ".config" / "systemd" / "user"
+        if udir.is_dir():
+            units = sorted(udir.glob(f"{_SERVICE_BASE}*.service"))
+            if units:
+                print("\nUser unit files (hermes-gateway*):")
+                for u in units:
+                    print(f"  {u.name}")
+            else:
+                print("\nNo user unit files matching hermes-gateway*.service")
+
+        _ensure_user_systemd_env()
+        try:
+            name = get_service_name()
+            r = subprocess.run(
+                ["systemctl", "--user", "is-active", f"{name}.service"],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            line = (r.stdout or r.stderr or "").strip()
+            print(f"\nsystemctl --user is-active {name}.service: {line}")
+        except Exception as exc:
+            print(f"\n(systemctl is-active skipped: {exc})")
+
+    print(
+        "\nExpect one supervised gateway per HERMES_HOME. Use gateway-watchdog with "
+        "WATCHDOG_ENFORCE_SINGLE_GATEWAY so external loops and Hermes do not leave "
+        "duplicate gateway PIDs."
+    )
+
+
+# =============================================================================
 # Main Command Handler
 # =============================================================================
 
@@ -2072,3 +2118,7 @@ def gateway_command(args):
             return
         print(reason, file=sys.stderr)
         sys.exit(1)
+
+    elif subcmd == "audit-singleton":
+        gateway_audit_singleton()
+        return

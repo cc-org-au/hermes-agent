@@ -1,8 +1,13 @@
 # Copy to: HERMES_HOME/workspace/operations/role_assignments.yaml
 # Install: hermes workspace governance init
 #
-# Maps messaging role slugs (used by config.yaml messaging.role_routing) to policy reads
-# and optional Hermes profiles for delegation. One Slack bot can switch persona per channel.
+# Maps messaging role slugs (used by config.yaml messaging.role_routing and/or
+# workspace/operations/messaging_role_routing.yaml overlay) to policy reads,
+# allowed_toolsets (gateway ∩ this list), and Hermes profiles for delegation.
+#
+# How to read policies: follow the read-order banners inside each policy file.
+# Token-model §14 requires human-visible replies to end with `--<Exact Role Name>`
+# (display name); the gateway injects that obligation into the messaging-role block.
 
 version: 1
 
@@ -10,17 +15,24 @@ roles:
   chief_orchestrator:
     display_name: Chief Orchestrator
     policy_reads:
+      - "POLICY_ROOT/core/governance/standards/token-model-tool-and-channel-governance-policy.md"
+      - "POLICY_ROOT/core/governance/standards/channel-architecture-policy.md"
       - "POLICY_ROOT/core/chief-orchestrator-directive.md"
       - "WORKSPACE/operations/ORG_REGISTRY.md"
     hermes_profile_for_delegation: chief-orchestrator
+    # Omit allowed_toolsets to use full platform toolsets; or set explicit caps:
+    # allowed_toolsets: [terminal, file, web]
 
   security_governor:
     display_name: Chief Security Governor
     policy_reads:
+      - "POLICY_ROOT/core/governance/standards/token-model-tool-and-channel-governance-policy.md"
+      - "POLICY_ROOT/core/governance/standards/channel-architecture-policy.md"
       - "POLICY_ROOT/core/security-prompts.md"
       - "WORKSPACE/operations/SECURITY_ALERT_REGISTER.md"
     hermes_profile_for_delegation: ag-sec-governor
+    allowed_toolsets: [terminal, file, web]
     forbidden:
       - "Stand down production gateways without IT approval."
 
-  # Add entries for each role slug referenced under messaging.role_routing in config.yaml
+  # Add entries for each role slug referenced under messaging role routing.
