@@ -56,6 +56,8 @@ _HERMES_CORE_TOOLS = [
     "clarify",
     # Code execution + delegation
     "execute_code", "delegate_task",
+    # Org manifest → ORG_* markdown + role profiles (gated via agent.org_automation.enabled)
+    "sync_org_automation",
     # Cronjob management
     "cronjob",
     # Cross-platform messaging (gated on gateway running via check_fn)

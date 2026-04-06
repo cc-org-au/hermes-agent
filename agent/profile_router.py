@@ -7,9 +7,10 @@ to another profile via ``delegate_task(hermes_profile=...)`` *before* the main
 This is **off by default** (extra latency + cost; chief/orchestrator stays in control).
 Does not mutate sticky ``active_profile`` — only per-turn delegation.
 
-Automatic profile creation, ORG_REGISTRY edits, and destructive lifecycle actions
-are **out of scope** here; use ``hermes profile lifecycle-audit`` (dry-run) and
-operator-approved workflows per policy docs.
+Automatic profile creation and ORG_REGISTRY edits are handled by
+``hermes workspace org-automation apply`` / ``sync_org_automation`` (see
+``hermes_cli.org_automation``), not by this router. Destructive lifecycle
+actions stay out of scope; use ``hermes profile lifecycle-audit`` (advisory).
 """
 
 from __future__ import annotations

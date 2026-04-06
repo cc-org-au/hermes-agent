@@ -149,6 +149,29 @@ def get_config_path() -> Path:
     """Get the main config file path."""
     return get_hermes_home() / "config.yaml"
 
+
+def merge_user_config_yaml(updates: dict) -> Path:
+    """Deep-merge *updates* into the on-disk ``config.yaml`` for the active HERMES_HOME.
+
+    Preserves unrelated keys. Uses the same merge semantics as user config loading.
+    """
+    from utils import atomic_yaml_write
+
+    ensure_hermes_home()
+    path = get_config_path()
+    user: dict = {}
+    if path.exists():
+        try:
+            with open(path, encoding="utf-8") as f:
+                user = yaml.safe_load(f) or {}
+        except Exception:
+            user = {}
+    if not isinstance(user, dict):
+        user = {}
+    merged = _deep_merge(user, updates)
+    atomic_yaml_write(path, merged)
+    return path
+
 def get_env_path() -> Path:
     """Get the .env file path (for API keys)."""
     return get_hermes_home() / ".env"
@@ -234,6 +257,11 @@ DEFAULT_CONFIG = {
             "exclude_profiles": [],
             "router_model": "",
             "router_provider": "",
+        },
+        # When enabled, the ``sync_org_automation`` tool may run manifest bootstrap +
+        # ORG_REGISTRY / ORG_CHART auto-blocks. CLI/cron: ``hermes workspace org-automation apply``.
+        "org_automation": {
+            "enabled": False,
         },
     },
     
@@ -586,7 +614,7 @@ DEFAULT_CONFIG = {
     },
 
     # Config schema version - bump this when adding new required fields
-    "_config_version": 15,
+    "_config_version": 16,
 }
 
 # =============================================================================
@@ -1245,6 +1273,17 @@ OPTIONAL_ENV_VARS = {
         "url": None,
         "password": False,
         "category": "setting",
+    },
+    "ORG_AUTOMATION_ALLOW_AGENT": {
+        "description": (
+            "When 1, exposes the sync_org_automation tool even if agent.org_automation.enabled "
+            "is false in config.yaml (orchestrator escape hatch)."
+        ),
+        "prompt": "Allow org automation tool without config flag (0/1)",
+        "url": None,
+        "password": False,
+        "category": "setting",
+        "advanced": True,
     },
     # HERMES_TOOL_PROGRESS and HERMES_TOOL_PROGRESS_MODE are deprecated —
     # now configured via display.tool_progress in config.yaml (off|new|all|verbose).

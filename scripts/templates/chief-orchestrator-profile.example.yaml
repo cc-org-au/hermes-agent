@@ -26,6 +26,23 @@
 # Org roles (security / directors / HR / project lead): after chief-orchestrator exists, run
 #   ./venv/bin/python scripts/core/bootstrap_org_agent_profiles.py
 # then delegate with delegate_task(..., hermes_profile="ag-sec-preflight" | "fd-product" | …).
+#
+# CLI profile router: per user message, an auxiliary model may delegate to another Hermes profile
+# before the main loop (chief stays default sticky). Enable with:
+#   ./venv/bin/hermes profile router-on
+# Or merge the block below. ``hermes profile router-off`` disables.
+#
+# Org automation (markdown registers + manifest bootstrap): cron or agent tool when enabled:
+#   ./venv/bin/hermes workspace org-automation apply
+# Agent tool ``sync_org_automation`` requires agent.org_automation.enabled (or ORG_AUTOMATION_ALLOW_AGENT=1).
+
+agent:
+  profile_router:
+    enabled: true
+    only_when_current_profiles:
+      - chief-orchestrator
+  org_automation:
+    enabled: true
 
 model:
   provider: openrouter

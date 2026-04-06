@@ -3809,6 +3809,38 @@ def cmd_profile(args):
             print(f"Error: {e}")
             sys.exit(1)
 
+    elif action == "router-on":
+        from hermes_cli.config import merge_user_config_yaml
+
+        any_current = bool(getattr(args, "router_any_current_profile", False))
+        only_list = getattr(args, "router_only_when_current", None)
+        if any_current:
+            only_when: list = []
+        elif only_list:
+            only_when = list(only_list)
+        else:
+            only_when = ["chief-orchestrator"]
+
+        path = merge_user_config_yaml(
+            {
+                "agent": {
+                    "profile_router": {
+                        "enabled": True,
+                        "only_when_current_profiles": only_when,
+                    }
+                }
+            }
+        )
+        print(f"\n✓ Enabled agent.profile_router (only_when_current_profiles={only_when!r})")
+        print(f"  Updated: {path}\n")
+
+    elif action == "router-off":
+        from hermes_cli.config import merge_user_config_yaml
+
+        path = merge_user_config_yaml({"agent": {"profile_router": {"enabled": False}}})
+        print(f"\n✓ Disabled agent.profile_router.enabled")
+        print(f"  Updated: {path}\n")
+
     elif action == "sync-org":
         import subprocess
         from pathlib import Path
@@ -5415,6 +5447,32 @@ For more help on a command:
         help="Flag profiles with no usage record older than N days (default: 90)",
     )
 
+    profile_router_on = profile_subparsers.add_parser(
+        "router-on",
+        help="Enable agent.profile_router in this profile's config.yaml (CLI per-turn routing)",
+    )
+    profile_router_on.add_argument(
+        "--only-when-current",
+        action="append",
+        dest="router_only_when_current",
+        metavar="NAME",
+        help=(
+            "Repeatable: only run the router when the active profile is one of these "
+            "(default: chief-orchestrator)"
+        ),
+    )
+    profile_router_on.add_argument(
+        "--any-current-profile",
+        action="store_true",
+        dest="router_any_current_profile",
+        help="Allow routing regardless of current profile (clears only_when_current_profiles)",
+    )
+
+    profile_subparsers.add_parser(
+        "router-off",
+        help="Set agent.profile_router.enabled to false in this profile's config.yaml",
+    )
+
     profile_parser.set_defaults(func=cmd_profile)
 
     # =========================================================================
@@ -5450,16 +5508,53 @@ For more help on a command:
         ),
     )
 
+    org_auto_parser = workspace_sub.add_parser(
+        "org-automation",
+        help="Sync ORG_REGISTRY / ORG_CHART from manifest; optional profile bootstrap",
+    )
+    org_auto_sub = org_auto_parser.add_subparsers(dest="org_automation_action", required=True)
+    org_apply = org_auto_sub.add_parser(
+        "apply",
+        help="Update workspace markdown + run bootstrap_org_agent_profiles.py",
+    )
+    org_apply.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print planned markdown updates; bootstrap runs with --dry-run",
+    )
+    org_apply.add_argument(
+        "--skip-bootstrap",
+        action="store_true",
+        help="Only refresh ORG_REGISTRY.md / ORG_CHART.md blocks",
+    )
+    org_apply.add_argument(
+        "--refresh-config",
+        action="store_true",
+        help="Re-merge manifest toolsets into existing role profiles (bootstrap flag)",
+    )
+    org_apply.add_argument(
+        "--manifest",
+        metavar="PATH",
+        help="Path to org_agent_profiles_manifest.yaml (default: repo scripts/core/…)",
+    )
+
     def cmd_workspace(args):
         from hermes_cli.workspace_governance import workspace_governance_command
 
-        if getattr(args, "workspace_action", None) != "governance":
+        wa = getattr(args, "workspace_action", None)
+        if wa == "governance":
+            workspace_governance_command(args)
+        elif wa == "org-automation":
+            from hermes_cli.org_automation import workspace_org_automation_command
+
+            workspace_org_automation_command(args)
+        else:
             print(
-                "Use: hermes workspace governance {init|show|path|sync-messaging}",
+                "Use: hermes workspace governance {init|show|path|sync-messaging}\n"
+                "     hermes workspace org-automation apply [--dry-run] [--skip-bootstrap] …",
                 file=sys.stderr,
             )
             sys.exit(2)
-        workspace_governance_command(args)
 
     workspace_parser.set_defaults(func=cmd_workspace)
 

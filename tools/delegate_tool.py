@@ -34,6 +34,7 @@ _HERMES_PROFILE_DELEGATE_LOCK = threading.RLock()
 DELEGATE_BLOCKED_TOOLS = frozenset([
     "delegate_task",   # no recursive delegation
     "hand_off_to_profile",
+    "sync_org_automation",  # org-wide writes; parent/orchestrator only
     "clarify",         # no user interaction
     "memory",          # no writes to shared MEMORY.md
     "send_message",    # no cross-platform side effects

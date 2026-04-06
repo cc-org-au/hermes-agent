@@ -12,6 +12,7 @@ from hermes_cli.config import (
     ensure_hermes_home,
     load_config,
     load_env,
+    merge_user_config_yaml,
     migrate_config,
     save_config,
     save_env_value,
@@ -397,6 +398,26 @@ class TestConfigV13GeminiDefaultMigration:
             migrate_config(interactive=False, quiet=True)
             reloaded = yaml.safe_load(config_path.read_text(encoding="utf-8"))
             assert reloaded["model"]["default"] == "anthropic/claude-opus-4.6"
+
+
+class TestMergeUserConfigYaml:
+    def test_deep_merges_without_dropping_keys(self, tmp_path):
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text(
+            yaml.safe_dump(
+                {
+                    "model": {"default": "m1", "provider": "openrouter"},
+                    "agent": {"max_turns": 40},
+                }
+            ),
+            encoding="utf-8",
+        )
+        with patch.dict(os.environ, {"HERMES_HOME": str(tmp_path)}, clear=False):
+            merge_user_config_yaml({"agent": {"profile_router": {"enabled": True}}})
+        data = yaml.safe_load(cfg.read_text(encoding="utf-8"))
+        assert data["model"]["default"] == "m1"
+        assert data["agent"]["max_turns"] == 40
+        assert data["agent"]["profile_router"]["enabled"] is True
 
 
 class TestAnthropicTokenMigration:
