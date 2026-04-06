@@ -31,6 +31,11 @@ Before you finish your reply, add a section **"Verification"** with:
 # **Hermes internals (reimplementation):** `POLICY_ROOT/core/hermes-model-delegation-and-tier-runtime.md`.
 #
 # Agent: **Handoff** (A + B, numbered) before **Verification** is mandatory each session.
+#
+# **Legacy templates removed:** `runtime_activation_session1_operator_message.txt` and
+# `runtime_activation_session3_operator_message.txt` — use **Session 3 COMPACT** (below) if
+# context is tight, else the full **Session 3** block. Session 1 is only a deprecation pointer
+# in those old files; phased order is already defined above.
 
 # ── Session 1 ────────────────────────────────────────────────────────────────
 ---BEGIN SESSION 1---
@@ -98,13 +103,50 @@ Read `POLICY_ROOT/core/governance/standards/token-model-tool-and-channel-governa
 
 ---END SESSION 2---
 
+# ── Session 3 COMPACT (optional — use if full Session 3 block is too large for context) ──
+# Paste **one** of the blocks below instead of the full Session 3 section. Still append the
+# global **---BEGIN VERIFICATION---** suffix from the top of this file. Do **not** paste all of
+# `deployment-handoff.md` into chat.
+---BEGIN SESSION 3 COMPACT---
+
+**Cover — phased activation (fresh context)**  
+**This session = Session 3** (runtime activation only, after Sessions 1–2). No prior turns — use disk + **Operator carry-in**.
+
+**Session task (MINIMAL)**
+
+Session 3 only (runtime activation). Read policy-root `core/deployment-handoff.md` from disk; run "## Runtime Activation Prompt" verification and preflight; output that section's **Required output** bullets. Paths: `HERMES_HOME/.hermes.md`.
+
+Before **Verification**: output a top-level **Handoff** for the operator to paste into Session 4 — **A. Outstanding tasks** (numbered; `1. None.` if none) and **B. Next session (Session 4)** (numbered executable steps: `POLICY_ROOT/core/governance/artifacts-and-archival-memory.md`, `POLICY_ROOT/core/agentic-company-deployment-pack.md`; confirm `WORKSPACE/operations/`). Prose-only lists are incomplete; skipping **Handoff** is incomplete.
+
+Then output **Verification** (same five parts as Session 1 in this file, abbreviated if needed).
+
+---END SESSION 3 COMPACT---
+
+---BEGIN SESSION 3 COMPACT STANDARD---
+
+**Cover — phased activation (fresh context)**  
+**This session = Session 3** (runtime activation only). No prior turns — use disk + **Operator carry-in**.
+
+**Session task (STANDARD)**
+
+You are the Chief Orchestrator for Session 3 (runtime activation only).
+
+1. Open `HERMES_HOME/.hermes.md` and note `POLICY_ROOT` and workspace paths (do not paste them back at length).
+2. Using file tools, read `POLICY_ROOT/core/deployment-handoff.md` starting at "## Runtime Activation Prompt" — in sections if the file is large. Do not ask the operator to paste this document.
+3. Follow "Hermes runtime discipline" and the activation checklist through verification, preflight, and security classification for this session only. Do not stand up directors or project leads unless the checklist explicitly requires naming them.
+4. End with the "Required output" bullet list from that section and one line: next session = Session 4 per the "Session-by-session prompt order" table in the same file.
+5. **Handoff (required)** — Before **Verification**, output a section titled **Handoff** with **A. Outstanding tasks** and **B. Next session (Session 4)** as bold subsection titles on their own lines, each followed by a numbered list (not one paragraph). **A** covers blockers, deferrals, and human steps (`1. None.` if nothing open). **B** lists numbered executable tasks for the next chat (`POLICY_ROOT/core/governance/artifacts-and-archival-memory.md`, `POLICY_ROOT/core/agentic-company-deployment-pack.md`; confirm `WORKSPACE/operations/`). The operator copies **Handoff** into Session 4 carry-in; skipping **Handoff** or omitting numbered A/B is incomplete Session 3.
+6. **Verification** — Absolute `HERMES_HOME` and profile name; read `.hermes.md` and print policy and workspace absolute paths (one line each); confirm `skip_context_files` is not disabling injection; list context files read this session (`.hermes.md`, `WORKSPACE/BOOTSTRAP.md`, `WORKSPACE/AGENTS.md`, `SOUL.md`) with verbatim first line or first heading from disk for each; bullet list this session's policy paths read with one-line purpose each; name three topic phrases from handoff/workspace rules you are following (do not dump the full system prompt).
+
+---END SESSION 3 COMPACT STANDARD---
+
 # ── Session 3 ────────────────────────────────────────────────────────────────
 ---BEGIN SESSION 3---
 
 **Cover — phased activation (fresh context)**  
 **Sessions 1–2 complete:** token governance artifacts on disk **and** Hermes runtime enforcement via `workspace/operations/hermes_token_governance.runtime.yaml` when Session 2 succeeded. This chat is **empty of prior turns** — continuity from **files, registers**, and **Operator carry-in**.
 
-**This session = Session 3.** It runs the **full runtime activation** checklist in `POLICY_ROOT/core/deployment-handoff.md` ("## Runtime Activation Prompt"): verification, preflight, security classification, Required output. **Cost caps from Session 2 should already apply** to this run. Do **not** redo Sessions 1–2 unless you find token governance files missing or invalid — fix in **Handoff A** instead.
+**This session = Session 3.** It runs the **full runtime activation** checklist in `POLICY_ROOT/core/deployment-handoff.md` ("## Runtime Activation Prompt"): verification, preflight, security classification, Required output. **Cost caps from Session 2 should already apply** to this run. Do **not** redo Sessions 1–2 unless you find token governance files missing or invalid — fix in **Handoff A** instead. **Do not** paste all of `deployment-handoff.md` into chat — read it from disk with tools.
 
 
 **Activation protocol (non-optional):** After your main work, you **must** output **Handoff** *before* **Verification**. Inside **Handoff**, use **two** bold subsection titles on their own lines — **A. Outstanding tasks** and **B.** as specified below — each immediately followed by a **numbered** list (`1.`, `2.`, …). Do **not** fold A/B into a narrative summary or into **Verification**. The operator copies **Handoff** into the next chat’s **Operator carry-in**; write A and B so a **fresh-context** agent can execute B without reading this thread.
@@ -118,7 +160,7 @@ Read `POLICY_ROOT/core/governance/standards/token-model-tool-and-channel-governa
 1. Open `HERMES_HOME/.hermes.md` and note `POLICY_ROOT` and workspace paths (do not paste them back at length).  
 2. Using file tools, read `POLICY_ROOT/core/deployment-handoff.md` starting at **"## Runtime Activation Prompt"** — in sections if large. Do not ask the operator to paste this document.  
 3. Follow **Hermes runtime discipline** and that checklist through verification, preflight, and security classification for this session. Do not stand up directors or project leads yet unless the checklist explicitly requires naming them in this phase.  
-4. End with the **Required output** bullet list from that section.  
+4. End with the **Required output** bullet list from that section and **one line**: next session = Session 4 per the "Session-by-session prompt order" table in the same file.  
 5. Read `POLICY_ROOT/core/hermes-model-delegation-and-tier-runtime.md` if you need a concise map of Hermes tier/delegation internals (optional, tools only).
 
 **Handoff + Verification (mandatory order)**  

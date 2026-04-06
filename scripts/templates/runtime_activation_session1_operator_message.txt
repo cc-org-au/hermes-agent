@@ -1,7 +1,0 @@
-# Deprecated — use Session 3 template for runtime activation
-#
-# Phased activation runs token governance in Sessions 1–2 first. Session 3 is the
-# runtime-activation operator paste.
-#
-# Use: scripts/templates/runtime_activation_session3_operator_message.txt
-# Policy: policies/core/deployment-handoff.md (section "Session-by-session prompt order")
