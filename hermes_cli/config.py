@@ -877,6 +877,14 @@ OPTIONAL_ENV_VARS = {
         "password": True,
         "category": "provider",
     },
+    "HUGGINGFACE_API_KEY": {
+        "description": "Alias for HF_TOKEN / HUGGING_FACE_HUB_TOKEN (common in older templates)",
+        "prompt": "Hugging Face API key (alias)",
+        "url": "https://huggingface.co/settings/tokens",
+        "password": True,
+        "category": "provider",
+        "advanced": True,
+    },
     "HF_BASE_URL": {
         "description": "Hugging Face Inference Providers base URL override",
         "prompt": "HF base URL (leave empty for default)",

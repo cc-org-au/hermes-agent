@@ -346,7 +346,7 @@ def _call_profile_router_llm(
     3. ``free_model_routing.kimi_router`` — Kimi router model picks one hub id from *tiers*,
        then that model runs the JSON classification.
 
-    Requires ``HF_TOKEN`` (or ``HUGGING_FACE_HUB_TOKEN``). No Gemini / paid Google path.
+    Requires ``HF_TOKEN``, ``HUGGING_FACE_HUB_TOKEN``, or ``HUGGINGFACE_API_KEY``. No Gemini / paid Google path.
     """
     from agent.auxiliary_client import call_llm
 
@@ -371,12 +371,13 @@ def _call_profile_router_llm(
     tok = (
         os.environ.get("HF_TOKEN")
         or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+        or os.environ.get("HUGGINGFACE_API_KEY")
         or ""
     ).strip()
     base = (os.environ.get("HF_BASE_URL", "").strip() or "https://router.huggingface.co/v1").rstrip("/")
     if not tok:
         raise RuntimeError(
-            "Profile router requires HF_TOKEN (or HUGGING_FACE_HUB_TOKEN) for Hugging Face Inference — "
+            "Profile router requires HF_TOKEN, HUGGING_FACE_HUB_TOKEN, or HUGGINGFACE_API_KEY for Hugging Face Inference — "
             "set in ~/.hermes/.env or the profile .env (shared parent .env is loaded for profiles).",
         )
 

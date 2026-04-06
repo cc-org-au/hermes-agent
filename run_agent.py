@@ -4815,6 +4815,18 @@ class AIAgent:
         if self._fallback_index >= len(self._fallback_chain):
             return False
 
+        # Refresh .env for the active HERMES_HOME. ``run_agent`` loads dotenv at
+        # import time; if that ran before ``HERMES_HOME`` was set to a profile, or
+        # keys were added/edited after process start, ``os.environ`` can miss
+        # HF_TOKEN until we reload here.
+        try:
+            load_hermes_dotenv(
+                hermes_home=get_hermes_home(),
+                project_env=Path(__file__).resolve().parent / ".env",
+            )
+        except Exception:
+            logger.debug("load_hermes_dotenv during fallback failed", exc_info=True)
+
         fb = self._fallback_chain[self._fallback_index]
         self._fallback_index += 1
         fb_resolve = self._fallback_entry_for_resolve(fb)
@@ -4837,6 +4849,7 @@ class AIAgent:
             _hf_key = (
                 _os.environ.get("HF_TOKEN")
                 or _os.environ.get("HUGGING_FACE_HUB_TOKEN")
+                or _os.environ.get("HUGGINGFACE_API_KEY")
                 or ""
             ).strip()
             _hf_base = (
@@ -4870,8 +4883,31 @@ class AIAgent:
         # access for Codex providers.
         try:
             from agent.auxiliary_client import resolve_provider_client
+
+            explicit_key = None
+            explicit_base = None
+            if fb_provider == "huggingface":
+                import os as _os
+
+                _ek = (
+                    _os.environ.get("HF_TOKEN")
+                    or _os.environ.get("HUGGING_FACE_HUB_TOKEN")
+                    or _os.environ.get("HUGGINGFACE_API_KEY")
+                    or ""
+                ).strip()
+                if _ek:
+                    explicit_key = _ek
+                    explicit_base = (
+                        _os.environ.get("HF_BASE_URL", "").strip()
+                        or "https://router.huggingface.co/v1"
+                    )
             fb_client, _ = resolve_provider_client(
-                fb_provider, model=fb_model, raw_codex=True)
+                fb_provider,
+                model=fb_model,
+                raw_codex=True,
+                explicit_api_key=explicit_key,
+                explicit_base_url=explicit_base,
+            )
             if fb_client is None:
                 logging.warning(
                     "Fallback to %s failed: provider not configured",
@@ -4879,7 +4915,7 @@ class AIAgent:
                 if fb_provider == "huggingface":
                     self._emit_status(
                         "⚠️ Hugging Face fallback skipped — no API client "
-                        "(set HF_TOKEN or HUGGING_FACE_HUB_TOKEN in ~/.hermes/.env; "
+                        "(set HF_TOKEN, HUGGING_FACE_HUB_TOKEN, or HUGGINGFACE_API_KEY in ~/.hermes/.env; "
                         "profiles load the parent file first). Trying next fallback…",
                         "fallback",
                     )

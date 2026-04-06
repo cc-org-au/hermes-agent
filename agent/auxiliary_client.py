@@ -1073,18 +1073,25 @@ def resolve_provider_client(
             final_model = model or default_model
             return (_to_async_client(client, final_model) if async_mode else (client, final_model))
 
-        creds = resolve_api_key_provider_credentials(provider)
-        api_key = str(creds.get("api_key", "")).strip()
-        if not api_key:
-            tried_sources = list(pconfig.api_key_env_vars)
-            if provider == "copilot":
-                tried_sources.append("gh auth token")
-            logger.debug("resolve_provider_client: provider %s has no API "
-                         "key configured (tried: %s)",
-                         provider, ", ".join(tried_sources))
-            return None, None
+        # Callers (e.g. run_agent fallback) may pass keys resolved after a fresh
+        # load_hermes_dotenv — honor explicit overrides before registry/env lookup.
+        explicit_key = (explicit_api_key or "").strip() if explicit_api_key else ""
+        if explicit_key:
+            api_key = explicit_key
+            base_url = (explicit_base_url or "").strip().rstrip("/") or pconfig.inference_base_url
+        else:
+            creds = resolve_api_key_provider_credentials(provider)
+            api_key = str(creds.get("api_key", "")).strip()
+            if not api_key:
+                tried_sources = list(pconfig.api_key_env_vars)
+                if provider == "copilot":
+                    tried_sources.append("gh auth token")
+                logger.debug("resolve_provider_client: provider %s has no API "
+                             "key configured (tried: %s)",
+                             provider, ", ".join(tried_sources))
+                return None, None
 
-        base_url = str(creds.get("base_url", "")).strip().rstrip("/") or pconfig.inference_base_url
+            base_url = str(creds.get("base_url", "")).strip().rstrip("/") or pconfig.inference_base_url
 
         default_model = _API_KEY_PROVIDER_AUX_MODELS.get(provider, "")
         final_model = model or default_model

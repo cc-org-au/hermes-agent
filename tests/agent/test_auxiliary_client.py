@@ -27,6 +27,7 @@ def _clean_env(monkeypatch):
     for key in (
         "OPENROUTER_API_KEY", "OPENAI_BASE_URL", "OPENAI_API_KEY",
         "OPENAI_MODEL", "LLM_MODEL", "NOUS_INFERENCE_BASE_URL",
+        "HF_TOKEN", "HUGGING_FACE_HUB_TOKEN", "HUGGINGFACE_API_KEY", "HF_BASE_URL",
         "ANTHROPIC_API_KEY", "ANTHROPIC_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN",
         # Per-task provider/model/direct-endpoint overrides
         "AUXILIARY_VISION_PROVIDER", "AUXILIARY_VISION_MODEL",
@@ -466,6 +467,23 @@ class TestExplicitProviderRouting:
             mock_openai.return_value = MagicMock()
             client, model = resolve_provider_client("zai")
             assert client is not None
+
+    def test_huggingface_explicit_api_key_skips_registry_env(self, monkeypatch):
+        """explicit_api_key should build the client when HF_* env is unset."""
+        monkeypatch.delenv("HF_TOKEN", raising=False)
+        monkeypatch.delenv("HUGGING_FACE_HUB_TOKEN", raising=False)
+        with patch("agent.auxiliary_client.OpenAI") as mock_openai:
+            mock_openai.return_value = MagicMock()
+            client, model = resolve_provider_client(
+                "huggingface",
+                model="meta-llama/Llama-3.1-8B-Instruct",
+                explicit_api_key="hf_explicit_route_token",
+                explicit_base_url="https://router.huggingface.co/v1",
+            )
+            assert client is not None
+            assert model == "meta-llama/Llama-3.1-8B-Instruct"
+            mock_openai.assert_called_once()
+            assert mock_openai.call_args.kwargs["api_key"] == "hf_explicit_route_token"
 
     def test_explicit_unknown_returns_none(self, monkeypatch):
         """Unknown provider should return None."""

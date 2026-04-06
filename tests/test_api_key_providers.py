@@ -91,7 +91,11 @@ class TestProviderRegistry:
 
     def test_huggingface_env_vars(self):
         pconfig = PROVIDER_REGISTRY["huggingface"]
-        assert pconfig.api_key_env_vars == ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN")
+        assert pconfig.api_key_env_vars == (
+            "HF_TOKEN",
+            "HUGGING_FACE_HUB_TOKEN",
+            "HUGGINGFACE_API_KEY",
+        )
         assert pconfig.base_url_env_var == "HF_BASE_URL"
 
     def test_gemini_env_vars(self):
