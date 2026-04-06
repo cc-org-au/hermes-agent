@@ -178,6 +178,14 @@ class TestQuotaStyleApiFailure:
 
         assert AIAgent._quota_style_api_failure(_E()) is True
 
+    def test_key_limit_message_without_status_code(self):
+        """SDK may omit status_code; body/str still carry OpenRouter key-cap text."""
+        exc = RuntimeError(
+            "Error code: 403 - {'error': {'message': 'Key limit exceeded (total limit). "
+            "Manage it using https://openrouter.ai/settings/keys', 'code': 403}}"
+        )
+        assert AIAgent._quota_style_api_failure(exc) is True
+
 
 class TestOnlyRateLimitFallback:
     def test_only_rate_limit_skips_without_rate_limit_flag(self):

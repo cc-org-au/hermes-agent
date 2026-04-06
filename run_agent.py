@@ -4556,6 +4556,21 @@ class AIAgent:
                     break
         msg = " ".join(chunks).lower()
 
+        # Some SDK wrappers omit ``status_code`` but embed HTTP status in ``str(exc)``.
+        if status is None and (
+            "http 403" in msg
+            or "[http 403]" in msg
+            or "error code: 403" in msg
+            or " status code 403" in msg
+        ):
+            status = 403
+        if status is None and ("http 402" in msg or "error code: 402" in msg):
+            status = 402
+        if status is None and ("http 429" in msg or "error code: 429" in msg):
+            status = 429
+        if status in (402, 429):
+            return True
+
         if status == 403:
             if any(
                 s in msg
@@ -4593,6 +4608,11 @@ class AIAgent:
                 "exceeded your current quota",
                 "credit balance",
                 "no credits",
+                # OpenRouter / aggregators: key caps and limits (even if status_code missing)
+                "key limit",
+                "limit exceeded (total",
+                "settings/keys",
+                "settings/credits",
             )
         )
 
@@ -7625,8 +7645,16 @@ class AIAgent:
                         # still recover.  The pool's retry-then-rotate cycle needs
                         # at least one more attempt to fire — jumping to a fallback
                         # provider here short-circuits it.
+                        # Only defer for **429** rate limits; 402/403 billing or key
+                        # caps (e.g. OpenRouter "Key limit exceeded") are account-wide
+                        # — another pooled key will not help, but ``only_rate_limit``
+                        # fallback (e.g. direct Gemini/Gemma) must run.
                         pool = self._credential_pool
-                        pool_may_recover = pool is not None and pool.has_available()
+                        pool_may_recover = (
+                            pool is not None
+                            and pool.has_available()
+                            and getattr(api_error, "status_code", None) == 429
+                        )
                         if not pool_may_recover:
                             self._emit_status(
                                 "⚠️ Quota, billing, or rate limit — switching to fallback provider...",
@@ -7820,7 +7848,9 @@ class AIAgent:
                         # Try fallback before aborting — a different provider
                         # may not have the same issue (rate limit, auth, etc.)
                         self._emit_status(f"⚠️ Non-retryable error (HTTP {status_code}) — trying fallback...")
-                        if self._try_activate_fallback(triggered_by_rate_limit=False):
+                        if self._try_activate_fallback(
+                            triggered_by_rate_limit=is_rate_limited,
+                        ):
                             retry_count = 0
                             continue
                         self._dump_api_request_debug(
