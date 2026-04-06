@@ -40,6 +40,9 @@ _DELETE_ALL_CONFIRM = "YES_DELETE_ALL_MY_MEM0_MEMORIES"
 _RESET_ACCOUNT_CONFIRM = "YES_RESET_ENTIRE_MEM0_ACCOUNT"
 _DELETE_PROJECT_CONFIRM = "YES_DELETE_MEM0_PROJECT"
 
+# Request body field for MemoryClient.add (SDK still POSTs to /v1/memories/).
+_MEM0_ADD_API_VERSION = "v2"
+
 
 def _json_response(data: Any) -> str:
     """Serialize API payloads for tool results."""
@@ -125,7 +128,9 @@ PROFILE_SCHEMA = {
     "name": "mem0_profile",
     "description": (
         "Retrieve all stored memories about the user — preferences, facts, "
-        "project context. Fast, no reranking. Use at conversation start."
+        "project context. Fast, no reranking. Use at conversation start. "
+        "Uses Mem0 v2 list (POST /v2/memories/) with filters scoped to the "
+        "configured Mem0 user_id — do not reimplement this with raw HTTP."
     ),
     "parameters": {"type": "object", "properties": {}, "required": []},
 }
@@ -133,7 +138,8 @@ PROFILE_SCHEMA = {
 SEARCH_SCHEMA = {
     "name": "mem0_search",
     "description": (
-        "Search memories by meaning. Returns relevant facts ranked by similarity. "
+        "Search memories by meaning (Mem0 v2 search API). Returns relevant facts ranked "
+        "by similarity. Filters are applied automatically for the configured user scope. "
         "Set rerank=true for higher accuracy on important queries."
     ),
     "parameters": {
@@ -151,7 +157,9 @@ CONCLUDE_SCHEMA = {
     "name": "mem0_conclude",
     "description": (
         "Store a durable fact about the user. Stored verbatim (no LLM extraction). "
-        "Use for explicit preferences, corrections, or decisions."
+        "Uses the same Mem0 add path as mem0_add_memory (SDK POST /v1/memories/) with "
+        "infer=false; Hermes supplies user_id and agent_id from mem0.json — do not call "
+        "Mem0 REST manually."
     ),
     "parameters": {
         "type": "object",
@@ -168,9 +176,11 @@ CONCLUDE_SCHEMA = {
 ADD_MEMORY_SCHEMA = {
     "name": "mem0_add_memory",
     "description": (
-        "Add memory via Mem0 Platform (same as MCP add_memory). Sends text or "
-        "conversation messages; with infer=true Mem0 runs server-side extraction "
-        "and deduplication. Use mem0_conclude instead for a single verbatim fact."
+        "Add memory via Mem0 Platform (official mem0ai SDK: POST /v1/memories/, not v2 list). "
+        "Sends text or conversation messages; with infer=true Mem0 runs server-side extraction "
+        "and deduplication. Hermes always passes user_id and agent_id from mem0.json — you "
+        "only provide content/messages/infer. For a single verbatim fact use mem0_conclude. "
+        "Do not use curl or POST /v2/memories/ to add; v2 is for listing/search with filters."
     ),
     "parameters": {
         "type": "object",
@@ -202,8 +212,9 @@ ADD_MEMORY_SCHEMA = {
 GET_MEMORIES_SCHEMA = {
     "name": "mem0_get_memories",
     "description": (
-        "List memories with v2 filters and pagination (MCP get_memories). Scoped to "
-        "the configured Mem0 user. Use for large profiles; prefer mem0_profile for a quick full dump."
+        "List memories with v2 filters and pagination (POST /v2/memories/). Hermes injects "
+        "the required filter scope (user_id). If you see errors about filters requiring "
+        "user_id/agent_id/app_id/run_id, you likely bypassed this tool with a raw v2 request."
     ),
     "parameters": {
         "type": "object",
@@ -653,7 +664,8 @@ MEM0_ASYNC_INVOKE_SCHEMA = {
         "project_members, project_get_members, project_member_add, project_add_member, "
         "project_member_update, project_update_member, project_member_remove, project_remove_member. "
         "Same confirm strings as sync for delete_all, reset, project_delete. "
-        "chat is not supported (returns error)."
+        "chat is not supported (returns error). "
+        "Operation add uses the SDK add path (v1 /v1/memories/); get_all/search use v2 with filters."
     ),
     "parameters": {
         "type": "object",
@@ -828,10 +840,22 @@ class Mem0MemoryProvider(MemoryProvider):
             "# Mem0 Memory (Platform API)\n"
             f"Active. {_scope}.\n"
             f"Tools: {_names}.\n"
-            "Includes Mem0 MCP memory tools, export/summary, webhooks, project CRUD/members, "
-            "legacy project APIs, account reset, mem0_async_invoke (AsyncMemoryClient), "
-            "and mem0_chat (SDK stub). "
-            "mem0_conclude = verbatim store; mem0_add_memory uses Mem0 extraction when infer=true.\n"
+            "## How to use (read this)\n"
+            "- Use **only** these `mem0_*` tools (official mem0ai SDK). Do **not** call Mem0 with "
+            "`curl`, browser, or guessed URLs.\n"
+            "- **Add** facts: `mem0_add_memory` (content or messages; optional infer) or "
+            "`mem0_conclude` (verbatim, infer off). The SDK uses **POST /v1/memories/** with "
+            "`user_id` and `agent_id` taken from the Active line above — you do **not** set them "
+            "in tool args unless a tool explicitly allows overrides.\n"
+            "- **List / search**: `mem0_profile`, `mem0_get_memories`, `mem0_search` use Mem0 **v2** "
+            "list/search and supply **filters** automatically. The error "
+            "`One of the filters: app_id, user_id, agent_id, run_id is required` means a **v2** "
+            "request was sent **without** that scope (often from raw **POST /v2/memories/**). "
+            "Fix: use the tools above, not manual REST.\n"
+            "- **Hermes profile** name (e.g. chief-orchestrator) is **not** the Mem0 `user_id` "
+            "unless you set `user_id` that way in `mem0.json`.\n"
+            "Includes export/summary, webhooks, project APIs, reset, mem0_async_invoke, "
+            "mem0_chat (stub).\n"
             "If a result JSON has \"error\", the Mem0 API rejected the call—check "
             "credentials, quota, filters, or parameters—not \"missing tools\"."
         )
@@ -885,7 +909,12 @@ class Mem0MemoryProvider(MemoryProvider):
                     {"role": "user", "content": user_content},
                     {"role": "assistant", "content": assistant_content},
                 ]
-                client.add(messages, user_id=self._user_id, agent_id=self._agent_id)
+                client.add(
+                    messages,
+                    user_id=self._user_id,
+                    agent_id=self._agent_id,
+                    version=_MEM0_ADD_API_VERSION,
+                )
                 self._record_success()
             except Exception as e:
                 self._record_failure()
@@ -1060,6 +1089,7 @@ class Mem0MemoryProvider(MemoryProvider):
                     user_id=self._user_id,
                     agent_id=self._agent_id,
                     infer=False,
+                    version=_MEM0_ADD_API_VERSION,
                 )
                 self._record_success()
                 return json.dumps({"result": "Fact stored."})
@@ -1085,6 +1115,7 @@ class Mem0MemoryProvider(MemoryProvider):
                     user_id=self._user_id,
                     agent_id=self._agent_id,
                     infer=infer,
+                    version=_MEM0_ADD_API_VERSION,
                 )
                 self._record_success()
                 return _json_response(raw)

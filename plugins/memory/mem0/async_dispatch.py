@@ -20,6 +20,7 @@ async def mem0_async_dispatch(
     from plugins.memory.mem0 import (
         _DELETE_ALL_CONFIRM,
         _DELETE_PROJECT_CONFIRM,
+        _MEM0_ADD_API_VERSION,
         _RESET_ACCOUNT_CONFIRM,
         _mem0_search_filters,
     )
@@ -83,6 +84,7 @@ async def mem0_async_dispatch(
             user_id=uid_scope,
             agent_id=aid_scope,
             infer=infer,
+            version=_MEM0_ADD_API_VERSION,
         )
 
     if op == "get":
