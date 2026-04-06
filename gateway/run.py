@@ -439,6 +439,36 @@ def _resolve_hermes_bin() -> Optional[list[str]]:
     return None
 
 
+def _memory_integration_fingerprint() -> str:
+    """Short hash so gateway AIAgent cache rebuilds when memory/Mem0 setup changes.
+
+    Without this, a session can keep a cached agent that was created before
+    ``memory.provider`` or Mem0 credentials existed — leaving ``valid_tool_names``
+    without ``mem0_*`` tools while the system prompt still mentions Mem0.
+    """
+    try:
+        import hashlib as _hl
+
+        from hermes_cli.config import load_config as _lc_mem
+
+        cfg = _lc_mem() or {}
+        mem = cfg.get("memory")
+        if not isinstance(mem, dict):
+            mem = {}
+        base = json.dumps(mem, sort_keys=True, default=str)
+        mj = get_hermes_home() / "mem0.json"
+        mtime = "0"
+        if mj.is_file():
+            try:
+                mtime = str(mj.stat().st_mtime_ns)
+            except OSError:
+                mtime = "?"
+        key_env = "1" if (os.environ.get("MEM0_API_KEY") or "").strip() else "0"
+        return _hl.sha256(f"{base}|{mtime}|{key_env}".encode()).hexdigest()[:16]
+    except Exception:
+        return "0"
+
+
 class GatewayRunner:
     """
     Main gateway controller.
@@ -5393,6 +5423,7 @@ class GatewayRunner:
                 # cached agent and doesn't affect system prompt or tools.
                 ephemeral_prompt or "",
                 skip_context_files,
+                _memory_integration_fingerprint(),
             ],
             sort_keys=True,
             default=str,

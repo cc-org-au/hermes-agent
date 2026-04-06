@@ -1645,7 +1645,15 @@ class Mem0MemoryProvider(MemoryProvider):
                 }
             )
 
-        return json.dumps({"error": f"Unknown tool: {tool_name}"})
+        return json.dumps(
+            {
+                "error": (
+                    f"Unrecognized Mem0 tool name {tool_name!r}. "
+                    "Use the exact names from the tool list (e.g. mem0_list_entities, "
+                    "mem0_delete_entities, mem0_get_memories, mem0_profile)."
+                )
+            }
+        )
 
     def shutdown(self) -> None:
         for t in (self._prefetch_thread, self._sync_thread):

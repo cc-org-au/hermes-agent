@@ -80,6 +80,10 @@ _FALLBACK_CHAIN_META_KEYS = frozenset({
     "only_rate_limit",
     "restore_health_check",
     "health_check_message",
+    # Hugging Face Inference Providers (router.huggingface.co) — not passed to resolve_provider_client
+    "hf_router",
+    "hf_inference_policy",
+    "hf_router_tiers",
 })
 
 # Agent internals extracted to agent/ package for modularity
@@ -891,20 +895,14 @@ class AIAgent:
             self._fallback_chain = [fallback_model]
         else:
             self._fallback_chain = []
-        # Gateway and minimal profiles often omit fallback_* — use hermes_cli defaults
-        # (Gemini Gemma, then Hugging Face with optional per-turn router).
-        # An explicit empty list means "no fallback"; only None/absent uses defaults.
+        # ``fallback_providers`` / ``free_model_routing`` from load_config() (no hardcoded hub ids in code).
+        # An explicit empty list means "no fallback"; None/missing uses free_model_routing synthesis.
         if not self._fallback_chain and fallback_model is None:
             try:
-                from hermes_cli.config import DEFAULT_CONFIG
+                from agent.free_model_routing import resolve_fallback_providers
+                from hermes_cli.config import load_config
 
-                _dfb = DEFAULT_CONFIG.get("fallback_providers")
-                if isinstance(_dfb, list):
-                    self._fallback_chain = [
-                        f
-                        for f in _dfb
-                        if isinstance(f, dict) and f.get("provider") and f.get("model")
-                    ]
+                self._fallback_chain = resolve_fallback_providers(load_config())
             except Exception:
                 pass
         self._fallback_index = 0
@@ -2813,6 +2811,30 @@ class AIAgent:
         normalized = lowered.replace("-", "_").replace(" ", "_")
         if normalized in self.valid_tool_names:
             return normalized
+
+        # 2b–2c. Mem0: models often shorten or pluralize tool names
+        _mem0_aliases = {
+            "mem0_list": "mem0_list_entities",
+            "mem0_list_entity": "mem0_list_entities",
+            "mem0_entities": "mem0_list_entities",
+            "mem0_users": "mem0_list_entities",
+            "mem0_delete_entity": "mem0_delete_entities",
+            "mem0_delete_user": "mem0_delete_entities",
+            "mem0_remove_entity": "mem0_delete_entities",
+            "mem0_get_memory_list": "mem0_get_memories",
+            "mem0_memories": "mem0_get_memories",
+            "mem0_memory_list": "mem0_get_memories",
+        }
+        if normalized in _mem0_aliases:
+            _cand = _mem0_aliases[normalized]
+            if _cand in self.valid_tool_names:
+                return _cand
+
+        _mem0_valid = sorted(n for n in self.valid_tool_names if n.startswith("mem0_"))
+        if _mem0_valid and normalized.startswith("mem0"):
+            _m = get_close_matches(normalized, _mem0_valid, n=1, cutoff=0.55)
+            if _m:
+                return _m[0]
 
         # 3. Fuzzy match
         matches = get_close_matches(lowered, self.valid_tool_names, n=1, cutoff=0.7)
@@ -4798,10 +4820,19 @@ class AIAgent:
         fb_resolve = self._fallback_entry_for_resolve(fb)
         fb_provider = (fb_resolve.get("provider") or "").strip().lower()
         fb_model = (fb_resolve.get("model") or "").strip()
+        # Inference Providers routing (before Kimi ``hf_router``); see ``apply_hf_inference_policy``.
+        if fb_provider == "huggingface" and fb_model:
+            from agent.hf_fallback_router import apply_hf_inference_policy
+
+            fb_model = apply_hf_inference_policy(fb_model, fb.get("hf_inference_policy"))
         if fb.get("hf_router") and fb_provider == "huggingface":
             import os as _os
 
-            from agent.hf_fallback_router import resolve_hf_routed_model
+            from agent.hf_fallback_router import (
+                env_flat_candidates,
+                resolve_hf_routed_model,
+                resolve_hf_routed_model_flat_candidates,
+            )
 
             _hf_key = (
                 _os.environ.get("HF_TOKEN")
@@ -4811,12 +4842,26 @@ class AIAgent:
             _hf_base = (
                 _os.environ.get("HF_BASE_URL", "").strip() or "https://router.huggingface.co/v1"
             )
-            if _hf_key:
+            _router = fb_model
+            _tiers = fb.get("hf_router_tiers") or []
+            if _hf_key and _tiers:
                 fb_model = resolve_hf_routed_model(
                     getattr(self, "_last_user_turn_text", "") or "",
                     api_key=_hf_key,
                     base_url=_hf_base,
+                    router_model=_router,
+                    tiers=_tiers,
                 )
+            elif _hf_key:
+                _flat = env_flat_candidates()
+                if _flat:
+                    fb_model = resolve_hf_routed_model_flat_candidates(
+                        getattr(self, "_last_user_turn_text", "") or "",
+                        api_key=_hf_key,
+                        base_url=_hf_base,
+                        router_model=_router,
+                        candidates=_flat,
+                    )
         if not fb_provider or not fb_model:
             return self._try_activate_fallback(triggered_by_rate_limit=triggered_by_rate_limit)  # skip invalid, try next
 
