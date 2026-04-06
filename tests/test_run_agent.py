@@ -231,6 +231,14 @@ class TestStripThinkBlocks:
         assert "reasoning" not in result
         assert "answer" in result
 
+    def test_thought_block_removed(self, agent):
+        """Gemma / some Gemini outputs use <thought>...</thought> before the answer."""
+        raw = "<thought>The user said ping; respond briefly.</thought>pong"
+        result = agent._strip_think_blocks(raw)
+        assert "user said ping" not in result
+        assert "pong" in result
+        assert result.strip() == "pong"
+
     def test_multiline_block_removed(self, agent):
         text = "<think>\nline1\nline2\n</think>\nvisible"
         result = agent._strip_think_blocks(text)

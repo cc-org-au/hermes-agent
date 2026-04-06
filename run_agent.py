@@ -1411,10 +1411,17 @@ class AIAgent:
         # Strip all reasoning tag variants: <think>, <thinking>, <THINKING>,
         # <reasoning>, <REASONING_SCRATCHPAD>
         content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL)
+        content = re.sub(r'<redacted_thinking>.*?</redacted_thinking>', '', content, flags=re.DOTALL)
         content = re.sub(r'<thinking>.*?</thinking>', '', content, flags=re.DOTALL | re.IGNORECASE)
+        content = re.sub(r'<thought>.*?</thought>', '', content, flags=re.DOTALL | re.IGNORECASE)
         content = re.sub(r'<reasoning>.*?</reasoning>', '', content, flags=re.DOTALL)
         content = re.sub(r'<REASONING_SCRATCHPAD>.*?</REASONING_SCRATCHPAD>', '', content, flags=re.DOTALL)
-        content = re.sub(r'</?(?:think|thinking|reasoning|REASONING_SCRATCHPAD)>\s*', '', content, flags=re.IGNORECASE)
+        content = re.sub(
+            r'</?(?:think|thinking|thought|reasoning|REASONING_SCRATCHPAD)>\s*',
+            "",
+            content,
+            flags=re.IGNORECASE,
+        )
         return content
 
     def _looks_like_codex_intermediate_ack(
@@ -1538,7 +1545,9 @@ class AIAgent:
         if not reasoning_parts and isinstance(content, str) and content:
             inline_patterns = (
                 r"<think>(.*?)</think>",
+                r"<redacted_thinking>(.*?)</redacted_thinking>",
                 r"<thinking>(.*?)</thinking>",
+                r"<thought>(.*?)</thought>",
                 r"<reasoning>(.*?)</reasoning>",
                 r"<REASONING_SCRATCHPAD>(.*?)</REASONING_SCRATCHPAD>",
             )
@@ -5415,7 +5424,16 @@ class AIAgent:
         # directly in the content rather than returning separate API fields).
         if not reasoning_text:
             content = assistant_message.content or ""
-            think_blocks = re.findall(r'<think>(.*?)</think>', content, flags=re.DOTALL)
+            _tb_patterns = (
+                r"<redacted_thinking>(.*?)</think>",
+                r"<think>(.*?)</think>",
+                r"<thought>(.*?)</thought>",
+            )
+            think_blocks = []
+            for _pat in _tb_patterns:
+                think_blocks.extend(
+                    re.findall(_pat, content, flags=re.DOTALL | re.IGNORECASE)
+                )
             if think_blocks:
                 combined = "\n\n".join(b.strip() for b in think_blocks if b.strip())
                 reasoning_text = combined or None
@@ -5438,9 +5456,11 @@ class AIAgent:
                 except Exception:
                     pass
 
+        _raw_assistant_content = assistant_message.content or ""
+        _visible_content = self._strip_think_blocks(_raw_assistant_content).strip()
         msg = {
             "role": "assistant",
-            "content": assistant_message.content or "",
+            "content": _visible_content,
             "reasoning": reasoning_text,
             "finish_reason": finish_reason,
         }

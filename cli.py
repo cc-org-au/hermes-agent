@@ -1869,8 +1869,8 @@ class HermesCLI:
         # suppress them during streaming too — unless show_reasoning is
         # enabled, in which case we route the inner content to the
         # reasoning display box instead of discarding it.
-        _OPEN_TAGS = ("<REASONING_SCRATCHPAD>", "<think>", "<reasoning>", "<THINKING>", "<thinking>")
-        _CLOSE_TAGS = ("</REASONING_SCRATCHPAD>", "</think>", "</reasoning>", "</THINKING>", "</thinking>")
+        _OPEN_TAGS = ("<REASONING_SCRATCHPAD>", "<redacted_thinking>", "<reasoning>", "<THINKING>", "<thinking>", "<thought>", "<Thought>", "<THOUGHT>", "<redacted_thinking>")
+        _CLOSE_TAGS = ("</REASONING_SCRATCHPAD>", "</redacted_thinking>", "</reasoning>", "</THINKING>", "</thinking>", "</thought>", "</Thought>", "</THOUGHT>", "</redacted_thinking>")
 
         # Append to a pre-filter buffer first
         self._stream_prefilt = getattr(self, "_stream_prefilt", "") + text
@@ -2433,18 +2433,27 @@ class HermesCLI:
         MAX_ASST_LINES = 3           # max lines of assistant text
 
         def _strip_reasoning(text: str) -> str:
-            """Remove <REASONING_SCRATCHPAD>...</REASONING_SCRATCHPAD> blocks
-            from displayed text (reasoning model internal thoughts)."""
+            """Remove embedded reasoning/thinking blocks from resumed history text."""
             import re
-            cleaned = re.sub(
-                r"<REASONING_SCRATCHPAD>.*?</REASONING_SCRATCHPAD>\s*",
-                "", text, flags=re.DOTALL,
-            )
-            # Also strip unclosed reasoning tags at the end
-            cleaned = re.sub(
-                r"<REASONING_SCRATCHPAD>.*$",
-                "", cleaned, flags=re.DOTALL,
-            )
+            cleaned = text
+            for open_t, close_t, flags in (
+                ("<REASONING_SCRATCHPAD>", "</REASONING_SCRATCHPAD>", re.DOTALL),
+                ("<thought>", "</thought>", re.DOTALL | re.IGNORECASE),
+                ("<thinking>", "</thinking>", re.DOTALL | re.IGNORECASE),
+                ("<redacted_thinking>", "</redacted_thinking>", re.DOTALL),
+            ):
+                cleaned = re.sub(
+                    re.escape(open_t) + r".*?" + re.escape(close_t) + r"\s*",
+                    "",
+                    cleaned,
+                    flags=flags,
+                )
+                cleaned = re.sub(
+                    re.escape(open_t) + r".*$",
+                    "",
+                    cleaned,
+                    flags=flags,
+                )
             return cleaned.strip()
 
         # Collect displayable entries (skip system, tool-result messages)

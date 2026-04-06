@@ -1833,9 +1833,9 @@ def extract_content_or_reasoning(response) -> str:
     if content:
         # Strip inline think/reasoning blocks (mirrors _strip_think_blocks)
         cleaned = re.sub(
-            r"<(?:think|thinking|reasoning|REASONING_SCRATCHPAD)>"
+            r"<(?:think|thinking|thought|reasoning|REASONING_SCRATCHPAD)>"
             r".*?"
-            r"</(?:think|thinking|reasoning|REASONING_SCRATCHPAD)>",
+            r"</(?:think|thinking|thought|reasoning|REASONING_SCRATCHPAD)>",
             "", content, flags=re.DOTALL | re.IGNORECASE,
         ).strip()
         if cleaned:
