@@ -4096,7 +4096,9 @@ For more help on a command:
         "watchdog-check",
         help=(
             "Exit 0 if gateway.pid process is alive, gateway_state=running, "
-            "and ≥1 platform connected (for external watchdogs)"
+            "and messaging is healthy (default: ≥1 platform connected; "
+            "strict: all configured platforms connected — see "
+            "messaging.watchdog_require_all_platforms)"
         ),
     )
     gateway_subparsers.add_parser(

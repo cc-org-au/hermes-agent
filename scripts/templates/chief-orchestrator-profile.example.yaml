@@ -89,6 +89,13 @@ fallback_model:
   restore_health_check: true
   health_check_message: "ping"
 
+# Gateway watchdog (`hermes gateway watchdog-check`, scripts/core/gateway-watchdog.sh):
+# when true, every configured messaging platform (Slack, Telegram, WhatsApp, …) must be
+# `connected` in gateway_state.json — not only one adapter. Triggers recovery if any drop.
+# Override with env HERMES_GATEWAY_WATCHDOG_REQUIRE_ALL_PLATFORMS=0|1.
+messaging:
+  watchdog_require_all_platforms: true
+
 # Skip dangerous-terminal approval prompts (gateway + CLI). Same effect as HERMES_YOLO_MODE.
 # Set to manual/smart when you want interactive approvals again.
 approvals:

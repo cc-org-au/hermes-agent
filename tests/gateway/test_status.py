@@ -198,3 +198,69 @@ class TestRuntimeWatchdogHealthy:
         ok, reason = status.runtime_status_watchdog_healthy()
         assert ok is False
         assert "not running" in reason
+
+
+class TestRuntimeWatchdogRequireAllPlatforms:
+    def test_strict_ok_when_all_expected_connected(self):
+        payload = {
+            "gateway_state": "running",
+            "platforms": {
+                "slack": {"state": "connected"},
+                "telegram": {"state": "connected"},
+                "whatsapp": {"state": "connected"},
+            },
+        }
+        ok, reason = status.runtime_status_watchdog_healthy(
+            payload,
+            require_all_platforms=True,
+            expected_platforms=("slack", "telegram", "whatsapp"),
+        )
+        assert ok is True
+        assert "all_connected" in reason
+
+    def test_strict_fails_when_one_reconnecting(self):
+        payload = {
+            "gateway_state": "running",
+            "platforms": {
+                "slack": {"state": "connected"},
+                "telegram": {"state": "reconnecting"},
+                "whatsapp": {"state": "connected"},
+            },
+        }
+        ok, reason = status.runtime_status_watchdog_healthy(
+            payload,
+            require_all_platforms=True,
+            expected_platforms=("slack", "telegram", "whatsapp"),
+        )
+        assert ok is False
+        assert "telegram" in reason
+        assert "not_connected" in reason
+
+    def test_strict_fails_when_platform_row_missing(self):
+        payload = {
+            "gateway_state": "running",
+            "platforms": {
+                "slack": {"state": "connected"},
+            },
+        }
+        ok, reason = status.runtime_status_watchdog_healthy(
+            payload,
+            require_all_platforms=True,
+            expected_platforms=("slack", "telegram"),
+        )
+        assert ok is False
+        assert "missing_status" in reason
+        assert "telegram" in reason
+
+    def test_strict_no_platforms_configured_is_ok(self):
+        payload = {
+            "gateway_state": "running",
+            "platforms": {"slack": {"state": "connected"}},
+        }
+        ok, reason = status.runtime_status_watchdog_healthy(
+            payload,
+            require_all_platforms=True,
+            expected_platforms=(),
+        )
+        assert ok is True
+        assert "no messaging platforms" in reason

@@ -6,7 +6,7 @@ description: "Keep the messaging gateway and platform connections healthy with w
 
 # Gateway watchdog (uptime & recovery)
 
-The messaging gateway is a long-lived process that should stay up and keep **at least one** platform adapter **connected** (Telegram, Slack, Discord, etc.). For servers or VPS deployments, run an **external watchdog** that periodically verifies health and recovers when something breaks.
+The messaging gateway is a long-lived process that should stay up and keep messaging adapters **healthy**. For servers or VPS deployments, run an **external watchdog** that periodically verifies health and recovers when something breaks.
 
 ## What “healthy” means
 
@@ -16,9 +16,17 @@ The messaging gateway is a long-lived process that should stay up and keep **at 
 |--------|--------|
 | **Gateway process** | `gateway.pid` in `$HERMES_HOME` references a **live** Hermes gateway process. This avoids treating a crashed process as healthy when `gateway_state.json` is stale. |
 | **Gateway state** | `gateway_state.json` has `gateway_state: running`. |
-| **Messaging uptime** | Under `platforms`, **at least one** adapter has `state: connected`. |
+| **Messaging uptime** | Depends on mode (see below). |
 
-Hermes **does not** require every platform to be connected. For example, Slack can be healthy while WhatsApp is `reconnecting` or `fatal`; restarting the whole gateway would drop good connections unnecessarily.
+### Default mode (≥1 connected)
+
+Under `platforms`, **at least one** adapter has `state: connected`. Hermes does **not** require every platform to be connected in this mode. For example, Slack can be healthy while WhatsApp is `reconnecting` or `fatal`; the check still passes so a flaky bridge does not force restarts that tear down healthy adapters.
+
+### Strict mode (all configured platforms connected)
+
+When **`messaging.watchdog_require_all_platforms: true`** is set in merged gateway config (`config.yaml` / `gateway.json`), or when **`HERMES_GATEWAY_WATCHDOG_REQUIRE_ALL_PLATFORMS=1`** is set in the environment (env overrides config when set to a truthy/falsey string), **every** messaging platform that Hermes considers **configured and enabled** for connection (`GatewayConfig.get_connected_platforms()`) must have `state: connected` in `gateway_state.json`. If **no** such platforms are configured, the check passes (nothing to enforce).
+
+Use strict mode when you want the watchdog to recover until **Slack, Telegram, WhatsApp,** and any other configured channel are all up—not only one of them.
 
 Run manually (from the repo with venv activated, `HERMES_HOME` set or `-p` for a named profile):
 
@@ -48,12 +56,14 @@ All variables are optional; defaults are in the script header.
 - **`HERMES_HOME`** — Profile / instance directory (explicit; wins over auto profile pick).
 - **`HERMES_PROFILE_BASE`** — Directory that contains `profiles/` (default `~/.hermes`).
 - **`HERMES_WATCHDOG_PROFILE`** — Named profile under `profiles/<name>` when `HERMES_HOME` is not set.
+- **`HERMES_GATEWAY_WATCHDOG_REQUIRE_ALL_PLATFORMS`** — `1` / `0` / `true` / `false` forces strict or default messaging health for `watchdog-check`. When **unset**, uses **`messaging.watchdog_require_all_platforms`** from Hermes gateway config.
 - **`WATCHDOG_PREFER_SYSTEMD`** — `1` (default) to try `systemctl --user restart` when `~/.config/systemd/user/hermes-gateway-*.service` exists for that profile; set `0` to always use `gateway run --replace`.
 - **`HERMES_AGENT_DIR`** — Path to the `hermes-agent` checkout containing `venv` (default `~/hermes-agent`).
 - **`WATCHDOG_INTERVAL_SECONDS`** — Seconds between checks when healthy (default `60`).
 - **`WATCHDOG_MAX_BACKOFF_SECONDS`**, **`WATCHDOG_JITTER_MAX_SECONDS`** — Backoff behavior between recovery attempts.
 - **`WATCHDOG_MAX_ATTEMPTS_IN_WINDOW`**, **`WATCHDOG_ATTEMPT_WINDOW_SECONDS`**, **`WATCHDOG_COOLDOWN_SECONDS`** — Rate limiting after repeated failures.
-- **`WATCHDOG_ENFORCE_SINGLE_GATEWAY`** — `1` (default): before each poll, terminate **extra** `python … hermes_cli.main … gateway run` processes for the same Unix user. The canonical PID from **`gateway.pid`** is kept when that process is still alive; otherwise the **newest** matching PID is kept. Set `0` to disable. This reduces Slack/Telegram/WhatsApp **token lock** incidents when two gateways were started by mistake.
+- **`WATCHDOG_ENFORCE_SINGLE_GATEWAY`** — `1` (default): before **each** poll and immediately **after** each recovery restart, terminate **extra** gateway processes for the same Unix user. Matching uses the same argv patterns as `hermes_cli.gateway.find_gateway_pids` (including `gateway/run.py` and `hermes gateway …`). If **`HERMES_HOME`** is under **`profiles/<name>/`**, only processes whose command line includes **`-p <name>`** are considered, so another profile’s gateway on the same account is not killed. The canonical PID from **`gateway.pid`** is kept when that process is still alive and still matches; otherwise the **newest** matching PID is kept. Set `0` to disable. This reduces Slack/Telegram/WhatsApp **token lock** incidents when two gateways were started by mistake.
+- **`WATCHDOG_SINGLE_INSTANCE_LOCK`** — `1` (default): take an exclusive **`flock`** on **`$HERMES_HOME/gateway-watchdog.lock`** at startup so two copies of **`gateway-watchdog.sh`** cannot run for the same **`HERMES_HOME`** (the second exits immediately). Set `0` to disable if your platform has no **`flock`** or you coordinate duplicates another way.
 
 ### Logs
 
@@ -67,7 +77,7 @@ Inspect this file when diagnosing restart loops or `doctor --fix` output.
 
 ## Relation to systemd / `gateway install`
 
-`hermes gateway install` sets up a service that starts the gateway at boot. The **shell watchdog** is an extra layer: it watches **runtime health** (process + `gateway_state.json` + at least one connected platform) and, when a matching **user** unit exists, calls **`systemctl --user restart`** on **`hermes-gateway-<name>.service`** so recovery does not start a duplicate **`gateway run`** that steals Telegram/Slack/WhatsApp locks. If no unit is installed, it falls back to **`gateway run --replace`** plus **`doctor --fix`** as before.
+`hermes gateway install` sets up a service that starts the gateway at boot. The **shell watchdog** is an extra layer: it watches **runtime health** (process + `gateway_state.json` + messaging rules above) and, when a matching **user** unit exists, calls **`systemctl --user restart`** on **`hermes-gateway-<name>.service`** so recovery does not start a duplicate **`gateway run`** that steals Telegram/Slack/WhatsApp locks. If no unit is installed, it falls back to **`gateway run --replace`** plus **`doctor --fix`** as before.
 
 Use both if you need automatic recovery without manual SSH.
 

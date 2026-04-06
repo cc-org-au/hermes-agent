@@ -5,17 +5,17 @@
 #
 # Purpose
 # -------
-# Keep the Hermes messaging gateway and at least one platform adapter connected.
+# Keep the Hermes messaging gateway and messaging adapters healthy.
 # The check uses `hermes gateway watchdog-check`, which verifies:
 #
 #   1. Gateway process uptime — a valid `gateway.pid` points to a live Hermes
 #      gateway process (detects crashes with stale `gateway_state.json`).
 #   2. Runtime state — `gateway_state.json` has `gateway_state=running`.
-#   3. Messaging channel uptime — at least one row under `platforms` has
-#      `state=connected` (e.g. Slack/Telegram up while WhatsApp reconnects).
-#
-# Intentionally, this does *not* require every platform to be connected, so
-# one flaky bridge does not force restarts that tear down healthy adapters.
+#   3. Messaging channel uptime — by default, at least one row under `platforms`
+#      has `state=connected`.  If `messaging.watchdog_require_all_platforms`
+#      is true in config (or HERMES_GATEWAY_WATCHDOG_REQUIRE_ALL_PLATFORMS=1),
+#      **every** configured platform (Slack, Telegram, WhatsApp, …) must be
+#      `connected` so the watchdog restarts when any social channel is down.
 #
 # Recovery loop
 # -------------
@@ -44,9 +44,19 @@
 #   WATCHDOG_COOLDOWN_SECONDS      — sleep after hitting attempt cap (default 900)
 #   WATCHDOG_RESTART_WAIT_SECONDS  — wait after restart before re-check (default 20)
 #   WATCHDOG_POST_DOCTOR_WAIT_SECONDS — wait after doctor+restart (default 25)
-#   WATCHDOG_ENFORCE_SINGLE_GATEWAY — 1 = before each health check, terminate extra
-#      `hermes_cli.main … gateway run` PIDs for this user (keep canonical gateway.pid
-#      when alive; else keep newest PID). Set 0 to disable. Default 1.
+#   WATCHDOG_ENFORCE_SINGLE_GATEWAY — 1 (default): before each health check and right
+#      after each recovery `restart_gateway`, terminate extra gateway processes for this
+#      Unix uid. Detection matches `hermes_cli.gateway.find_gateway_pids` (venv/python,
+#      `hermes_cli.main gateway`, `gateway/run.py`, etc.). If HERMES_HOME is under
+#      `profiles/<name>/`, only processes whose argv contains `-p <name>` are considered.
+#      Keeps `gateway.pid` when that process is still a matching gateway; else newest PID.
+#      Set 0 to disable.
+#   WATCHDOG_SINGLE_INSTANCE_LOCK — 1 (default): exclusive `flock` on
+#      `$HERMES_HOME/gateway-watchdog.lock` so only one watchdog loop runs per HERMES_HOME.
+#      Set 0 if you use another mutex or `flock` is unavailable.
+#   HERMES_GATEWAY_WATCHDOG_REQUIRE_ALL_PLATFORMS — 1|0 forces strict watchdog
+#      (all configured messaging platforms must be connected). When unset, uses
+#      `messaging.watchdog_require_all_platforms` from Hermes gateway config.
 #
 # Profile resolution (when HERMES_HOME is unset)
 # ----------------------------------------------

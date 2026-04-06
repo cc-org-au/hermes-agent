@@ -13,12 +13,15 @@ concurrently under distinct configurations).
 
 import hashlib
 import json
+import logging
 import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from hermes_constants import get_hermes_home
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
+
+logger = logging.getLogger(__name__)
 
 _GATEWAY_KIND = "hermes-gateway"
 _RUNTIME_STATUS_FILE = "gateway_state.json"
@@ -226,27 +229,70 @@ def read_runtime_status() -> Optional[dict[str, Any]]:
     return _read_json_file(_get_runtime_status_path())
 
 
+def _env_watchdog_require_all_platforms() -> Optional[bool]:
+    """Return True/False from env, or None to fall through to gateway config."""
+    raw = (os.environ.get("HERMES_GATEWAY_WATCHDOG_REQUIRE_ALL_PLATFORMS") or "").strip().lower()
+    if raw in ("1", "true", "yes", "on"):
+        return True
+    if raw in ("0", "false", "no", "off"):
+        return False
+    return None
+
+
+def _config_watchdog_require_all_platforms() -> bool:
+    try:
+        from gateway.config import load_gateway_config
+
+        cfg = load_gateway_config()
+        val = (cfg.messaging or {}).get("watchdog_require_all_platforms")
+        if val is None:
+            return False
+        if isinstance(val, str):
+            return val.strip().lower() in ("1", "true", "yes", "on")
+        return bool(val)
+    except Exception:
+        logger.debug("watchdog_require_all_platforms: load_gateway_config failed", exc_info=True)
+        return False
+
+
+def _resolve_watchdog_require_all_platforms(explicit: Optional[bool]) -> bool:
+    if explicit is not None:
+        return bool(explicit)
+    env_v = _env_watchdog_require_all_platforms()
+    if env_v is not None:
+        return env_v
+    return _config_watchdog_require_all_platforms()
+
+
 def runtime_status_watchdog_healthy(
     payload: Optional[dict[str, Any]] = None,
+    *,
+    require_all_platforms: Optional[bool] = None,
+    expected_platforms: Optional[Sequence[str]] = None,
 ) -> tuple[bool, str]:
     """Return ``(ok, reason)`` for external process watchdogs.
 
-    A gateway may keep Slack (or Telegram) online while WhatsApp is
-    reconnecting. Requiring *every* platform row to be ``connected`` causes
-    unnecessary ``hermes gateway run --replace`` restarts that tear down
-    healthy adapters.
-
-    Healthy when **all** of the following hold:
+    Default (strict off): healthy when **all** of the following hold:
 
     1. A live gateway process is registered in ``gateway.pid`` (when reading
        status from disk — callers that pass an explicit ``payload`` dict, e.g.
        unit tests, skip this check).
     2. ``gateway_state`` in ``gateway_state.json`` is ``running``.
-    3. **At least one** configured platform row reports ``state == "connected"``
-       (messaging channel uptime).
+    3. **At least one** platform row reports ``state == "connected"``.
 
-    Together this covers **gateway process uptime** plus **at least one
-    messaging adapter connected**.
+    Optional **strict** mode (every configured messaging platform must be
+    connected) — enable via either:
+
+    - ``messaging.watchdog_require_all_platforms: true`` in merged gateway
+      config (``config.yaml`` / ``gateway.json``), or
+    - ``HERMES_GATEWAY_WATCHDOG_REQUIRE_ALL_PLATFORMS=1`` in the environment
+      (overrides config when set to a truthy/falsey string).
+
+    In strict mode, expected platforms are ``GatewayConfig.get_connected_platforms()``
+    unless tests pass ``expected_platforms=...``. If none are configured,
+    health is **ok** (nothing to enforce). Missing status rows or any state
+    other than ``connected`` (e.g. ``reconnecting``, ``fatal``) fails the check
+    so external watchdogs can restart the gateway and bring every adapter up.
     """
     loaded_from_disk = payload is None
     if loaded_from_disk:
@@ -263,6 +309,40 @@ def runtime_status_watchdog_healthy(
     platforms = payload.get("platforms") or {}
     if not platforms:
         return False, "no platform statuses present"
+
+    require_all = _resolve_watchdog_require_all_platforms(require_all_platforms)
+    if require_all:
+        if expected_platforms is not None:
+            exp = [str(x).strip() for x in expected_platforms if str(x).strip()]
+        else:
+            try:
+                from gateway.config import load_gateway_config
+
+                gc = load_gateway_config()
+                exp = [p.value for p in gc.get_connected_platforms()]
+            except Exception:
+                logger.debug("watchdog expected platforms: load failed", exc_info=True)
+                exp = []
+        if not exp:
+            return True, "ok watchdog_require_all (no messaging platforms configured)"
+        missing_status: list[str] = []
+        not_connected: list[str] = []
+        for name in sorted(exp):
+            pdata = platforms.get(name)
+            if not isinstance(pdata, dict):
+                missing_status.append(name)
+                continue
+            if pdata.get("state") != "connected":
+                not_connected.append(f"{name}={pdata.get('state')!r}")
+        if missing_status or not_connected:
+            parts: list[str] = []
+            if missing_status:
+                parts.append(f"missing_status={','.join(missing_status)}")
+            if not_connected:
+                parts.append(f"not_connected={','.join(not_connected)}")
+            return False, f"watchdog_require_all_platforms: {'; '.join(parts)}"
+        return True, f"ok all_connected={','.join(exp)}"
+
     connected = [
         name
         for name, pdata in platforms.items()

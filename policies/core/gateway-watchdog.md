@@ -8,7 +8,7 @@
 
 ## Purpose
 
-For **production** deployments where Hermes serves users through the **messaging gateway** (Telegram, Slack, Discord, WhatsApp, etc.), the operator MUST ensure **continuous gateway process uptime** and **at least one connected messaging adapter**, with **automated recovery** when the stack degrades.
+For **production** deployments where Hermes serves users through the **messaging gateway** (Telegram, Slack, Discord, WhatsApp, etc.), the operator MUST ensure **continuous gateway process uptime** and **healthy messaging adapters** (default: **at least one** connected; optional **strict**: **every configured** platform connected), with **automated recovery** when the stack degrades.
 
 This file is the **policies-layer** requirement. The full procedure, CLI semantics, script env vars, and logs are documented for operators in:
 
@@ -24,7 +24,9 @@ Implementation references in the Hermes Agent codebase:
 
 ## Requirements
 
-1. **Health definition** — External automation MUST use **`hermes gateway watchdog-check`** (or equivalent logic), not ad-hoc “all platforms connected” checks. Healthy means: valid **`gateway.pid`** process, **`gateway_state=running`** in `gateway_state.json`, and **≥1** platform with **`state=connected`**. Requiring every platform to be connected is **forbidden** for watchdog purposes (it causes unnecessary restarts when one bridge is flaky).
+1. **Health definition** — External automation MUST use **`hermes gateway watchdog-check`** (or equivalent logic). Healthy means: valid **`gateway.pid`** process, **`gateway_state=running`** in `gateway_state.json`, and messaging uptime per mode:
+   - **Default:** **≥1** platform with **`state=connected`** (one flaky bridge does not fail the check).
+   - **Strict (opt-in):** set **`messaging.watchdog_require_all_platforms: true`** in gateway config, or **`HERMES_GATEWAY_WATCHDOG_REQUIRE_ALL_PLATFORMS=1`** in the environment. Then **every** platform returned by configured “connected” messaging settings must be **`state=connected`**; if none are configured, the check passes. Use strict mode only when the deployment requires **all** social channels up (e.g. Slack **and** Telegram **and** WhatsApp); it may restart more often if any single adapter reconnects slowly.
 
 2. **Recovery** — When health checks fail repeatedly, automation MUST recover the gateway without spawning a **second** concurrent poller for the same tokens. Prefer **`systemctl --user restart hermes-gateway-<profile>.service`** when that unit exists for the active **`HERMES_HOME`** (e.g. **`chief-orchestrator`** after **`hermes gateway install`**). Otherwise use **`hermes gateway run --replace`**, then **`hermes doctor --fix`** followed by another restart/replace if the gateway does not recover. Rate-limit recovery attempts (backoff/cooldown) to avoid tight loops on misconfiguration.
 
