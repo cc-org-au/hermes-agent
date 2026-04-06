@@ -196,6 +196,51 @@ def list_routable_profile_names() -> List[str]:
     return sorted(names)
 
 
+def _keyword_route_project_lead(
+    user_message: str,
+    candidates: List[str],
+    *,
+    current_profile: str,
+    skip_current: bool,
+    threshold: float,
+) -> Optional[Tuple[str, float, str]]:
+    """Fast path: project / product lead status asks → ``ag-pl-*`` / ``fd-product`` (no HF call)."""
+    low = (user_message or "").strip().lower()
+    if len(low) < 12:
+        return None
+
+    lead_q = (
+        "project lead" in low
+        or ("project" in low and "lead" in low)
+        or ("status update" in low and "lead" in low)
+        or "from the lead" in low
+        or ("lead" in low and "status" in low and "project" in low)
+    )
+    if not lead_q:
+        return None
+
+    scored: List[Tuple[int, str]] = []
+    for slug in candidates:
+        s = slug.lower()
+        score = 0
+        if "agentic-company" in low and "agentic-company" in s:
+            score += 120
+        if s.startswith("ag-pl-") or "-pl-" in s or "project-lead" in s:
+            score += 60
+        if s == "fd-product" and ("product" in low or "lead" in low):
+            score += 35
+        if score > 0:
+            scored.append((score, slug))
+    if not scored:
+        return None
+    scored.sort(key=lambda x: (-x[0], x[1]))
+    best = scored[0][1]
+    if skip_current and best == current_profile:
+        return None, 0.0, "keyword target is current profile"
+    conf = max(float(threshold), 0.78)
+    return best, conf, "keyword project-lead routing"
+
+
 def _keyword_route_profile(
     user_message: str,
     candidates: List[str],
@@ -435,6 +480,17 @@ def classify_profile_for_prompt(
     if skip_current and current_profile in candidates and current_profile != "default":
         # Still allow routing *to* another profile when current is chief; remove self from targets only if same name chosen later
         pass
+
+    kw_pl = _keyword_route_project_lead(
+        user_message,
+        candidates,
+        current_profile=current_profile,
+        skip_current=skip_current,
+        threshold=threshold,
+    )
+    if kw_pl and kw_pl[0]:
+        _set_router_telemetry("keyword_heuristic", "keyword")
+        return kw_pl[0], kw_pl[1], kw_pl[2]
 
     kw = _keyword_route_profile(
         user_message,

@@ -3194,9 +3194,14 @@ class HermesCLI:
             if not labels:
                 print("\n  No named profiles to pick. Create one: hermes profile create <slug>\n")
                 return
-            from hermes_cli.tools_config import _prompt_choice
+            from hermes_cli.tools_config import prompt_choice_tui_safe
             display_labels = labels + ["(cancel)"]
-            idx = _prompt_choice("Select profile (sticky default):", display_labels, default=0)
+            idx = prompt_choice_tui_safe(
+                "Select profile (sticky default):",
+                display_labels,
+                default=0,
+                pt_app=getattr(self, "_app", None),
+            )
             if idx >= len(labels):
                 print("  Cancelled.")
                 return
@@ -5777,7 +5782,7 @@ class HermesCLI:
 
         try:
             from agent.pipeline_models import collect_pipeline_models
-            from hermes_cli.tools_config import _prompt_choice
+            from hermes_cli.tools_config import prompt_choice_tui_safe
         except Exception as e:
             _cprint(f"  /models unavailable: {e}")
             return
@@ -5804,7 +5809,12 @@ class HermesCLI:
             return
 
         labels = [f"{e['model']} — {e['source']}" for e in entries]
-        idx = _prompt_choice("Select model for next prompt (↑/↓, Enter):", labels, 0)
+        idx = prompt_choice_tui_safe(
+            "Select model for next prompt (↑/↓, Enter):",
+            labels,
+            0,
+            pt_app=getattr(self, "_app", None),
+        )
         if idx >= len(entries):
             _cprint("  Cancelled.")
             return

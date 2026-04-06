@@ -138,6 +138,26 @@ def test_route_and_delegate_calls_delegate(mock_extract, mock_pr_llm, _lr):
         assert ckwargs.get("hermes_profile") == "worker"
 
 
+def test_classify_keyword_project_lead_skips_llm():
+    from agent.profile_router import classify_profile_for_prompt
+
+    with patch("agent.auxiliary_client.call_llm") as mock_call:
+        t, conf, reason = classify_profile_for_prompt(
+            "can i get a status update from the project lead for the agentic-company project?",
+            candidates=["chief-orchestrator", "ag-pl-agentic-company", "fd-product"],
+            current_profile="chief-orchestrator",
+            router_cfg={
+                "only_when_current_profiles": ["chief-orchestrator"],
+                "min_message_chars": 3,
+                "confidence_threshold": 0.65,
+            },
+        )
+    assert mock_call.call_count == 0
+    assert t == "ag-pl-agentic-company"
+    assert conf >= 0.65
+    assert "project-lead" in reason.lower()
+
+
 def test_classify_keyword_security_skips_llm():
     from agent.profile_router import classify_profile_for_prompt
 

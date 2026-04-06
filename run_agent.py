@@ -5280,6 +5280,19 @@ class AIAgent:
         base = (getattr(self, "base_url", "") or "").lower()
         return "dashscope" in base or "aliyuncs" in base
 
+    def _openai_compatible_model_param(self) -> str:
+        """Model id for OpenAI-compatible ``chat.completions`` (native Gemini API rejects ``google/…`` slugs)."""
+        m = self.model
+        if not m:
+            return m
+        pl = (self.provider or "").strip().lower()
+        bu = (self.base_url or "").lower()
+        if pl == "gemini" or "generativelanguage.googleapis.com" in bu:
+            ms = str(m)
+            if ms.startswith("google/"):
+                return ms.split("/", 1)[1]
+        return m
+
     def _build_api_kwargs(self, api_messages: list) -> dict:
         """Build the keyword arguments dict for the active API mode."""
         if self.api_mode == "anthropic_messages":
@@ -5419,7 +5432,7 @@ class AIAgent:
             provider_preferences["data_collection"] = self.provider_data_collection
 
         api_kwargs = {
-            "model": self.model,
+            "model": self._openai_compatible_model_param(),
             "messages": sanitized_messages,
             "timeout": float(os.getenv("HERMES_API_TIMEOUT", 1800.0)),
         }
@@ -5812,7 +5825,7 @@ class AIAgent:
                 response = self._anthropic_messages_create(ant_kwargs)
             elif not _aux_available:
                 api_kwargs = {
-                    "model": self.model,
+                    "model": self._openai_compatible_model_param(),
                     "messages": api_messages,
                     "tools": [memory_tool_def],
                     "temperature": 0.3,
@@ -6367,6 +6380,16 @@ class AIAgent:
                 tool_duration = time.time() - tool_start_time
                 if self.quiet_mode:
                     self._vprint(f"  {_get_cute_tool_message_impl('memory', function_args, tool_duration, result=function_result)}")
+            elif self._memory_manager and self._memory_manager.has_tool(function_name):
+                # Mem0 / Honcho / etc. — same routing as _invoke_tool (not in tools/registry).
+                function_result = self._memory_manager.handle_tool_call(
+                    function_name, function_args
+                )
+                tool_duration = time.time() - tool_start_time
+                if self.quiet_mode:
+                    self._vprint(
+                        f"  {_get_cute_tool_message_impl(function_name, function_args, tool_duration, result=function_result)}"
+                    )
             elif function_name == "clarify":
                 from tools.clarify_tool import clarify_tool as _clarify_tool
                 function_result = _clarify_tool(
@@ -6649,7 +6672,7 @@ class AIAgent:
                 final_response = (assistant_message.content or "").strip() if assistant_message else ""
             else:
                 summary_kwargs = {
-                    "model": self.model,
+                    "model": self._openai_compatible_model_param(),
                     "messages": api_messages,
                 }
                 if self.max_tokens is not None:
@@ -6714,7 +6737,7 @@ class AIAgent:
                     final_response = (_retry_msg.content or "").strip()
                 else:
                     summary_kwargs = {
-                        "model": self.model,
+                        "model": self._openai_compatible_model_param(),
                         "messages": api_messages,
                     }
                     if self.max_tokens is not None:

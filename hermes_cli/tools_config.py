@@ -744,6 +744,32 @@ def _prompt_choice(question: str, choices: list, default: int = 0) -> int:
             return default
 
 
+def prompt_choice_tui_safe(
+    question: str,
+    choices: list,
+    default: int = 0,
+    pt_app=None,
+) -> int:
+    """Like :func:`_prompt_choice`, but when *pt_app* is the active prompt_toolkit
+    :class:`~prompt_toolkit.application.Application`, run the curses menu in a
+    real terminal via :func:`prompt_toolkit.application.run_in_terminal` so the
+    TUI does not glitch (``/models``, ``/profile menu``, etc.).
+    """
+    if pt_app is None:
+        return _prompt_choice(question, choices, default)
+    try:
+        from prompt_toolkit.application import run_in_terminal
+    except ImportError:
+        return _prompt_choice(question, choices, default)
+
+    result = [default]
+
+    def _body():
+        result[0] = _prompt_choice(question, choices, default)
+
+    run_in_terminal(_body)
+    return result[0]
+
 # ─── Token Estimation ────────────────────────────────────────────────────────
 
 # Module-level cache so discovery + tokenization runs at most once per process.
