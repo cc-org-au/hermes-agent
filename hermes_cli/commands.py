@@ -112,9 +112,14 @@ COMMAND_REGISTRY: list[CommandDef] = [
                cli_only=True, args_hint="[name]"),
     CommandDef("voice", "Toggle voice mode", "Configuration",
                args_hint="[on|off|tts|status]", subcommands=("on", "off", "tts", "status")),
-    CommandDef("models", "Pick a pipeline model for the next prompt only", "Configuration",
-               cli_only=True, args_hint="[list|clear|<n>]",
-               subcommands=("list", "clear")),
+    CommandDef(
+        "models",
+        "Pick next-prompt model (shortcuts, OpenRouter list, session router); sequential pickers",
+        "Configuration",
+        cli_only=True,
+        args_hint="[list|clear|router clear|<n>]",
+        subcommands=("list", "clear", "router clear"),
+    ),
 
     # Tools & Skills
     CommandDef("tools", "Manage tools: /tools [list|disable|enable] [name...]", "Tools & Skills",

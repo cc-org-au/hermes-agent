@@ -477,6 +477,7 @@ class AIAgent:
         skip_context_files: bool = False,
         skip_memory: bool = False,
         skip_per_turn_tier_routing: bool = False,
+        router_session_override: Dict[str, Any] = None,
         session_db=None,
         iteration_budget: "IterationBudget" = None,
         fallback_model: Dict[str, Any] = None,
@@ -528,6 +529,10 @@ class AIAgent:
         _install_safe_stdio()
 
         self.model = model
+        # CLI /models → Choose-Router: force consultant router LLM stack for the session.
+        self._router_session_override = (
+            dict(router_session_override) if isinstance(router_session_override, dict) else None
+        )
         # CLI /models one-shot: skip dynamic tier pick for this user turn only (cleared in run_conversation).
         self._skip_per_turn_tier_routing = bool(skip_per_turn_tier_routing)
         self.max_iterations = max_iterations

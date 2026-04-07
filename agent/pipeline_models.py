@@ -10,6 +10,10 @@ from agent.free_model_routing import (
     raw_free_model_routing_tiers,
 )
 from agent.local_inference import filter_hub_model_ids_by_local_state
+from agent.routing_model_blocklist import filter_blocklisted_models, is_routing_blocklisted
+
+MENU_ACTION_OPENROUTER_BROWSE = "openrouter_browse"
+MENU_ACTION_CHOOSE_ROUTER = "choose_router"
 
 
 def _strip(s: Any) -> str:
@@ -31,14 +35,14 @@ def collect_pipeline_models(config: Optional[Dict[str, Any]]) -> List[Dict[str, 
 
     def _add_hf(model_id: str, source: str) -> None:
         mid = _strip(model_id)
-        if not mid or mid in seen_hf:
+        if not mid or mid in seen_hf or is_routing_blocklisted(mid):
             return
         seen_hf.add(mid)
         out.append({"model": mid, "source": source, "provider_kind": "huggingface"})
 
     def _add_gemini(model_id: str, source: str) -> None:
         mid = _strip(model_id)
-        if not mid or mid in seen_gemini:
+        if not mid or mid in seen_gemini or is_routing_blocklisted(mid):
             return
         seen_gemini.add(mid)
         out.append({"model": mid, "source": source, "provider_kind": "gemini"})
@@ -48,7 +52,7 @@ def collect_pipeline_models(config: Optional[Dict[str, Any]]) -> List[Dict[str, 
         primary = _strip(mc.get("default") or mc.get("model"))
     else:
         primary = _strip(mc)
-    if primary:
+    if primary and not is_routing_blocklisted(primary):
         out.append(
             {
                 "model": primary,
@@ -65,7 +69,7 @@ def collect_pipeline_models(config: Optional[Dict[str, Any]]) -> List[Dict[str, 
     if isinstance(kr, dict):
         f_native = gemini_native_tier_model_set(fmr)
         rm = _strip(kr.get("router_model"))
-        if rm:
+        if rm and not is_routing_blocklisted(rm):
             if rm in f_native:
                 _add_gemini(rm, "free_model_routing.kimi_router (router)")
             else:
@@ -91,7 +95,7 @@ def collect_pipeline_models(config: Optional[Dict[str, Any]]) -> List[Dict[str, 
     og = fmr.get("optional_gemini") or {}
     if isinstance(og, dict) and og.get("enabled"):
         gm = _strip(og.get("model"))
-        if gm and gm not in seen_gemini:
+        if gm and gm not in seen_gemini and not is_routing_blocklisted(gm):
             seen_gemini.add(gm)
             out.append(
                 {
@@ -102,3 +106,86 @@ def collect_pipeline_models(config: Optional[Dict[str, Any]]) -> List[Dict[str, 
             )
 
     return out
+
+
+def list_openrouter_picker_model_ids() -> List[str]:
+    """Sorted OpenRouter slugs for full-model pickers (live API, else static catalog)."""
+    try:
+        from hermes_cli.models import fetch_openrouter_model_ids, model_ids
+
+        live = fetch_openrouter_model_ids()
+        base = live if live else model_ids()
+    except Exception:
+        from hermes_cli.models import model_ids
+
+        base = model_ids()
+    cleaned = filter_blocklisted_models(base)
+    return sorted(set(cleaned), key=str.lower)
+
+
+def collect_router_picker_model_rows() -> List[Dict[str, Any]]:
+    """Flat rows for ``Choose-Router`` (deduped labels; OpenRouter provider)."""
+    rows: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for mid in list_openrouter_picker_model_ids():
+        if mid in seen:
+            continue
+        seen.add(mid)
+        rows.append(
+            {
+                "kind": "model",
+                "model": mid,
+                "source": "openrouter (session router)",
+                "provider_kind": "openrouter",
+            }
+        )
+    return rows
+
+
+def collect_models_menu_entries(config: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Rows for interactive ``/models``: shortcuts, action rows, then pipeline models."""
+    entries: List[Dict[str, Any]] = []
+
+    def _add_shortcut(model: str, source: str) -> None:
+        if is_routing_blocklisted(model):
+            return
+        entries.append(
+            {
+                "kind": "model",
+                "model": model,
+                "source": source,
+                "provider_kind": "openrouter",
+            }
+        )
+
+    _add_shortcut("openai/gpt-5.4", "/models shortcut")
+    _add_shortcut("openai/gpt-5.3-codex", "/models shortcut")
+    _add_shortcut("openrouter/auto", "/models shortcut (OpenRouter auto)")
+
+    entries.append(
+        {
+            "kind": "action",
+            "action": MENU_ACTION_OPENROUTER_BROWSE,
+            "label": "OpenRouter-(choose-model)…",
+            "model": "",
+            "source": "",
+            "provider_kind": "action",
+        }
+    )
+    entries.append(
+        {
+            "kind": "action",
+            "action": MENU_ACTION_CHOOSE_ROUTER,
+            "label": "Choose-Router…",
+            "model": "",
+            "source": "",
+            "provider_kind": "action",
+        }
+    )
+
+    for row in collect_pipeline_models(config):
+        row = dict(row)
+        row.setdefault("kind", "model")
+        entries.append(row)
+
+    return entries

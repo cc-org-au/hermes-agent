@@ -26,6 +26,7 @@ GITHUB_MODELS_CATALOG_URL = COPILOT_MODELS_URL
 
 # (model_id, display description shown in menus)
 OPENROUTER_MODELS: list[tuple[str, str]] = [
+    ("openrouter/auto",                 "OpenRouter auto-routing"),
     ("anthropic/claude-opus-4.6",       "recommended"),
     ("anthropic/claude-sonnet-4.6",     ""),
     ("qwen/qwen3.6-plus-preview:free", "free"),
@@ -42,11 +43,8 @@ OPENROUTER_MODELS: list[tuple[str, str]] = [
     ("qwen/qwen3.5-plus-02-15",         ""),
     ("qwen/qwen3.5-35b-a3b",            ""),
     ("stepfun/step-3.5-flash",          ""),
-    ("minimax/minimax-m2.7",            ""),
-    ("minimax/minimax-m2.5",            ""),
     ("z-ai/glm-5",                      ""),
     ("z-ai/glm-5-turbo",                ""),
-    ("moonshotai/kimi-k2.5",            ""),
     ("x-ai/grok-4.20-beta",             ""),
     ("nvidia/nemotron-3-super-120b-a12b",      ""),
     ("nvidia/nemotron-3-super-120b-a12b:free", "free"),
@@ -57,6 +55,7 @@ OPENROUTER_MODELS: list[tuple[str, str]] = [
 
 _PROVIDER_MODELS: dict[str, list[str]] = {
     "nous": [
+        "openrouter/auto",
         "anthropic/claude-opus-4.6",
         "anthropic/claude-sonnet-4.6",
         "qwen/qwen3.6-plus-preview:free",
@@ -73,11 +72,8 @@ _PROVIDER_MODELS: dict[str, list[str]] = {
         "qwen/qwen3.5-plus-02-15",
         "qwen/qwen3.5-35b-a3b",
         "stepfun/step-3.5-flash",
-        "minimax/minimax-m2.7",
-        "minimax/minimax-m2.5",
         "z-ai/glm-5",
         "z-ai/glm-5-turbo",
-        "moonshotai/kimi-k2.5",
         "x-ai/grok-4.20-beta",
         "nvidia/nemotron-3-super-120b-a12b",
         "nvidia/nemotron-3-super-120b-a12b:free",
@@ -1165,6 +1161,18 @@ def fetch_api_models(
     be reached (network error, timeout, auth failure, etc.).
     """
     return probe_api_models(api_key, base_url, timeout=timeout).get("models")
+
+
+def fetch_openrouter_model_ids(timeout: float = 15.0) -> Optional[list[str]]:
+    """Live OpenRouter model IDs from ``/models`` (needs ``OPENROUTER_API_KEY``)."""
+    key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    if not key:
+        return None
+    try:
+        from hermes_constants import OPENROUTER_BASE_URL
+    except ImportError:
+        return None
+    return fetch_api_models(key, OPENROUTER_BASE_URL, timeout=timeout)
 
 
 def validate_requested_model(

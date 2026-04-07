@@ -5,6 +5,8 @@ from __future__ import annotations
 import pytest
 
 from agent.tier_model_routing import (
+    BUILTIN_TIER_MODELS,
+    effective_tier_models,
     resolve_tier_dynamic_model,
     select_tier_for_message,
 )
@@ -101,3 +103,9 @@ def test_fixed_letter_fallback(default_routing_tier, expected):
     cfg = _base_cfg(default_routing_tier=default_routing_tier)
     msg = "hello world " * 200
     assert select_tier_for_message(msg, cfg) == expected
+
+
+def test_effective_tier_models_sanitizes_blocklisted_yaml():
+    merged = effective_tier_models({"C": "deepseek/deepseek-r1"})
+    assert merged["C"] == "openrouter/auto"
+    assert merged["E"] == BUILTIN_TIER_MODELS["E"]

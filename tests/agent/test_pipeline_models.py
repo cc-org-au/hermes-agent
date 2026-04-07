@@ -1,6 +1,11 @@
 """Tests for agent.pipeline_models.collect_pipeline_models."""
 
-from agent.pipeline_models import collect_pipeline_models
+from agent.pipeline_models import (
+    MENU_ACTION_CHOOSE_ROUTER,
+    MENU_ACTION_OPENROUTER_BROWSE,
+    collect_models_menu_entries,
+    collect_pipeline_models,
+)
 
 
 def test_collect_pipeline_models_order_and_dedupe():
@@ -63,3 +68,39 @@ def test_collect_pipeline_models_routing_tiers():
     rows = collect_pipeline_models(cfg)
     models = [r["model"] for r in rows]
     assert "only-tier-model" in models
+
+
+def test_collect_pipeline_models_skips_blocklisted_ids():
+    cfg = {
+        "model": {"default": "anthropic/claude-sonnet-4"},
+        "free_model_routing": {
+            "enabled": True,
+            "filter_free_tier_models_by_local_hub": False,
+            "kimi_router": {
+                "router_model": "deepseek/deepseek-chat",
+                "router_provider": "gemini",
+                "tiers": [
+                    {
+                        "id": "t",
+                        "models": ["Qwen/Qwen2.5-7B", "moonshotai/kimi-k2.5"],
+                    },
+                ],
+            },
+        },
+    }
+    rows = collect_pipeline_models(cfg)
+    models = [r["model"] for r in rows]
+    assert "moonshotai/kimi-k2.5" not in models
+    assert "deepseek/deepseek-chat" not in models
+    assert "Qwen/Qwen2.5-7B" in models
+
+
+def test_collect_models_menu_entries_includes_actions_and_shortcuts():
+    cfg = {"model": {"default": "openai/gpt-5.4"}, "free_model_routing": {"enabled": False}}
+    entries = collect_models_menu_entries(cfg)
+    actions = [e for e in entries if e.get("kind") == "action"]
+    assert any(a.get("action") == MENU_ACTION_OPENROUTER_BROWSE for a in actions)
+    assert any(a.get("action") == MENU_ACTION_CHOOSE_ROUTER for a in actions)
+    mids = [e["model"] for e in entries if e.get("kind") == "model"]
+    assert "openrouter/auto" in mids
+    assert "openai/gpt-5.4" in mids

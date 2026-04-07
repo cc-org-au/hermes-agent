@@ -17,6 +17,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from agent.local_inference import filter_hub_model_ids_by_local_state
+from agent.routing_model_blocklist import is_routing_blocklisted
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +131,8 @@ def _filtered_kimi_tiers(fmr: Dict[str, Any]) -> List[Dict[str, Any]]:
         filtered_hub = filter_hub_model_ids_by_local_state(hub_only, enabled=hub_filter)
         merged: List[str] = []
         for m in raw:
+            if is_routing_blocklisted(m):
+                continue
             if m in native_set:
                 merged.append(m)
             elif m in filtered_hub:

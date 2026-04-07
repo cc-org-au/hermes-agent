@@ -1316,6 +1316,8 @@ class HermesCLI:
         self._active_agent_route_signature = None
         # One-shot model from /models (next user turn only).
         self._pipeline_model_once: Optional[Dict[str, Any]] = None
+        # /models → Choose-Router: consultant stack uses this OpenRouter slug for the CLI session.
+        self._session_router_override: Optional[Dict[str, str]] = None
 
         # Agent will be initialized on first use
         self.agent: Optional[AIAgent] = None
@@ -2255,6 +2257,23 @@ class HermesCLI:
                         tuple(rt.get("args") or ()),
                     ),
                 }
+            if pk == "openrouter":
+                rt = resolve_runtime_provider(requested="openrouter")
+                self._pipeline_model_once = None
+                return {
+                    "model": model,
+                    "runtime": _rt_from_resolved(rt),
+                    "label": f"/models → {model} (OpenRouter)",
+                    "skip_per_turn_tier_routing": True,
+                    "signature": (
+                        model,
+                        rt.get("provider"),
+                        rt.get("base_url"),
+                        rt.get("api_mode"),
+                        rt.get("command"),
+                        tuple(rt.get("args") or ()),
+                    ),
+                }
             self._pipeline_model_once = None
             return {**base, "skip_per_turn_tier_routing": base.get("skip_per_turn_tier_routing", False)}
         except Exception as exc:
@@ -2374,6 +2393,7 @@ class HermesCLI:
                 checkpoint_max_snapshots=self.checkpoint_max_snapshots,
                 pass_session_id=self.pass_session_id,
                 skip_context_files=self.skip_context_files,
+                router_session_override=getattr(self, "_session_router_override", None),
                 tool_progress_callback=self._on_tool_progress,
                 tool_start_callback=self._on_tool_start if self._inline_diffs_enabled else None,
                 tool_complete_callback=self._on_tool_complete if self._inline_diffs_enabled else None,
@@ -4636,6 +4656,7 @@ class HermesCLI:
                     provider_data_collection=self._provider_data_collection,
                     fallback_model=self._fallback_model,
                     skip_context_files=self.skip_context_files,
+                    router_session_override=getattr(self, "_session_router_override", None),
                 )
                 # Silence raw spinner; route thinking through TUI widget when no foreground agent is active.
                 bg_agent._print_fn = lambda *_a, **_kw: None
@@ -4775,6 +4796,7 @@ class HermesCLI:
                     skip_memory=True,
                     skip_context_files=True,
                     persist_session=False,
+                    router_session_override=getattr(self, "_session_router_override", None),
                 )
 
                 btw_prompt = (
@@ -5782,7 +5804,10 @@ class HermesCLI:
             self._voice_tts_done.set()
 
     def _handle_models_command(self, command: str) -> None:
-        """Handle /models — pick a model from the free-model pipeline for the next prompt only."""
+        """Handle /models — shortcuts, OpenRouter submenu, session router, pipeline rows.
+
+        Submenus use sequential full-screen pickers (curses), not nested widgets inside one menu.
+        """
         parts = command.strip().split(maxsplit=1)
         rest = parts[1].strip() if len(parts) > 1 else ""
 
@@ -5791,35 +5816,68 @@ class HermesCLI:
             _cprint("  Cleared one-shot model selection (next prompt uses normal routing).")
             return
 
+        if rest.lower().replace("_", "-") in ("router clear", "router-clear", "router reset"):
+            self._session_router_override = None
+            if getattr(self, "agent", None) is not None:
+                self.agent._router_session_override = None
+            _cprint("  Cleared session router override (consultant routing uses config defaults).")
+            return
+
         try:
-            from agent.pipeline_models import collect_pipeline_models
+            from agent.pipeline_models import (
+                MENU_ACTION_CHOOSE_ROUTER,
+                MENU_ACTION_OPENROUTER_BROWSE,
+                collect_models_menu_entries,
+                collect_router_picker_model_rows,
+                list_openrouter_picker_model_ids,
+            )
             from hermes_cli.tools_config import prompt_choice_tui_safe
         except Exception as e:
             _cprint(f"  /models unavailable: {e}")
             return
 
-        entries = collect_pipeline_models(self.config)
+        entries = collect_models_menu_entries(self.config)
         if not entries:
-            _cprint("  No pipeline models configured. Set free_model_routing in config.yaml.")
+            _cprint("  /models: empty menu.")
             return
+
+        def _row_to_once(row: dict) -> dict:
+            return {
+                "model": row["model"],
+                "source": row["source"],
+                "provider_kind": row.get("provider_kind") or "primary",
+            }
 
         if rest.lower() == "list":
             for i, e in enumerate(entries, start=1):
-                _cprint(f"  {i}. {e['model']} — {e['source']}")
-            _cprint("  Use /models <n> or /models for interactive picker.")
+                if e.get("kind") == "action":
+                    _cprint(f"  {i}. {e.get('label')}")
+                else:
+                    _cprint(f"  {i}. {e['model']} — {e['source']}")
+            _cprint("  Use /models <n> or /models. Sequential submenus: OpenRouter-(choose-model), Choose-Router.")
+            _cprint("  /models router clear — reset session router model.")
             return
 
         if rest.isdigit():
             idx = int(rest) - 1
-            if 0 <= idx < len(entries):
-                self._pipeline_model_once = dict(entries[idx])
-                e = entries[idx]
-                _cprint(f"  Next prompt: {e['model']} ({e['source']})")
-            else:
+            if not (0 <= idx < len(entries)):
                 _cprint(f"  Invalid index. Use 1–{len(entries)} or /models list.")
+                return
+            picked = entries[idx]
+            if picked.get("kind") == "action":
+                _cprint("  That line opens a submenu — run /models without a number for the picker.")
+                return
+            self._pipeline_model_once = _row_to_once(picked)
+            _cprint(f"  Next prompt: {picked['model']} ({picked['source']})")
             return
 
-        labels = [f"{e['model']} — {e['source']}" for e in entries]
+        labels: list[str] = []
+        for e in entries:
+            if e.get("kind") == "action":
+                labels.append(str(e.get("label") or ""))
+            else:
+                labels.append(f"{e['model']} — {e['source']}")
+
         idx = prompt_choice_tui_safe(
             "Select model for next prompt (↑/↓, Enter):",
             labels,
@@ -5829,9 +5887,52 @@ class HermesCLI:
         if idx >= len(entries):
             _cprint("  Cancelled.")
             return
-        self._pipeline_model_once = dict(entries[idx])
-        e = entries[idx]
-        _cprint(f"  Next prompt: {e['model']} ({e['source']})")
+        picked = entries[idx]
+        if picked.get("kind") == "action" and picked.get("action") == MENU_ACTION_OPENROUTER_BROWSE:
+            or_ids = list_openrouter_picker_model_ids()
+            if not or_ids:
+                _cprint("  No OpenRouter models (set OPENROUTER_API_KEY for live list, or check catalog).")
+                return
+            j = prompt_choice_tui_safe(
+                "OpenRouter model (↑/↓, Enter):",
+                or_ids,
+                0,
+                pt_app=getattr(self, "_app", None),
+            )
+            if j >= len(or_ids):
+                _cprint("  Cancelled.")
+                return
+            self._pipeline_model_once = {
+                "model": or_ids[j],
+                "source": "openrouter full picker",
+                "provider_kind": "openrouter",
+            }
+            _cprint(f"  Next prompt: {or_ids[j]} (openrouter full picker)")
+            return
+        if picked.get("kind") == "action" and picked.get("action") == MENU_ACTION_CHOOSE_ROUTER:
+            rrows = collect_router_picker_model_rows()
+            if not rrows:
+                _cprint("  No models available for session router.")
+                return
+            rlabels = [f"{r['model']} — {r['source']}" for r in rrows]
+            j = prompt_choice_tui_safe(
+                "Session router model (↑/↓, Enter):",
+                rlabels,
+                0,
+                pt_app=getattr(self, "_app", None),
+            )
+            if j >= len(rrows):
+                _cprint("  Cancelled.")
+                return
+            mid = rrows[j]["model"]
+            self._session_router_override = {"provider": "openrouter", "model": mid}
+            if getattr(self, "agent", None) is not None:
+                self.agent._router_session_override = dict(self._session_router_override)
+            _cprint(f"  Session router → {mid} (OpenRouter). /models router clear to reset.")
+            return
+
+        self._pipeline_model_once = _row_to_once(picked)
+        _cprint(f"  Next prompt: {picked['model']} ({picked['source']})")
 
     def _handle_voice_command(self, command: str):
         """Handle /voice [on|off|tts|status] command."""

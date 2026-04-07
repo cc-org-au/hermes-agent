@@ -138,15 +138,38 @@ def _min_tier_cost(a: str, b: str) -> str:
     return a if ia <= ib else b
 
 
-def _call_aux_task(task: str, system: str, user: str, max_tokens: int = 512) -> str:
+def _call_aux_task(
+    task: str,
+    system: str,
+    user: str,
+    max_tokens: int = 512,
+    *,
+    agent: Any = None,
+) -> str:
     from agent.auxiliary_client import call_llm, extract_content_or_reasoning
+
+    msgs = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
+    ]
+    override = getattr(agent, "_router_session_override", None) if agent is not None else None
+    if isinstance(override, dict):
+        prov = str(override.get("provider") or "").strip()
+        mod = str(override.get("model") or "").strip()
+        if prov and mod:
+            resp = call_llm(
+                task=None,
+                provider=prov,
+                model=mod,
+                messages=msgs,
+                temperature=0.2,
+                max_tokens=max_tokens,
+            )
+            return extract_content_or_reasoning(resp) or ""
 
     resp = call_llm(
         task,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
+        messages=msgs,
         temperature=0.2,
         max_tokens=max_tokens,
     )
@@ -229,7 +252,9 @@ def resolve_consultant_tier(
             "on security, registry alignment, or multi-artifact reconciliation."
         )
         try:
-            raw_r = _call_aux_task(router_task, sys_router, user_router, max_tokens=400)
+            raw_r = _call_aux_task(
+                router_task, sys_router, user_router, max_tokens=400, agent=agent
+            )
             parsed = _extract_json_object(raw_r) or {}
             rec = _normalize_tier_letter(str(parsed.get("recommended_tier") or ""), tier_models)
             esc = bool(parsed.get("request_consultant_escalation"))
@@ -299,7 +324,9 @@ def resolve_consultant_tier(
             '{"challenge":"...", "max_reasonable_tier":"B"|"C"|"D"|"E"|"F"}'
         )
         try:
-            raw_ch = _call_aux_task(challenger_task, sys_ch, user_ch, max_tokens=350)
+            raw_ch = _call_aux_task(
+                challenger_task, sys_ch, user_ch, max_tokens=350, agent=agent
+            )
             ch_p = _extract_json_object(raw_ch) or {}
         except Exception as e:
             ch_p = {"challenge": f"(challenger failed: {e})", "max_reasonable_tier": "D"}
@@ -325,7 +352,9 @@ def resolve_consultant_tier(
             "max_reasonable_tier (or lower)."
         )
         try:
-            raw_cf = _call_aux_task(chief_task, sys_chef, user_chef, max_tokens=400)
+            raw_cf = _call_aux_task(
+                chief_task, sys_chef, user_chef, max_tokens=400, agent=agent
+            )
             cf_p = _extract_json_object(raw_cf) or {}
         except Exception as e:
             logger.info("consultant chief deliberation failed; capping at D: %s", e)

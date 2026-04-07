@@ -34,14 +34,13 @@ enabled: true
 # Tier E/F: OpenAI GPT-5 consultants on api.openai.com (OPENAI_API_KEY). Use only when
 # consultant_routing deliberation approves (policy § Consultant model).
 tier_models:
-  # Do not use openrouter/auto here — it may route to Anthropic without org deliberation.
-  A: "google/gemini-2.5-flash"
-  B: "google/gemini-2.5-flash-lite"
-  # OpenRouter: use deepseek-r1 (deepseek-reasoner is the DeepSeek-direct API name, not a valid OR slug).
-  C: "deepseek/deepseek-r1"
-  D: "google/gemini-2.5-flash"
-  E: "gpt-5.4"
-  F: "gpt-5.3-codex"
+  # A–D default to OpenRouter auto-routing; blocklisted vendor slugs in YAML are rewritten at runtime.
+  A: "openrouter/auto"
+  B: "openrouter/auto"
+  C: "openrouter/auto"
+  D: "openrouter/auto"
+  E: "openai/gpt-5.4"
+  F: "openai/gpt-5.3-codex"
 
 # Chief orchestrator baseline when config says `model.default: tier:D` (or omit default_model here).
 chief_default_tier: D

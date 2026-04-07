@@ -64,7 +64,7 @@ def test_governance_floor_forces_deliberation(monkeypatch, gov_env):
     g = _gov_base()
     g["consultant_routing"]["governance_activation_deliberation_floor"] = "E"
 
-    def fake_call(task, system, user, max_tokens=512):
+    def fake_call(task, system, user, max_tokens=512, *, agent=None):
         if "cost-aware" in system.lower() or "routing advisor" in system.lower():
             return json.dumps(
                 {
@@ -127,7 +127,7 @@ def test_skip_router_when_deterministic_b(gov_env):
 def test_hybrid_router_escalation_triggers_deliberation(gov_env):
     g = _gov_base()
 
-    def fake_call(task, system, user, max_tokens=512):
+    def fake_call(task, system, user, max_tokens=512, *, agent=None):
         if "routing advisor" in system.lower() or "cost-aware" in system.lower():
             return json.dumps(
                 {
@@ -169,7 +169,7 @@ def test_deliberation_log_written(gov_env):
     g = _gov_base()
     log_path = gov_env / "consultant_deliberations.jsonl"
 
-    def fake_call(task, system, user, max_tokens=512):
+    def fake_call(task, system, user, max_tokens=512, *, agent=None):
         if "cost-aware" in system.lower() or "routing advisor" in system.lower():
             return json.dumps(
                 {

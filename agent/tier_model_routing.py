@@ -19,13 +19,14 @@ TIER_DYNAMIC_SENTINEL = "tier:dynamic"
 # User YAML overrides these defaults per key; align with
 # ``memory/runtime/tasks/templates/script-templates/hermes_token_governance.runtime.example.yaml``.
 BUILTIN_TIER_MODELS: Dict[str, str] = {
-    "A": "google/gemini-2.5-flash",
-    "B": "google/gemini-2.5-flash-lite",
-    "C": "deepseek/deepseek-r1",
-    "D": "google/gemini-2.5-flash",
-    # E/F: OpenAI GPT-5 consultants — use only via consultant_routing deliberation (governance YAML).
-    "E": "gpt-5.4",
-    "F": "gpt-5.3-codex",
+    # A–D: OpenRouter resolves the concrete endpoint (avoid fixed per-tier slugs in code).
+    "A": "openrouter/auto",
+    "B": "openrouter/auto",
+    "C": "openrouter/auto",
+    "D": "openrouter/auto",
+    # E/F: premium consultants (OpenRouter slugs; resolved per provider stack).
+    "E": "openai/gpt-5.4",
+    "F": "openai/gpt-5.3-codex",
 }
 
 
@@ -84,6 +85,14 @@ def resolve_tier_dynamic_model(
     return tm.get(tier)
 
 
+def _normalize_openrouter_auto_slug(model_id: str) -> str:
+    s = (model_id or "").strip()
+    collapsed = s.lower().replace("_", "-").replace("/", "-")
+    if collapsed == "openrouter-auto":
+        return "openrouter/auto"
+    return s
+
+
 def normalize_tier_models(raw: Any) -> Dict[str, str]:
     """Return upper-case tier key → model id."""
     out: Dict[str, str] = {}
@@ -92,15 +101,17 @@ def normalize_tier_models(raw: Any) -> Dict[str, str]:
     for k, v in raw.items():
         key = str(k).strip().upper()
         if len(key) == 1 and key in "ABCDEF" and v:
-            out[key] = str(v).strip()
+            out[key] = _normalize_openrouter_auto_slug(str(v).strip())
     return out
 
 
 def effective_tier_models(raw: Any) -> Dict[str, str]:
     """Merge governance ``tier_models`` with :data:`BUILTIN_TIER_MODELS` (user wins)."""
+    from agent.routing_model_blocklist import replace_if_blocklisted
+
     merged = dict(BUILTIN_TIER_MODELS)
     merged.update(normalize_tier_models(raw))
-    return merged
+    return {k: replace_if_blocklisted(v) for k, v in merged.items()}
 
 
 def resolve_tier_placeholder(
