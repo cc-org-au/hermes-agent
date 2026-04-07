@@ -63,7 +63,9 @@ def load_hermes_dotenv(
         _load_dotenv_with_fallback(project_env_path, override=not loaded)
         loaded.append(project_env_path)
 
-    # VPS / split-env: allow OPENAI_API_KEY_DROPLET when OPENAI_API_KEY is unset.
+    # VPS / split-env: copy DROPLET → OPENAI_API_KEY when the latter is unset so legacy
+    # call sites see a key. Native OpenAI routing prefers DROPLET first via
+    # agent.openai_native_runtime.native_openai_api_key().
     _droplet_key = os.environ.get("OPENAI_API_KEY_DROPLET", "").strip()
     _openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
     if _droplet_key and not _openai_key:

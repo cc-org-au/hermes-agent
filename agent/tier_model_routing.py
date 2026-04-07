@@ -24,9 +24,9 @@ BUILTIN_TIER_MODELS: Dict[str, str] = {
     "B": "openrouter/auto",
     "C": "openrouter/auto",
     "D": "openrouter/auto",
-    # E/F: premium consultants (OpenRouter slugs; resolved per provider stack).
-    "E": "openai/gpt-5.4",
-    "F": "openai/gpt-5.3-codex",
+    # E/F: native api.openai.com consultants (OPENAI_API_KEY_DROPLET or OPENAI_API_KEY).
+    "E": "gpt-5.4",
+    "F": "gpt-5.3-codex",
 }
 
 
@@ -37,13 +37,26 @@ def is_tier_dynamic(model: Optional[str]) -> bool:
     return str(model).strip().lower() == TIER_DYNAMIC_SENTINEL.lower()
 
 
+def _tier_slug_matches_resolved_model(agent_model: str, tier_slug: str) -> bool:
+    """Match ``gpt-5.4`` to ``openai/gpt-5.4`` (and vice versa) for status lines."""
+    a = str(agent_model or "").strip().lower()
+    b = str(tier_slug or "").strip().lower()
+    if a == b:
+        return True
+
+    def core(s: str) -> str:
+        return s[7:] if s.startswith("openai/") else s
+
+    return core(a) == core(b)
+
+
 def infer_tier_letter_for_model(model_id: str, tier_models: Dict[str, str]) -> str:
     """Reverse-lookup tier letter for status lines, or ``?`` if unknown."""
     if not model_id or not tier_models:
         return "?"
     mid = str(model_id).strip()
     for letter, slug in tier_models.items():
-        if slug == mid:
+        if _tier_slug_matches_resolved_model(mid, slug):
             return letter
     return "?"
 

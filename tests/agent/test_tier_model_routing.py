@@ -7,6 +7,7 @@ import pytest
 from agent.tier_model_routing import (
     BUILTIN_TIER_MODELS,
     effective_tier_models,
+    infer_tier_letter_for_model,
     resolve_tier_dynamic_model,
     select_tier_for_message,
 )
@@ -109,3 +110,11 @@ def test_effective_tier_models_sanitizes_blocklisted_yaml():
     merged = effective_tier_models({"C": "deepseek/deepseek-r1"})
     assert merged["C"] == "openrouter/auto"
     assert merged["E"] == BUILTIN_TIER_MODELS["E"]
+    assert merged["E"] == "gpt-5.4"
+
+
+def test_infer_tier_letter_matches_openai_prefix_vs_bare():
+    tm = {"E": "openai/gpt-5.4", "F": "gpt-5.3-codex"}
+    assert infer_tier_letter_for_model("gpt-5.4", tm) == "E"
+    assert infer_tier_letter_for_model("openai/gpt-5.4", tm) == "E"
+    assert infer_tier_letter_for_model("gpt-5.3-codex", tm) == "F"

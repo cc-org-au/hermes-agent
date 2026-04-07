@@ -160,7 +160,9 @@ def _call_aux_task(
         ak = str(override.get("api_key") or "").strip()
         if prov and mod:
             if prov == "custom" and bu:
-                ak = ak or os.getenv("OPENAI_API_KEY", "").strip()
+                from agent.openai_native_runtime import native_openai_api_key
+
+                ak = ak or native_openai_api_key()
                 resp = call_llm(
                     task=None,
                     provider="custom",

@@ -30,17 +30,18 @@
 version: 1
 enabled: true
 
-# Concrete OpenRouter slugs per tier (see policy § Model Tiering Framework).
-# Tier E/F: OpenAI GPT-5 consultants on api.openai.com (OPENAI_API_KEY). Use only when
-# consultant_routing deliberation approves (policy § Consultant model).
+# Tier A–D: routing slugs; E/F: native OpenAI API model ids (api.openai.com).
+# Keys: OPENAI_API_KEY_DROPLET (preferred on VPS) or OPENAI_API_KEY — not OpenRouter unless
+# you explicitly use OpenRouter for the main session and pick OR models in /models.
+# Consultant tiers E/F run only when consultant_routing approves (policy § Consultant model).
 tier_models:
   # A–D default to OpenRouter auto-routing; blocklisted vendor slugs in YAML are rewritten at runtime.
   A: "openrouter/auto"
   B: "openrouter/auto"
   C: "openrouter/auto"
   D: "openrouter/auto"
-  E: "openai/gpt-5.4"
-  F: "openai/gpt-5.3-codex"
+  E: "gpt-5.4"
+  F: "gpt-5.3-codex"
 
 # Chief orchestrator baseline when config says `model.default: tier:D` (or omit default_model here).
 chief_default_tier: D

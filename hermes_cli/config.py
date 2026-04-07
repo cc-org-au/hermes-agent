@@ -834,8 +834,9 @@ OPTIONAL_ENV_VARS = {
     },
     "OPENAI_API_KEY_DROPLET": {
         "description": (
-            "Optional OpenAI API key (e.g. VPS-only). When set and OPENAI_API_KEY is empty, "
-            "Hermes copies it to OPENAI_API_KEY after loading .env."
+            "OpenAI API key for VPS / split env. Preferred over OPENAI_API_KEY for native "
+            "api.openai.com routing (tier E/F gpt-5.4, gpt-5.3-codex, /models native shortcuts). "
+            "When OPENAI_API_KEY is empty, Hermes also copies this to OPENAI_API_KEY after .env load."
         ),
         "prompt": "OpenAI API key (droplet / alternate)",
         "url": "https://platform.openai.com/api-keys",

@@ -3939,20 +3939,17 @@ class AIAgent:
             self._client_kwargs.pop("default_headers", None)
 
     def _tier_targets_openai_native_consultant(self, model_id: str) -> bool:
-        """True for direct OpenAI API GPT-5 consultants (not mini/nano)."""
-        m = (model_id or "").strip().lower()
-        if not m.startswith("gpt-5"):
-            return False
-        if "mini" in m or "nano" in m:
-            return False
-        return True
+        """True for tier E/F consultants that should use api.openai.com (not OpenRouter)."""
+        from agent.openai_native_runtime import is_native_openai_consultant_model_id
+
+        return is_native_openai_consultant_model_id(model_id)
 
     def _reconcile_runtime_after_tier_model_change(self) -> None:
         """After token-governance per-turn tier pick, point the OpenAI SDK client at the right host.
 
-        Chief runtimes often use Gemini or OpenRouter; tiers E/F may select native ``gpt-5.4`` /
-        ``gpt-5.3-codex`` on ``api.openai.com``. Restore the snapshot baseline when the tier model
-        is not an OpenAI-native consultant id.
+        Chief runtimes often use Gemini or OpenRouter; tiers E/F select native ``gpt-5.4`` /
+        ``gpt-5.3-codex`` on ``api.openai.com`` using ``OPENAI_API_KEY_DROPLET`` (preferred) or
+        ``OPENAI_API_KEY``. Restore the snapshot baseline for other models.
         """
         if getattr(self, "api_mode", None) == "anthropic_messages":
             return
@@ -3962,15 +3959,21 @@ class AIAgent:
 
         mid = (self.model or "").strip()
         if self._tier_targets_openai_native_consultant(mid):
-            key = (os.environ.get("OPENAI_API_KEY") or "").strip()
-            if not key:
-                return
+            from agent.openai_native_runtime import (
+                bare_openai_api_model_id,
+                native_openai_runtime_tuple,
+            )
             from hermes_cli.runtime_provider import _detect_api_mode_for_url
 
-            want_base = "https://api.openai.com/v1"
+            tup = native_openai_runtime_tuple()
+            if not tup:
+                return
+            want_base, want_key = tup
             want_mode = _detect_api_mode_for_url(want_base) or "codex_responses"
             want_provider = "custom"
-            want_key = key
+            bare = bare_openai_api_model_id(mid)
+            if bare:
+                self.model = bare
         else:
             want_provider = str(snap.get("provider") or "")
             want_base = str(snap.get("base_url") or "")
