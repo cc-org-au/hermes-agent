@@ -1,10 +1,10 @@
 version: 1
 enabled: true
 tier_models:
-  # A-C: free Gemini tiers (via Gemini API direct or OpenRouter).
-  A: google/gemini-2.5-flash          # ultra-fast, free daily cap
-  B: google/gemini-2.5-flash-lite     # lightest, cheapest — routine tasks
-  C: google/gemini-2.5-pro            # stronger reasoning, medium tasks
+  # A-C: low-cost Gemini tiers (paid Gemini API — NOT free; Gemma-4/Qwen are the only free options).
+  A: google/gemini-2.5-flash          # fast, low-cost
+  B: google/gemini-2.5-flash-lite     # lightest, lowest cost per call
+  C: google/gemini-2.5-pro            # stronger reasoning, medium complexity
   # D: dominant consultant for most complex tasks — claude-sonnet-4.6 via OpenRouter.
   D: anthropic/claude-sonnet-4-6
   # E/F: native api.openai.com consultants (OPENAI_API_KEY_DROPLET or OPENAI_API_KEY).
@@ -57,3 +57,19 @@ hr_consultation:
     - hiring agent
 org_tool_policy_notes: Security foundation profiles (ag-sec-*) use toolsets from scripts/org_agent_profiles_manifest.yaml after bootstrap; not duplicated in core.
 skip_context_files: false
+
+# Subprocess / background task governance (enforced by agent/subprocess_governance.py)
+subprocess_governance:
+  enabled: true
+  max_duration_seconds: 300         # 5 minute hard limit; subprocess is flagged timed_out after this
+  free_models_only: true            # background tasks must use only local/free models (gemma-4, qwen)
+  paid_model_requires_approval: true  # any paid API model needs real-time operator approval
+  # Truly free models for subprocess use (zero API cost — local inference):
+  free_model_substrings:
+    - gemma-4
+    - gemma4
+    - qwen
+  # NOTE: Gemini API models (gemini-2.5-flash etc.) are NOT free — they have API costs.
+  # They are tier A/B/C for interactive use only. Use free_model_substrings above for background tasks.
+  chief_consultation_required: true  # routing engine must flag background tasks; chief approves
+  max_iterations_for_subprocess: 15  # subprocesses must complete in ≤15 LLM calls

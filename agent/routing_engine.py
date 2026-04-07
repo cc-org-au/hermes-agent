@@ -40,18 +40,24 @@ class UnifiedRouteDecision:
     """Routing decision returned by ``route_prompt``."""
 
     tier: str = "D"
-    """Recommended tier letter (A–F)."""
+    """Recommended tier letter (A–F). All tiers involve API costs."""
 
     profile: Optional[str] = None
     """Named profile to delegate to, or None for chief-orchestrator/default."""
 
     free_model_brief: Optional[str] = None
-    """Concise machine-readable brief for free-tier (A/B/C) models.
-    None when tier D/E/F (full-capability models need no brief)."""
+    """Concise machine-readable brief for low-cost-tier (A/B/C) models.
+    None when tier D/E/F (full-capability models need no brief).
+    Field kept as free_model_brief for backwards compatibility."""
 
     coding_task: bool = False
     """True when the request is primarily software/engineering work.
     Used to prefer tier F (gpt-5.3-codex) on consultant escalation."""
+
+    background_task: bool = False
+    """True when the request explicitly involves a background/subprocess task.
+    Background tasks must use only free local models (gemma-4, qwen).
+    Chief orchestrator must be consulted before any paid background task launches."""
 
     audit: Dict[str, Any] = field(default_factory=dict)
 
@@ -63,28 +69,34 @@ class UnifiedRouteDecision:
 _ROUTING_SYSTEM_PROMPT = """\
 You are the Hermes routing advisor. For every user request you make ONE authoritative \
 JSON routing decision that covers model tier selection, profile delegation, and (for \
-free models) a condensed task brief.
+low-cost tiers) a condensed task brief.
 
-TIER TABLE (ascending capability/cost):
-  A = Gemini Flash      — one-liners, trivial ack/lookup, pure formatting
-  B = Gemini Flash-Lite — short/simple tasks, renames, single-file edits
-  C = Gemini Pro        — multi-step reasoning, moderate complexity, analysis
-  D = claude-sonnet-4.6 — complex tasks, most consultations, writing, planning, debugging
-  E = gpt-5.4           — hardest non-coding reasoning, ambiguous multi-domain problems
-  F = gpt-5.3-codex     — deep engineering, architecture, refactors, complex codegen
+TIER TABLE (ascending capability/cost — ALL tiers cost money via API):
+  A = Gemini Flash       — one-liners, trivial ack/lookup, pure formatting (low-cost)
+  B = Gemini Flash-Lite  — short/simple tasks, renames, single-file edits (low-cost)
+  C = Gemini Pro         — multi-step reasoning, moderate complexity, analysis (low-cost)
+  D = claude-sonnet-4.6  — complex tasks, most consultations, writing, planning, debugging
+  E = gpt-5.4            — hardest non-coding reasoning, ambiguous multi-domain problems
+  F = gpt-5.3-codex      — deep engineering, architecture, refactors, complex codegen
+
+NOTE: The only genuinely free (zero API cost) models are: gemma-4 (local) and qwen (local).
+These are available for subprocess/background tasks but NOT listed above as interactive tiers.
 
 ROUTING RULES:
-1. Match tier strictly to genuine complexity. NEVER default to D unless the task is
-   complex. Use A/B/C for the bulk of routine/menial work — they are free.
-2. Escalate to D only when depth/quality genuinely warrants it.
+1. Match tier strictly to genuine complexity. NEVER default to D unless the task is complex.
+   Use A/B/C for the bulk of routine/menial work — they have the lowest API cost.
+2. Escalate to D only when depth/quality genuinely warrants it (most complex tasks).
 3. Escalate to E/F only for the hardest tasks or after repeated failures.
-4. coding_task=true when the primary work is software engineering (prefers F for
-   consultant escalation over E).
-5. free_model_brief: REQUIRED when tier is A, B, or C. Write a direct, concise,
+4. coding_task=true when the primary work is software engineering (prefers F for consultant
+   escalation over E). This also hints to use gpt-5.3-codex for any code-heavy background work.
+5. low_cost_brief: REQUIRED when tier is A, B, or C. Write a direct, concise,
    machine-readable restatement of the task optimised for a capable-but-limited model.
    Use imperative sentences. Max 3 sentences. Omit pleasantries.
-6. free_model_brief must be null when tier is D, E, or F.
+6. low_cost_brief must be null when tier is D, E, or F.
 7. profile: suggest the most suitable profile by EXACT name, or null for default.
+8. background_task: true if the request explicitly asks to run something in the background,
+   spawn a subprocess, or run a parallel process. Background tasks MUST use only local/free
+   models (gemma-4, qwen) — any paid model requires operator approval.
 
 PROFILES:
 {profiles_desc}
@@ -94,7 +106,8 @@ Return ONLY valid JSON — no markdown fences, no prose:
   "tier": "A" | "B" | "C" | "D" | "E" | "F",
   "profile": "<exact_profile_name>" | null,
   "coding_task": true | false,
-  "free_model_brief": "<concise instruction for free model>" | null
+  "background_task": true | false,
+  "low_cost_brief": "<concise instruction for low-cost model>" | null
 }}
 """
 
@@ -164,19 +177,18 @@ def _parse_routing_response(raw: str) -> Optional[dict]:
     profile = obj.get("profile") or None
     if isinstance(profile, str):
         profile = profile.strip() or None
-    brief = obj.get("free_model_brief") or None
+    # Accept both new "low_cost_brief" key and legacy "free_model_brief"
+    brief = obj.get("low_cost_brief") or obj.get("free_model_brief") or None
     if isinstance(brief, str):
         brief = brief.strip() or None
-    # Enforce brief only for free tiers
+    # Brief only applies to low-cost tiers A/B/C
     if tier not in ("A", "B", "C"):
         brief = None
-    elif not brief:
-        # Generate a minimal brief from the truncated user message if LLM forgot
-        brief = None  # will be filled by caller if needed
     return {
         "tier": tier,
         "profile": profile,
         "coding_task": bool(obj.get("coding_task", False)),
+        "background_task": bool(obj.get("background_task", False)),
         "free_model_brief": brief,
     }
 
@@ -280,7 +292,7 @@ def route_prompt(
     parsed = _parse_routing_response(raw) if raw else None
     if parsed:
         brief = parsed.get("free_model_brief")
-        # If brief is missing for a free tier, synthesise a minimal one
+        # If brief is missing for a low-cost tier, synthesise a minimal one
         if parsed["tier"] in ("A", "B", "C") and not brief:
             brief = (user_message or "").strip()[:400] or None
         return UnifiedRouteDecision(
@@ -288,6 +300,7 @@ def route_prompt(
             profile=parsed.get("profile"),
             free_model_brief=brief,
             coding_task=parsed.get("coding_task", False),
+            background_task=parsed.get("background_task", False),
             audit={"raw_excerpt": raw[:300], "parsed": True},
         )
 

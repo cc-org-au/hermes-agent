@@ -363,16 +363,19 @@ def resolve_consultant_tier(
             )
         sys_router = (
             "You are an intelligent routing advisor for a multi-tier AI organization. "
-            "Tiers A–F increase in capability and cost. Match tier strictly to genuine task complexity.\n"
-            "- Tier A: one-liners, trivial ack/lookup, pure formatting\n"
-            "- Tier B: short/simple tasks, renames, single-file edits (FREE)\n"
-            "- Tier C: multi-step reasoning, moderate analysis, batch ops (FREE)\n"
+            "Tiers A–F all have API costs — NONE are free. Match tier strictly to genuine task complexity.\n"
+            "- Tier A: one-liners, trivial ack/lookup, pure formatting (low-cost Gemini)\n"
+            "- Tier B: short/simple tasks, renames, single-file edits (low-cost Gemini)\n"
+            "- Tier C: multi-step reasoning, moderate analysis, batch ops (low-cost Gemini Pro)\n"
             "- Tier D: complex tasks, most consultations, writing, planning, debugging (claude-sonnet-4.6)\n"
             "- Tier E: hardest non-coding reasoning, ambiguous multi-domain problems (gpt-5.4)\n"
             "- Tier F: deep engineering, architecture, refactors, complex code generation (gpt-5.3-codex)\n\n"
-            "ROUTING BIAS: Use A/B/C for the bulk of routine/menial work — they are free. "
+            "ROUTING BIAS: Use A/B/C for the bulk of routine/menial work (lowest API cost). "
             "Only escalate to D for genuinely complex tasks. Only escalate to E/F for the hardest tasks "
-            "or after repeated failures. Under-routing is better than over-routing unless quality matters.\n"
+            "or after repeated failures. Under-routing cost is lower than over-routing.\n"
+            "CONSULTANT ESCALATION: When the task genuinely warrants D/E/F, set request_consultant_escalation=true "
+            "and the deliberation system (challenger + chief review) will run an agentic discussion before approving. "
+            "Do NOT suppress escalation — the deliberation system is the gatekeeping mechanism.\n"
             "IMPORTANT: Set request_consultant_escalation=true whenever you recommend E or F. "
             "For coding/engineering tasks that warrant consultant escalation, prefer F over E."
         )
@@ -427,6 +430,7 @@ def resolve_consultant_tier(
                     "rationale": "routing_engine unified decision",
                     "free_model_brief": free_model_brief,
                     "coding_task": coding_task_hint,
+                    "background_task": _route.background_task,
                     "profile_suggestion": _route.profile,
                 }
                 _used_routing_engine = True

@@ -313,13 +313,34 @@ def apply_per_turn_tier_model(agent: Any, user_message: str) -> None:
             tier = deterministic_tier
             audit = {}
 
-    # Store free_model_brief for injection into user message (free tiers A/B/C only).
+    # Store free_model_brief for injection into user message (low-cost tiers A/B/C only).
     _router_rec = audit.get("router") or {}
     _free_brief = _router_rec.get("free_model_brief") if isinstance(_router_rec, dict) else None
     if _free_brief and tier in ("A", "B", "C"):
         setattr(agent, "_free_model_brief_for_turn", str(_free_brief).strip())
     else:
         setattr(agent, "_free_model_brief_for_turn", None)
+
+    # Flag background task detection: signal chief should be consulted before launching.
+    _is_bg_task = (
+        _router_rec.get("background_task", False) if isinstance(_router_rec, dict) else False
+    )
+    if _is_bg_task:
+        setattr(agent, "_routing_detected_background_task", True)
+        logger.info(
+            "routing_engine: background task detected — chief orchestrator should be consulted "
+            "before launching subprocess; only free local models (gemma-4, qwen) permitted "
+            "without explicit operator approval"
+        )
+        emit = getattr(agent, "_emit_status", None)
+        if callable(emit):
+            emit(
+                "⚡ Background task detected — subprocess policy: free models only; "
+                "paid models require operator approval",
+                "subprocess_governance",
+            )
+    else:
+        setattr(agent, "_routing_detected_background_task", False)
 
     # Log profile suggestion if routing engine provided one.
     _profile_sug = _router_rec.get("profile_suggestion") if isinstance(_router_rec, dict) else None

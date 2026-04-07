@@ -35,10 +35,11 @@ enabled: true
 # you explicitly use OpenRouter for the main session and pick OR models in /models.
 # Consultant tiers E/F run only when consultant_routing approves (policy § Consultant model).
 tier_models:
-  # A–C: free Gemini tiers (direct Gemini API or OpenRouter).
-  A: "google/gemini-2.5-flash"        # ultra-fast, free daily cap
-  B: "google/gemini-2.5-flash-lite"   # lightest, routine tasks
-  C: "google/gemini-2.5-pro"          # stronger reasoning, medium tasks
+  # A–C: low-cost Gemini tiers (paid Gemini API — NOT free; Gemma-4/Qwen are the only truly free options).
+  # For subprocess/background tasks, prefer free local models (gemma-4, qwen) — see subprocess_governance.
+  A: "google/gemini-2.5-flash"        # fast, low-cost
+  B: "google/gemini-2.5-flash-lite"   # lightest, lowest cost per call
+  C: "google/gemini-2.5-pro"          # stronger reasoning, medium complexity
   # D: dominant consultant for most complex tasks — claude-sonnet-4.6 via OpenRouter.
   D: "anthropic/claude-sonnet-4-6"
   # E/F: native api.openai.com consultants (OPENAI_API_KEY_DROPLET or OPENAI_API_KEY).
@@ -135,3 +136,21 @@ hr_consultation:
   # goal: optional override string for delegate_task(goal=...)
 
 skip_context_files: false
+
+# ── Subprocess / background task governance ──────────────────────────────────────
+# Enforced by agent/subprocess_governance.py + delegate_tool.py.
+# Background tasks and delegated subagents must use only zero-cost local models.
+# Any paid API model requires real-time operator approval before the task runs.
+subprocess_governance:
+  enabled: true
+  max_duration_seconds: 300         # 5-minute hard limit; exceeding flags as timed_out
+  free_models_only: true            # enforce free-local-models-only for background tasks
+  paid_model_requires_approval: true  # any paid model needs explicit operator approval
+  free_model_substrings:            # models considered zero-cost (local inference)
+    - gemma-4
+    - gemma4
+    - qwen
+  # NOTE: google/gemini-2.5-flash and other Gemini API models are NOT free — they
+  # have per-call API costs. They are only valid for interactive tier A/B/C use.
+  chief_consultation_required: true   # chief orchestrator must approve background task model choice
+  max_iterations_for_subprocess: 15   # subprocesses must finish in ≤15 LLM calls

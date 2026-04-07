@@ -288,20 +288,68 @@ def _run_single_child(
     goal: str,
     child=None,
     parent_agent=None,
+    *,
+    _subprocess_task_id: Optional[str] = None,
     **_kwargs,
 ) -> Dict[str, Any]:
     """
     Run a pre-built child agent. Called from within a thread.
     Returns a structured result dict.
+
+    Subprocess governance is applied here:
+    - Checks model cost class before running.
+    - Requires operator approval for any non-free (paid) model.
+    - Enforces max duration (SUBPROCESS_MAX_SECONDS = 5 min).
+    - Notifies parent agent on completion.
     """
     child_start = time.monotonic()
+    child_model = getattr(child, "model", None) or ""
+    task_id = _subprocess_task_id or f"delegate-{task_index}-{int(child_start)}"
+
+    # ── Subprocess governance: enforce free-model-only policy ──────────────
+    try:
+        from agent.subprocess_governance import (
+            enforce_subprocess_model_policy,
+            notify_completion,
+            SUBPROCESS_MAX_SECONDS,
+        )
+        _gov_approved, _gov_reason = enforce_subprocess_model_policy(
+            child_model,
+            goal,
+            task_id,
+            parent_agent=parent_agent,
+        )
+        if not _gov_approved:
+            blocked_msg = (
+                f"Subprocess blocked by governance policy: model {child_model!r} "
+                f"requires operator approval for background/subprocess use. "
+                f"Only free local models (gemma-4, qwen) are permitted without approval. "
+                f"Reason: {_gov_reason}"
+            )
+            logger.warning("delegate_tool: %s", blocked_msg)
+            _emit = getattr(parent_agent, "_emit_status", None) if parent_agent else None
+            if callable(_emit):
+                _emit(f"⛔ {blocked_msg}", "subprocess_governance")
+            return {
+                "task_index": task_index,
+                "goal": goal[:80],
+                "status": "blocked",
+                "summary": blocked_msg,
+                "duration": 0,
+                "api_calls": 0,
+                "exit_reason": "subprocess_governance_blocked",
+            }
+        _gov_max_s = SUBPROCESS_MAX_SECONDS
+    except Exception as _gov_err:
+        logger.debug("subprocess_governance import/check failed: %s", _gov_err)
+        _gov_approved = True  # fail-open if governance module is unavailable
+        _gov_max_s = 300
 
     if parent_agent is not None and child is not None:
         _dcb = getattr(parent_agent, "on_delegate_child_model", None)
         if callable(_dcb):
             try:
-                _m = getattr(child, "model", None)
-                _dcb(_m if isinstance(_m, str) else str(_m or ""))
+                _dcb(child_model if isinstance(child_model, str) else str(child_model or ""))
             except Exception:
                 logger.debug("on_delegate_child_model callback failed", exc_info=True)
 
@@ -325,6 +373,25 @@ def _run_single_child(
                 logger.debug("Progress callback flush failed: %s", e)
 
         duration = round(time.monotonic() - child_start, 2)
+
+        # ── Subprocess timeout check ────────────────────────────────────────
+        if _gov_approved and duration > _gov_max_s:
+            logger.warning(
+                "delegate_tool: subprocess task_id=%s exceeded %ds limit (took %.1fs) — "
+                "flagging as timed_out",
+                task_id, _gov_max_s, duration,
+            )
+            _emit = getattr(parent_agent, "_emit_status", None) if parent_agent else None
+            if callable(_emit):
+                _emit(
+                    f"⏱️ Subprocess {task_id} exceeded {_gov_max_s}s time limit (took {duration:.1f}s)",
+                    "subprocess_governance",
+                )
+            try:
+                from agent.subprocess_governance import update_subprocess
+                update_subprocess(task_id, "timed_out")
+            except Exception:
+                pass
 
         summary = result.get("final_response") or ""
         completed = result.get("completed", False)
@@ -409,11 +476,31 @@ def _run_single_child(
         if status == "failed":
             entry["error"] = result.get("error", "Subagent did not produce a response.")
 
+        # ── Subprocess completion notification ─────────────────────────────
+        if _gov_approved:
+            try:
+                from agent.subprocess_governance import notify_completion
+                _notif_summary = (
+                    f"Subprocess {task_id}: {status} in {duration:.1f}s "
+                    f"({api_calls} API calls). "
+                    + (summary[:200] if summary else "No output.")
+                )
+                notify_completion(task_id, _notif_summary, parent_agent=parent_agent)
+            except Exception:
+                logger.debug("subprocess completion notify failed", exc_info=True)
+
         return entry
 
     except Exception as exc:
         duration = round(time.monotonic() - child_start, 2)
         logging.exception(f"[subagent-{task_index}] failed")
+        # Notify governance of error
+        if _gov_approved:
+            try:
+                from agent.subprocess_governance import update_subprocess
+                update_subprocess(task_id, "completed", result_summary=f"error: {exc}")
+            except Exception:
+                pass
         return {
             "task_index": task_index,
             "status": "error",
@@ -487,6 +574,23 @@ def delegate_task(
                 effective_max_iter = min(effective_max_iter, tg_i)
         except (TypeError, ValueError):
             pass
+
+    # Subprocess governance: cap iterations for subprocesses to max_iterations_for_subprocess.
+    # This prevents runaway subagents from making excessive API calls.
+    # The cap is loaded from the token governance YAML; fallback is 15.
+    try:
+        from agent.token_governance_runtime import load_runtime_config as _load_tg
+        _tg = _load_tg()
+        _subproc_cap = None
+        if _tg:
+            _sg = _tg.get("subprocess_governance") or {}
+            _subproc_cap = _sg.get("max_iterations_for_subprocess")
+        if _subproc_cap is not None:
+            _sp_cap_i = int(_subproc_cap)
+            if _sp_cap_i > 0:
+                effective_max_iter = min(effective_max_iter, _sp_cap_i)
+    except Exception:
+        pass
 
     from agent.tier_model_routing import is_tier_dynamic
 
