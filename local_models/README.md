@@ -24,7 +24,7 @@ Logs: `logs/download.log`, `logs/failures.jsonl`, `hub/state.json`.
 
 Multi‑100 GiB weights are **too large** for Hugging Face’s free serverless GPU slots and for most “free API” tiers. Practical options:
 
-1. **Google AI (Gemma-4 router)** — Hermes defaults to **`router_provider: gemini`** + **`gemma-4-31b-it`** in `free_model_routing.kimi_router` with **`GEMINI_API_KEY`** / **`GOOGLE_API_KEY`** to pick among tier targets (default: **`gemma-4-31b-it`** on Gemini API and **`Qwen/QwQ-32B`** when that hub id is downloaded and **`HERMES_LOCAL_INFERENCE_BASE_URL`** is set). **`gemini_native_tier_models`** marks API ids that are not HF hub repos.
+1. **Google AI (Gemma-4 router)** — Hermes defaults to **`router_provider: gemini`** + **`gemma-4-31b-it`** under **`free_model_routing.kimi_router`**, with tier targets in **`free_model_routing.tiers`**, using **`GEMINI_API_KEY`** / **`GOOGLE_API_KEY`** (default: **`gemma-4-31b-it`** on Gemini API and **`Qwen/QwQ-32B`** when that hub id is downloaded and **`HERMES_LOCAL_INFERENCE_BASE_URL`** is set). Top-level **`gemini_native_tier_models`** marks API ids that are not HF hub repos.
 2. **Legacy HF router API** — set **`router_provider: huggingface`** and a **`router_model`** served at `router.huggingface.co` if you still use that path; **`HF_TOKEN`** is required for that hop.
 3. **Hugging Face Inference Providers** — optional paid/credit hosted models (see [Inference Providers pricing](https://huggingface.co/docs/inference-providers/pricing)); not part of Hermes default `free_model_routing` anymore.
 

@@ -5,43 +5,55 @@ tier_models:
   B: google/gemini-2.5-flash-lite
   C: deepseek/deepseek-r1
   D: google/gemini-2.5-flash
-  # OpenAI consultants (direct API; OPENAI_API_KEY or OPENAI_API_KEY_DROPLET). E/F only via
-  # consultant_routing + chief deliberation per token-model-tool-and-channel-governance-policy.md.
+  # E/F: OpenAI GPT-5 consultants (api.openai.com). Tier F = coding consultant.
   E: gpt-5.4
-  F: gpt-5-codex
+  F: gpt-5.3-codex
 chief_default_tier: D
 blocked_fallback_tier: B
 blocked_model_substrings:
-- claude-opus
-- claude-sonnet-4
-- claude-3.5-sonnet
-- gpt-4
-- openai/o1
-- openai/o3
-- claude-sonnet-4.5
-- anthropic/claude
+  - claude-opus
+  - claude-sonnet-4
+  - claude-sonnet-4.5
+  - anthropic/claude
+  - claude-3.5-sonnet
+  - gpt-4
+  - openai/o1
+  - openai/o3
 max_agent_turns: 50
 delegation_max_iterations: 30
 dynamic_tier_routing: true
-default_routing_tier: D
-skip_context_files: false
+default_routing_tier: dynamic
+dynamic_fallback_medium_chars: 800
+dynamic_fallback_long_chars: 2800
+dynamic_fallback_medium_tier: C
+dynamic_fallback_long_tier: D
+consultant_routing:
+  enabled: true
+  mode: hybrid
+  skip_router_when_tier_in:
+    - B
+  router_task: consultant_router
+  challenger_task: consultant_challenger
+  chief_task: consultant_chief
+  tiers_requiring_deliberation:
+    - E
+    - F
 hr_consultation:
   enabled: true
   hermes_profile: ag-org-hr
   max_iterations: 28
   min_message_chars: 12
   trigger_keywords:
-  - new agent
-  - redundant agent
-  - headcount
-  - org chart
-  - RACI
-  - HR approval
-  - escalate to chief
-  - org registry
-  - proposal for role
-  - retire agent
-  - hiring agent
-org_tool_policy_notes: Security foundation profiles (ag-sec-*) use toolsets from scripts/org_agent_profiles_manifest.yaml
-  after bootstrap; not duplicated in core. Default delegation uses chief tier_models;
-  use consultant routing / tier E–F for incident or board-class work per MODEL_ROUTING_REGISTRY.md.
+    - new agent
+    - redundant agent
+    - headcount
+    - org chart
+    - RACI
+    - HR approval
+    - escalate to chief
+    - org registry
+    - proposal for role
+    - retire agent
+    - hiring agent
+org_tool_policy_notes: Security foundation profiles (ag-sec-*) use toolsets from scripts/org_agent_profiles_manifest.yaml after bootstrap; not duplicated in core.
+skip_context_files: false

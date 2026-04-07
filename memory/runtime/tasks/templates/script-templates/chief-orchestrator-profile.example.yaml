@@ -101,7 +101,7 @@ auxiliary:
     provider: openrouter
     model: tier:D
   # CLI profile routing does not use auxiliary.profile_router — it uses agent.profile_router
-  # + free_model_routing.kimi_router (tier pick).
+  # + free_model_routing (tier pick).
 
 delegation:
   provider: openrouter
@@ -112,18 +112,18 @@ delegation:
 # Gemma on Gemini API: https://ai.google.dev/gemma/docs/core/gemma_on_gemini_api
 free_model_routing:
   enabled: true
-  # Tier router: gemma-4-31b-it on Google AI picks Gemma-4 (same API id) or Qwen when downloaded locally.
+  fallback_free_routed_model: gemma-4-31b-it
+  gemini_native_tier_models:
+    - gemma-4-31b-it
+  tiers:
+    - id: local
+      description: "Gemma-4 (Gemini API) or Qwen (local hub + HERMES_LOCAL_INFERENCE_BASE_URL)"
+      models:
+        - gemma-4-31b-it
+        - Qwen/QwQ-32B
   kimi_router:
     router_provider: gemini
     router_model: gemma-4-31b-it
-    gemini_native_tier_models:
-      - gemma-4-31b-it
-    tiers:
-      - id: local
-        description: "Gemma-4 (Gemini API) or Qwen (local hub + HERMES_LOCAL_INFERENCE_BASE_URL)"
-        models:
-          - gemma-4-31b-it
-          - Qwen/QwQ-32B
   optional_gemini:
     enabled: true
     model: gemma-4-31b-it

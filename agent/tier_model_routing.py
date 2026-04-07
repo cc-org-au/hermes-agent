@@ -17,7 +17,7 @@ TIER_DYNAMIC_SENTINEL = "tier:dynamic"
 # When ``workspace/operations/hermes_token_governance.runtime.yaml`` is missing or
 # ``tier_models`` omits a letter, OpenRouter must never receive a literal ``tier:X``.
 # User YAML overrides these defaults per key; align with
-# ``scripts/templates/hermes_token_governance.runtime.example.yaml``.
+# ``memory/runtime/tasks/templates/script-templates/hermes_token_governance.runtime.example.yaml``.
 BUILTIN_TIER_MODELS: Dict[str, str] = {
     "A": "google/gemini-2.5-flash",
     "B": "google/gemini-2.5-flash-lite",
@@ -25,7 +25,7 @@ BUILTIN_TIER_MODELS: Dict[str, str] = {
     "D": "google/gemini-2.5-flash",
     # E/F: OpenAI GPT-5 consultants — use only via consultant_routing deliberation (governance YAML).
     "E": "gpt-5.4",
-    "F": "gpt-5-codex",
+    "F": "gpt-5.3-codex",
 }
 
 

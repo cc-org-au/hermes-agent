@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from agent.free_model_routing import gemini_native_tier_model_set, normalize_kimi_tiers
+from agent.free_model_routing import (
+    gemini_native_tier_model_set,
+    normalize_kimi_tiers,
+    raw_free_model_routing_tiers,
+)
 from agent.local_inference import filter_hub_model_ids_by_local_state
 
 
@@ -67,7 +71,7 @@ def collect_pipeline_models(config: Optional[Dict[str, Any]]) -> List[Dict[str, 
             else:
                 _add_hf(rm, "free_model_routing.kimi_router (router)")
 
-        tiers = normalize_kimi_tiers(kr.get("tiers"))
+        tiers = normalize_kimi_tiers(raw_free_model_routing_tiers(fmr))
         hub_filter = bool(fmr.get("filter_free_tier_models_by_local_hub", True))
         for tier in tiers:
             tid = _strip(tier.get("id")) or "tier"

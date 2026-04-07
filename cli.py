@@ -243,7 +243,8 @@ def load_cli_config() -> Dict[str, Any]:
         "fallback_providers": None,
         "free_model_routing": {
             "enabled": True,
-            "kimi_router": {"router_model": "", "tiers": []},
+            "tiers": [],
+            "kimi_router": {"router_model": ""},
             "optional_gemini": {
                 "enabled": False,
                 "model": "",

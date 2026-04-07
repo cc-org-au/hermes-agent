@@ -342,7 +342,7 @@ def _call_profile_router_llm(
 
     1. Optional pinned ``router_provider``/``router_model`` if both are set to
        ``huggingface`` + a hub id (tried first; on failure, continue).
-    2. ``free_model_routing.kimi_router`` — router picks one hub id from *tiers*
+    2. ``free_model_routing`` — router picks one hub id from *tiers* (top-level or legacy ``kimi_router.tiers``)
        (``router_provider: gemini`` + ``gemma-4-31b-it``, or legacy HF router API), then that
        hub model runs the JSON classification (local OpenAI base if configured).
 
@@ -379,7 +379,12 @@ def _call_profile_router_llm(
 
     from hermes_cli.config import load_config
 
-    from agent.free_model_routing import gemini_native_tier_model_set, normalize_kimi_tiers
+    from agent.free_model_routing import (
+        fallback_free_routed_model_id,
+        gemini_native_tier_model_set,
+        normalize_kimi_tiers,
+        raw_free_model_routing_tiers,
+    )
     from agent.hf_fallback_router import resolve_gemini_routed_model, resolve_hf_routed_model
 
     cfg = load_config()
@@ -407,7 +412,12 @@ def _call_profile_router_llm(
 
     kr = fmr.get("kimi_router") if isinstance(fmr.get("kimi_router"), dict) else {}
     router_model = str(kr.get("router_model") or "").strip()
-    tiers = normalize_kimi_tiers(kr.get("tiers"))
+    tiers = normalize_kimi_tiers(raw_free_model_routing_tiers(fmr if isinstance(fmr, dict) else {}))
+    if router_model and not tiers:
+        fb = fallback_free_routed_model_id(fmr if isinstance(fmr, dict) else {})
+        tiers = normalize_kimi_tiers(
+            [{"id": "fallback-free-routed", "description": "", "models": [fb]}]
+        )
     router_prov = str(kr.get("router_provider") or "gemini").strip().lower()
     if router_model and tiers:
         if router_prov == "gemini":
@@ -465,7 +475,7 @@ def _call_profile_router_llm(
                 logger.warning("profile_router: HF tier router pick failed: %s", exc)
 
     raise RuntimeError(
-        "profile_router: set free_model_routing.kimi_router (router_model + tiers), "
+        "profile_router: set free_model_routing (kimi_router.router_model + tiers), "
         "or agent.profile_router with router_provider=huggingface and router_model=<hub id>.",
     )
 

@@ -232,29 +232,30 @@ DEFAULT_CONFIG = {
         # When local_models/hub/state.json lists downloads, tier hub ids not marked
         # downloaded are hidden from /models and omitted from the synthesized fallback chain.
         "filter_free_tier_models_by_local_hub": True,
+        # When router_model is set but all tier targets are filtered out, use this id alone (Gemma-4 on Gemini API).
+        "fallback_free_routed_model": "gemma-4-31b-it",
+        # Tier ids that are Gemini API model names (not HF hub repos) — never filtered by local_models/hub.
+        "gemini_native_tier_models": [
+            "gemma-4-31b-it",
+        ],
+        "tiers": [
+            {
+                "id": "local",
+                "description": (
+                    "Gemma-4 on Gemini API (gemma-4-31b-it) or Qwen served locally "
+                    "(HERMES_LOCAL_INFERENCE_BASE_URL + local_models/hub/state.json)"
+                ),
+                "models": [
+                    "gemma-4-31b-it",
+                    "Qwen/QwQ-32B",
+                ],
+            },
+        ],
         # Tier router (Gemini API Gemma-4 picks a hub id) → optional Gemini. No HF Inference Providers hop.
         "kimi_router": {
             # "huggingface" = legacy HF router.huggingface.co API; "gemini" = Google AI (gemma-4-31b-it) picks among tiers.
             "router_provider": "gemini",
             "router_model": "gemma-4-31b-it",
-            # Tier ids that are Gemini API model names (not HF hub repos) — never filtered by local_models/hub.
-            "gemini_native_tier_models":
-                [
-                    "gemma-4-31b-it",
-                ],
-            "tiers": [
-                {
-                    "id": "local",
-                    "description": (
-                        "Gemma-4 on Gemini API (gemma-4-31b-it) or Qwen served locally "
-                        "(HERMES_LOCAL_INFERENCE_BASE_URL + local_models/hub/state.json)"
-                    ),
-                    "models": [
-                        "gemma-4-31b-it",
-                        "Qwen/QwQ-32B",
-                    ],
-                },
-            ],
         },
         "optional_gemini": {
             "enabled": True,
@@ -295,7 +296,7 @@ DEFAULT_CONFIG = {
             "exclude_profiles": [],
             "router_model": "",
             "router_provider": "",
-            # When true (default), profile routing uses ``free_model_routing.kimi_router`` (Gemini tier pick).
+            # When true (default), profile routing uses ``free_model_routing`` (Gemini tier pick).
             "use_free_model_routing": True,
         },
         # When enabled, the ``sync_org_automation`` tool may run manifest bootstrap +
@@ -654,7 +655,7 @@ DEFAULT_CONFIG = {
     },
 
     # Config schema version - bump this when adding new required fields
-    "_config_version": 22,
+    "_config_version": 23,
 }
 
 # =============================================================================
@@ -1615,11 +1616,16 @@ def migrate_config(interactive: bool = True, quiet: bool = False) -> Dict[str, A
             kr = fmr.get("kimi_router")
             if not isinstance(kr, dict):
                 kr = {}
+            d_kr = dflt.get("kimi_router") or {}
+            seed_tiers = copy.deepcopy(dflt.get("tiers") or [])
             if not str(kr.get("router_model") or "").strip():
-                kr["router_model"] = dflt["kimi_router"]["router_model"]
+                kr["router_model"] = d_kr.get("router_model")
                 changed = True
-            if not kr.get("tiers"):
-                kr["tiers"] = copy.deepcopy(dflt["kimi_router"]["tiers"])
+            if not fmr.get("tiers") and seed_tiers:
+                fmr["tiers"] = copy.deepcopy(seed_tiers)
+                changed = True
+            if not kr.get("tiers") and seed_tiers:
+                kr["tiers"] = copy.deepcopy(seed_tiers)
                 changed = True
             fmr["kimi_router"] = kr
 
@@ -1738,13 +1744,16 @@ def migrate_config(interactive: bool = True, quiet: bool = False) -> Dict[str, A
             if not isinstance(kr, dict):
                 kr = {}
             kr = dict(kr)
-            dflt_kr = copy.deepcopy(DEFAULT_CONFIG["free_model_routing"]["kimi_router"])
+            dflt_fmr = copy.deepcopy(DEFAULT_CONFIG["free_model_routing"])
+            dflt_kr = copy.deepcopy(dflt_fmr.get("kimi_router") or {})
             changed = False
 
             OLD_TIER_MODELS = frozenset({"MiniMaxAI/MiniMax-M2.5", "openai/gpt-oss-120b"})
-            tiers = kr.get("tiers")
+            tiers = fmr.get("tiers")
+            if not isinstance(tiers, list) or not tiers:
+                tiers = kr.get("tiers")
             if isinstance(tiers, list):
-                new_tier0 = (dflt_kr.get("tiers") or [{}])[0]
+                new_tier0 = (dflt_fmr.get("tiers") or [{}])[0]
                 for t in tiers:
                     if not isinstance(t, dict):
                         continue
@@ -1814,29 +1823,40 @@ def migrate_config(interactive: bool = True, quiet: bool = False) -> Dict[str, A
                 )
                 changed = True
 
+            d_tier0 = dflt_fmr.get("tiers") or []
+            d_models: list = []
+            d_desc = ""
+            if d_tier0 and isinstance(d_tier0[0], dict):
+                d_models = list(d_tier0[0].get("models") or [])
+                d_desc = str(d_tier0[0].get("description") or "")
+
+            def _v21_strip_gemma3(tiers: Any) -> bool:
+                local = False
+                if not isinstance(tiers, list) or not d_models:
+                    return False
+                for t in tiers:
+                    if not isinstance(t, dict):
+                        continue
+                    mids = t.get("models")
+                    if not isinstance(mids, list):
+                        continue
+                    if "google/gemma-3-27b-it" in {str(x).strip() for x in mids}:
+                        new_m = [str(x).strip() for x in mids if str(x).strip() != "google/gemma-3-27b-it"]
+                        if not new_m:
+                            new_m = copy.deepcopy(d_models)
+                        t["models"] = new_m
+                        if d_desc:
+                            t["description"] = d_desc
+                        local = True
+                return local
+
+            if _v21_strip_gemma3(fmr.get("tiers")):
+                changed = True
             kr = fmr.get("kimi_router")
             if isinstance(kr, dict):
                 kr = dict(kr)
-                tiers = kr.get("tiers")
-                d_tier0 = (dflt_fmr.get("kimi_router") or {}).get("tiers") or []
-                d_models = []
-                if d_tier0 and isinstance(d_tier0[0], dict):
-                    d_models = list(d_tier0[0].get("models") or [])
-                if isinstance(tiers, list) and d_models:
-                    for t in tiers:
-                        if not isinstance(t, dict):
-                            continue
-                        mids = t.get("models")
-                        if not isinstance(mids, list):
-                            continue
-                        if "google/gemma-3-27b-it" in {str(x).strip() for x in mids}:
-                            new_m = [str(x).strip() for x in mids if str(x).strip() != "google/gemma-3-27b-it"]
-                            if not new_m:
-                                new_m = copy.deepcopy(d_models)
-                            t["models"] = new_m
-                            if d_tier0 and isinstance(d_tier0[0], dict) and d_tier0[0].get("description"):
-                                t["description"] = d_tier0[0]["description"]
-                            changed = True
+                if _v21_strip_gemma3(kr.get("tiers")):
+                    changed = True
                 fmr["kimi_router"] = kr
 
             if changed:
@@ -1872,7 +1892,6 @@ def migrate_config(interactive: bool = True, quiet: bool = False) -> Dict[str, A
                 fmr = {}
             fmr = dict(fmr)
             dflt_fmr = copy.deepcopy(DEFAULT_CONFIG["free_model_routing"])
-            dflt_kr = copy.deepcopy((dflt_fmr.get("kimi_router") or {}))
             changed = False
 
             kr = fmr.get("kimi_router")
@@ -1880,15 +1899,20 @@ def migrate_config(interactive: bool = True, quiet: bool = False) -> Dict[str, A
                 kr = {}
             kr = dict(kr)
 
-            if "gemini_native_tier_models" not in kr:
-                kr["gemini_native_tier_models"] = copy.deepcopy(
-                    dflt_kr.get("gemini_native_tier_models") or ["gemma-4-31b-it"]
-                )
+            d_native = dflt_fmr.get("gemini_native_tier_models") or ["gemma-4-31b-it"]
+            if not fmr.get("gemini_native_tier_models"):
+                if isinstance(kr.get("gemini_native_tier_models"), list) and kr.get("gemini_native_tier_models"):
+                    fmr["gemini_native_tier_models"] = copy.deepcopy(kr["gemini_native_tier_models"])
+                else:
+                    fmr["gemini_native_tier_models"] = copy.deepcopy(d_native)
                 changed = True
 
             gem4 = "gemma-4-31b-it"
-            tiers = kr.get("tiers")
-            if isinstance(tiers, list):
+
+            def _v22_prepend_gem4(tiers: Any) -> bool:
+                local = False
+                if not isinstance(tiers, list):
+                    return False
                 for t in tiers:
                     if not isinstance(t, dict):
                         continue
@@ -1898,10 +1922,15 @@ def migrate_config(interactive: bool = True, quiet: bool = False) -> Dict[str, A
                     norm = [str(x).strip() for x in mids if str(x).strip()]
                     if gem4 in norm:
                         continue
-                    # Prepend Gemma-4 API id when tier matched v21 Qwen-only default.
                     if norm == ["Qwen/QwQ-32B"]:
                         t["models"] = [gem4] + norm
-                        changed = True
+                        local = True
+                return local
+
+            if _v22_prepend_gem4(fmr.get("tiers")):
+                changed = True
+            if _v22_prepend_gem4(kr.get("tiers")):
+                changed = True
             fmr["kimi_router"] = kr
 
             if changed:
@@ -1910,12 +1939,83 @@ def migrate_config(interactive: bool = True, quiet: bool = False) -> Dict[str, A
                 if not quiet:
                     print(
                         "  ✓ v22: free_model_routing — gemma-4-31b-it in tier list; "
-                        "kimi_router.gemini_native_tier_models for Gemini API tier ids"
+                        "gemini_native_tier_models at free_model_routing top level"
                     )
         except Exception as e:
             if not quiet:
                 print(f"  ⚠ v22 free_model_routing migration skipped: {e}")
             results["warnings"].append(f"v22 migration: {e}")
+
+    # ── Version 22 → 23: tiers + gemini_native_tier_models at free_model_routing top level ──
+    if current_ver < 23:
+        try:
+            import copy
+
+            path = get_config_path()
+            raw_user: Dict[str, Any] = {}
+            if path.exists():
+                try:
+                    with open(path, encoding="utf-8") as f:
+                        raw_user = yaml.safe_load(f) or {}
+                except Exception:
+                    raw_user = {}
+            if not isinstance(raw_user, dict):
+                raw_user = {}
+            fmr = raw_user.get("free_model_routing")
+            if not isinstance(fmr, dict):
+                fmr = {}
+            fmr = dict(fmr)
+            dflt_fmr = copy.deepcopy(DEFAULT_CONFIG["free_model_routing"])
+            changed = False
+
+            kr = fmr.get("kimi_router")
+            if not isinstance(kr, dict):
+                kr = {}
+            kr = dict(kr)
+
+            if "tiers" not in fmr:
+                if isinstance(kr.get("tiers"), list) and kr["tiers"]:
+                    fmr["tiers"] = copy.deepcopy(kr["tiers"])
+                    kr.pop("tiers", None)
+                    changed = True
+            elif "tiers" in kr:
+                kr.pop("tiers", None)
+                changed = True
+
+            if "gemini_native_tier_models" not in fmr:
+                if isinstance(kr.get("gemini_native_tier_models"), list) and kr.get("gemini_native_tier_models"):
+                    fmr["gemini_native_tier_models"] = copy.deepcopy(kr["gemini_native_tier_models"])
+                else:
+                    fmr["gemini_native_tier_models"] = copy.deepcopy(
+                        dflt_fmr.get("gemini_native_tier_models") or ["gemma-4-31b-it"]
+                    )
+                kr.pop("gemini_native_tier_models", None)
+                changed = True
+            elif "gemini_native_tier_models" in kr:
+                kr.pop("gemini_native_tier_models", None)
+                changed = True
+
+            if "fallback_free_routed_model" not in fmr:
+                fmr["fallback_free_routed_model"] = str(
+                    dflt_fmr.get("fallback_free_routed_model") or "gemma-4-31b-it"
+                )
+                changed = True
+
+            fmr["kimi_router"] = kr
+            if changed:
+                merge_user_config_yaml({"free_model_routing": fmr, "_config_version": 23})
+                results["config_added"].append(
+                    "free_model_routing (v23 tiers + gemini_native + fallback at top level)"
+                )
+                if not quiet:
+                    print(
+                        "  ✓ v23: free_model_routing — tiers and gemini_native_tier_models under "
+                        "free_model_routing; fallback_free_routed_model default"
+                    )
+        except Exception as e:
+            if not quiet:
+                print(f"  ⚠ v23 free_model_routing migration skipped: {e}")
+            results["warnings"].append(f"v23 migration: {e}")
 
     if current_ver < latest_ver and not quiet:
         print(f"Config version: {current_ver} → {latest_ver}")

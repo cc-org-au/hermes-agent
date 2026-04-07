@@ -2,9 +2,12 @@
 
 Synthesized order (HF “Inference Providers” policy hop removed):
 
-1. **Tiered router** — ``kimi_router.router_model`` picks one hub id from ``tiers``.
+1. **Tiered router** — ``kimi_router.router_model`` picks one hub id from ``tiers``
+   (top-level ``free_model_routing.tiers``; legacy ``kimi_router.tiers`` is still read if missing).
    Prefer ``router_provider: gemini`` with ``router_model: gemma-4-31b-it`` (Google AI).
    Legacy ``router_provider: huggingface`` uses the HF router API (``router.huggingface.co``).
+   When every tier target is filtered out but ``router_model`` is set, ``fallback_free_routed_model``
+   (default ``gemma-4-31b-it``) is used as the sole tier target.
 2. **Optional Gemini** — last-resort hosted Gemma if ``optional_gemini`` is enabled.
 """
 
@@ -18,16 +21,38 @@ from agent.local_inference import filter_hub_model_ids_by_local_state
 logger = logging.getLogger(__name__)
 
 _DEFAULT_GEMINI_NATIVE = frozenset({"gemma-4-31b-it"})
+_DEFAULT_FALLBACK_FREE_ROUTED = "gemma-4-31b-it"
+
+
+def raw_free_model_routing_tiers(fmr: Optional[Dict[str, Any]]) -> Any:
+    """Return the raw ``tiers`` value: top-level ``free_model_routing.tiers`` wins over legacy ``kimi_router.tiers``."""
+    if not isinstance(fmr, dict):
+        return None
+    if "tiers" in fmr:
+        return fmr.get("tiers")
+    kr = fmr.get("kimi_router")
+    if isinstance(kr, dict):
+        return kr.get("tiers")
+    return None
+
+
+def fallback_free_routed_model_id(fmr: Optional[Dict[str, Any]] = None) -> str:
+    """Model id used alone when ``router_model`` is set but no tier targets remain after filtering."""
+    if not isinstance(fmr, dict):
+        return _DEFAULT_FALLBACK_FREE_ROUTED
+    v = _strip(fmr.get("fallback_free_routed_model"))
+    return v or _DEFAULT_FALLBACK_FREE_ROUTED
 
 
 def gemini_native_tier_model_set(fmr: Optional[Dict[str, Any]] = None) -> frozenset[str]:
-    """Model ids in ``free_model_routing.kimi_router.tiers`` that use Gemini API, not HF hub OpenAI."""
+    """Tier model ids served via Gemini API (not HF hub OpenAI), from config ``gemini_native_tier_models``."""
     if not isinstance(fmr, dict):
         return _DEFAULT_GEMINI_NATIVE
-    kr = fmr.get("kimi_router")
-    if not isinstance(kr, dict):
-        return _DEFAULT_GEMINI_NATIVE
-    raw = kr.get("gemini_native_tier_models")
+    raw = fmr.get("gemini_native_tier_models")
+    if not isinstance(raw, list) or not raw:
+        kr = fmr.get("kimi_router")
+        if isinstance(kr, dict):
+            raw = kr.get("gemini_native_tier_models")
     if isinstance(raw, list) and raw:
         return frozenset(str(x).strip() for x in raw if str(x).strip())
     return _DEFAULT_GEMINI_NATIVE
@@ -84,13 +109,13 @@ def normalize_kimi_tiers(raw: Any) -> List[Dict[str, Any]]:
     return out
 
 
-def _filtered_kimi_tiers(fmr: Dict[str, Any], kr: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _filtered_kimi_tiers(fmr: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Apply optional local-hub download filter to tier hub ids.
 
     ``gemini_native_tier_models`` (default ``gemma-4-31b-it``) are never stripped — they are
     served via Gemini API, not ``local_models/hub``.
     """
-    tiers = normalize_kimi_tiers(kr.get("tiers"))
+    tiers = normalize_kimi_tiers(raw_free_model_routing_tiers(fmr))
     hub_filter = bool(fmr.get("filter_free_tier_models_by_local_hub", True))
     native_set = gemini_native_tier_model_set(fmr)
     out: List[Dict[str, Any]] = []
@@ -132,11 +157,22 @@ def build_free_fallback_chain(config: Optional[Dict[str, Any]]) -> List[Dict[str
     kr = fmr.get("kimi_router") or {}
     if isinstance(kr, dict):
         router_model = _strip(kr.get("router_model"))
-        tiers = _filtered_kimi_tiers(fmr, kr)
+        tiers = _filtered_kimi_tiers(fmr)
+        if router_model and not tiers:
+            fb = fallback_free_routed_model_id(fmr)
+            tiers = normalize_kimi_tiers(
+                [
+                    {
+                        "id": "fallback-free-routed",
+                        "description": "Fallback when no free-routing tier targets remain after filtering",
+                        "models": [fb],
+                    }
+                ]
+            )
         if router_model and tiers:
             flat = [m for t in tiers for m in t.get("models", [])]
             if not flat:
-                logger.warning("free_model_routing.kimi_router: tiers have no model ids — skipping tier router")
+                logger.warning("free_model_routing: tiers have no model ids — skipping tier router")
             else:
                 rprov = _strip(kr.get("router_provider") or "gemini").lower()
                 if rprov not in ("huggingface", "gemini"):
@@ -155,11 +191,6 @@ def build_free_fallback_chain(config: Optional[Dict[str, Any]]) -> List[Dict[str
                         "gemini_native_tier_models": sorted(gemini_native_tier_model_set(fmr)),
                     }
                 )
-        elif router_model and not tiers:
-            logger.warning(
-                "free_model_routing.kimi_router: router_model set but tiers empty — "
-                "configure kimi_router.tiers for tiered routing",
-            )
 
     og = fmr.get("optional_gemini") or {}
     if isinstance(og, dict) and og.get("enabled") and _strip(og.get("model")):

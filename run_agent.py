@@ -3946,7 +3946,7 @@ class AIAgent:
         """After token-governance per-turn tier pick, point the OpenAI SDK client at the right host.
 
         Chief runtimes often use Gemini or OpenRouter; tiers E/F may select native ``gpt-5.4`` /
-        ``gpt-5-codex`` on ``api.openai.com``. Restore the snapshot baseline when the tier model
+        ``gpt-5.3-codex`` on ``api.openai.com``. Restore the snapshot baseline when the tier model
         is not an OpenAI-native consultant id.
         """
         if getattr(self, "api_mode", None) == "anthropic_messages":

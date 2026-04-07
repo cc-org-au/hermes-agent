@@ -10,19 +10,19 @@
 
 free_model_routing:
   enabled: true
-  # Hide tier hub ids not listed in local_models/hub/state.json downloaded (when that file exists).
   filter_free_tier_models_by_local_hub: true
+  fallback_free_routed_model: gemma-4-31b-it
+  gemini_native_tier_models:
+    - gemma-4-31b-it
+  tiers:
+    - id: local
+      description: "Gemma-4 (Gemini API id) or Qwen when served locally"
+      models:
+        - gemma-4-31b-it
+        - Qwen/QwQ-32B
   kimi_router:
     router_provider: gemini
     router_model: gemma-4-31b-it
-    gemini_native_tier_models:
-      - gemma-4-31b-it
-    tiers:
-      - id: local
-        description: "Gemma-4 (Gemini API id) or Qwen when served locally"
-        models:
-          - gemma-4-31b-it
-          - Qwen/QwQ-32B
   optional_gemini:
     enabled: true
     model: gemma-4-31b-it

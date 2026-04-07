@@ -20,6 +20,49 @@ def test_normalize_kimi_tiers_list_of_dicts():
     assert t[1]["models"] == ["m3"]
 
 
+def test_top_level_tiers_preferred_over_legacy_kimi_router():
+    cfg = {
+        "free_model_routing": {
+            "enabled": True,
+            "tiers": [{"id": "top", "models": ["org/top"]}],
+            "kimi_router": {
+                "router_model": "gemma-4-31b-it",
+                "tiers": [{"id": "legacy", "models": ["org/legacy"]}],
+            },
+        }
+    }
+    ch = build_free_fallback_chain(cfg)
+    assert ch
+    flat = [m for t in ch[0]["hf_router_tiers"] for m in t["models"]]
+    assert "org/top" in flat
+    assert "org/legacy" not in flat
+
+
+def test_fallback_tier_when_all_hub_models_filtered(monkeypatch):
+    monkeypatch.setattr(
+        "agent.free_model_routing.filter_hub_model_ids_by_local_state",
+        lambda ids, enabled=True: [],
+    )
+    cfg = {
+        "free_model_routing": {
+            "enabled": True,
+            "filter_free_tier_models_by_local_hub": True,
+            "fallback_free_routed_model": "gemma-4-31b-it",
+            "gemini_native_tier_models": ["gemma-4-31b-it"],
+            "kimi_router": {
+                "router_provider": "gemini",
+                "router_model": "gemma-4-31b-it",
+                "tiers": [{"id": "local", "models": ["Qwen/QwQ-32B"]}],
+            },
+        }
+    }
+    ch = build_free_fallback_chain(cfg)
+    assert ch
+    assert ch[0].get("hf_router") is True
+    flat = [m for t in ch[0]["hf_router_tiers"] for m in t["models"]]
+    assert "gemma-4-31b-it" in flat
+
+
 def test_build_chain_kimi_then_optional_gemini():
     cfg = {
         "free_model_routing": {

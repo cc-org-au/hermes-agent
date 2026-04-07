@@ -41,7 +41,7 @@ tier_models:
   C: "deepseek/deepseek-r1"
   D: "google/gemini-2.5-flash"
   E: "gpt-5.4"
-  F: "gpt-5-codex"
+  F: "gpt-5.3-codex"
 
 # Chief orchestrator baseline when config says `model.default: tier:D` (or omit default_model here).
 chief_default_tier: D
