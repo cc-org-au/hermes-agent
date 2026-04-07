@@ -20,15 +20,15 @@ python scripts/local_models/download_models.py --max-workers 64 --no-sync-drople
 
 Logs: `logs/download.log`, `logs/failures.jsonl`, `hub/state.json`.
 
-## Hosted inference for very large open models (MiniMax, gpt-oss, …)
+## Hosted vs local routing (very large checkpoints)
 
-Those checkpoints are **too large** for Hugging Face’s free serverless GPU slots and for most “free API” tiers. Practical options:
+Multi‑100 GiB weights are **too large** for Hugging Face’s free serverless GPU slots and for most “free API” tiers. Practical options:
 
-1. **Hugging Face Inference Providers** (OpenAI-compatible via `HF_TOKEN`): small monthly credits on free accounts, then pay-as-you-go; pick **models that are actually offered** on a provider (see [Inference Providers pricing](https://huggingface.co/docs/inference-providers/pricing)). Hermes already uses **`provider: huggingface`** with **`HF_TOKEN`** / **`HUGGINGFACE_API_KEY`** for routing and fallbacks (`free_model_routing`, `hf_router`).
-2. **Google AI (Gemma)** — free tier limits; Hermes can use **`router_provider: gemini`** in `free_model_routing.kimi_router` with **`GEMINI_API_KEY`** / **`GOOGLE_API_KEY`** for tier picking (not the same weights as MiniMax/gpt-oss, but zero local disk).
-3. **Swap tier lists** in `config.yaml` `free_model_routing.kimi_router.tiers` to **smaller hub ids** that your chosen provider actually serves (e.g. community Qwen/Llama instruct variants), instead of `MiniMaxAI/MiniMax-M2.5` / `openai/gpt-oss-120b`.
+1. **Google AI (Gemma-4 router)** — Hermes defaults to **`router_provider: gemini`** + **`gemma-4-31b-it`** in `free_model_routing.kimi_router` with **`GEMINI_API_KEY`** / **`GOOGLE_API_KEY`** to pick among **tier hub ids** (default: **`Qwen/QwQ-32B`** for local serving when listed in `hub/state.json`; Gemma-4 is via the router / `optional_gemini`, not a separate HF hub id in the default tier).
+2. **Legacy HF router API** — set **`router_provider: huggingface`** and a **`router_model`** served at `router.huggingface.co` if you still use that path; **`HF_TOKEN`** is required for that hop.
+3. **Hugging Face Inference Providers** — optional paid/credit hosted models (see [Inference Providers pricing](https://huggingface.co/docs/inference-providers/pricing)); not part of Hermes default `free_model_routing` anymore.
 
-There is no durable **100% free** API that runs **those exact** multi‑100 GiB weights at scale; the sustainable pattern is **smaller hosted models** + credits, or **self‑host** where you have RAM/VRAM.
+There is no durable **100% free** API that runs **those exact** largest weights at scale; the sustainable pattern is **tier routing to what you host locally** (`HERMES_LOCAL_INFERENCE_BASE_URL` + `hub/state.json`), smaller hosted models, or credits.
 
 ## Local OpenAI-compatible server
 

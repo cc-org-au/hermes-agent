@@ -786,6 +786,7 @@ class AIAgent:
             # No OpenAI client needed for Anthropic mode
             self.client = None
             self._client_kwargs = {}
+            self._inference_runtime_snapshot = None
             if not self.quiet_mode:
                 print(f"🤖 AI Agent initialized with model: {self.model} (Anthropic native)")
                 if effective_key and len(effective_key) > 12:
@@ -883,7 +884,13 @@ class AIAgent:
                         print(f"⚠️  Warning: API key appears invalid or missing (got: '{key_used[:20] if key_used else 'none'}...')")
             except Exception as e:
                 raise RuntimeError(f"Failed to initialize OpenAI client: {e}")
-        
+            self._inference_runtime_snapshot = {
+                "provider": self.provider,
+                "base_url": self.base_url,
+                "api_key": self.api_key,
+                "api_mode": self.api_mode,
+            }
+
         # Provider fallback chain — ordered list of backup providers tried
         # when the primary is exhausted (rate-limit, overload, connection
         # failure).  Supports both legacy single-dict ``fallback_model`` and
@@ -3926,6 +3933,71 @@ class AIAgent:
         else:
             self._client_kwargs.pop("default_headers", None)
 
+    def _tier_targets_openai_native_consultant(self, model_id: str) -> bool:
+        """True for direct OpenAI API GPT-5 consultants (not mini/nano)."""
+        m = (model_id or "").strip().lower()
+        if not m.startswith("gpt-5"):
+            return False
+        if "mini" in m or "nano" in m:
+            return False
+        return True
+
+    def _reconcile_runtime_after_tier_model_change(self) -> None:
+        """After token-governance per-turn tier pick, point the OpenAI SDK client at the right host.
+
+        Chief runtimes often use Gemini or OpenRouter; tiers E/F may select native ``gpt-5.4`` /
+        ``gpt-5-codex`` on ``api.openai.com``. Restore the snapshot baseline when the tier model
+        is not an OpenAI-native consultant id.
+        """
+        if getattr(self, "api_mode", None) == "anthropic_messages":
+            return
+        snap = getattr(self, "_inference_runtime_snapshot", None)
+        if not isinstance(snap, dict):
+            return
+
+        mid = (self.model or "").strip()
+        if self._tier_targets_openai_native_consultant(mid):
+            key = (os.environ.get("OPENAI_API_KEY") or "").strip()
+            if not key:
+                return
+            from hermes_cli.runtime_provider import _detect_api_mode_for_url
+
+            want_base = "https://api.openai.com/v1"
+            want_mode = _detect_api_mode_for_url(want_base) or "codex_responses"
+            want_provider = "custom"
+            want_key = key
+        else:
+            want_provider = str(snap.get("provider") or "")
+            want_base = str(snap.get("base_url") or "")
+            want_key = str(snap.get("api_key") or "")
+            want_mode = str(snap.get("api_mode") or "chat_completions")
+
+        cur_base = (self.base_url or "").rstrip("/")
+        if (
+            self.provider == want_provider
+            and cur_base == (want_base or "").rstrip("/")
+            and self.api_key == want_key
+            and self.api_mode == want_mode
+        ):
+            return
+
+        self.provider = want_provider
+        self.api_mode = want_mode
+        self.base_url = want_base
+        self.api_key = want_key
+        self._client_kwargs["api_key"] = self.api_key
+        self._client_kwargs["base_url"] = self.base_url
+        self._apply_client_headers_for_base_url(self.base_url)
+        if not self._replace_primary_openai_client(reason="tier_model_runtime_reconcile"):
+            return
+        try:
+            is_openrouter = self._is_openrouter_url()
+            is_claude = "claude" in (self.model or "").lower()
+            is_native_anthropic = self.api_mode == "anthropic_messages"
+            self._use_prompt_caching = (is_openrouter and is_claude) or is_native_anthropic
+        except Exception:
+            logger.debug("tier reconcile: could not refresh prompt caching flags", exc_info=True)
+
     def _swap_credential(self, entry) -> None:
         runtime_key = getattr(entry, "runtime_api_key", None) or getattr(entry, "access_token", "")
         runtime_base = getattr(entry, "runtime_base_url", None) or getattr(entry, "base_url", None) or self.base_url
@@ -4856,7 +4928,7 @@ class AIAgent:
             )
             _router = fb_model
             _tiers = fb.get("hf_router_tiers") or []
-            _router_prov = (fb.get("router_provider") or "huggingface").strip().lower()
+            _router_prov = (fb.get("router_provider") or "gemini").strip().lower()
             _user_turn = getattr(self, "_last_user_turn_text", "") or ""
 
             if _router_prov == "gemini" and _tiers:

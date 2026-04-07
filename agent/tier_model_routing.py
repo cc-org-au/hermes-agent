@@ -23,8 +23,9 @@ BUILTIN_TIER_MODELS: Dict[str, str] = {
     "B": "google/gemini-2.5-flash-lite",
     "C": "deepseek/deepseek-r1",
     "D": "google/gemini-2.5-flash",
-    "E": "google/gemini-2.5-pro",
-    "F": "google/gemini-3-pro-preview",
+    # E/F: OpenAI GPT-5 consultants — use only via consultant_routing deliberation (governance YAML).
+    "E": "gpt-5.4",
+    "F": "gpt-5-codex",
 }
 
 

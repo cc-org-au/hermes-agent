@@ -8,13 +8,15 @@ def test_collect_pipeline_models_order_and_dedupe():
         "model": {"default": "anthropic/claude-sonnet-4"},
         "free_model_routing": {
             "enabled": True,
+            "filter_free_tier_models_by_local_hub": False,
             "kimi_router": {
-                "router_model": "moonshotai/Kimi-K2-Thinking",
+                "router_model": "gemma-4-31b-it",
+                "router_provider": "gemini",
                 "tiers": [
                     {
                         "id": "general",
                         "description": "General",
-                        "models": ["MiniMaxAI/MiniMax-M2.5", "org/other"],
+                        "models": ["Qwen/QwQ-32B", "org/other"],
                     },
                 ],
             },
@@ -26,10 +28,10 @@ def test_collect_pipeline_models_order_and_dedupe():
     }
     rows = collect_pipeline_models(cfg)
     models = [r["model"] for r in rows]
-    # Primary first; MiniMax once (tier dedupe); router; tier other; gemini
+    # Primary first; Qwen hub id once (tier dedupe); router; tier other; gemini
     assert models[0] == "anthropic/claude-sonnet-4"
-    assert models.count("MiniMaxAI/MiniMax-M2.5") == 1
-    assert "moonshotai/Kimi-K2-Thinking" in models
+    assert models.count("Qwen/QwQ-32B") == 1
+    assert "gemma-4-31b-it" in models
     assert "org/other" in models
     assert models[-1] == "gemma-4-31b-it"
     assert rows[-1]["provider_kind"] == "gemini"
@@ -45,13 +47,15 @@ def test_collect_pipeline_models_disabled():
     assert rows[0]["model"] == "x"
 
 
-def test_collect_pipeline_models_kimi_tiers():
+def test_collect_pipeline_models_routing_tiers():
     cfg = {
         "model": {"default": "anthropic/claude-sonnet-4"},
         "free_model_routing": {
             "enabled": True,
+            "filter_free_tier_models_by_local_hub": False,
             "kimi_router": {
-                "router_model": "moonshotai/Kimi-K2-Thinking",
+                "router_model": "gemma-4-31b-it",
+                "router_provider": "gemini",
                 "tiers": [{"id": "g", "models": ["only-tier-model"]}],
             },
         },

@@ -5,8 +5,10 @@ tier_models:
   B: google/gemini-2.5-flash-lite
   C: deepseek/deepseek-r1
   D: google/gemini-2.5-flash
-  E: google/gemini-2.5-pro
-  F: google/gemini-3-pro-preview
+  # OpenAI consultants (direct API; OPENAI_API_KEY or OPENAI_API_KEY_DROPLET). E/F only via
+  # consultant_routing + chief deliberation per token-model-tool-and-channel-governance-policy.md.
+  E: gpt-5.4
+  F: gpt-5-codex
 chief_default_tier: D
 blocked_fallback_tier: B
 blocked_model_substrings:
@@ -14,7 +16,6 @@ blocked_model_substrings:
 - claude-sonnet-4
 - claude-3.5-sonnet
 - gpt-4
-- gpt-5
 - openai/o1
 - openai/o3
 - claude-sonnet-4.5

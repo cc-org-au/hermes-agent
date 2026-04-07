@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from agent.free_model_routing import normalize_kimi_tiers
+from agent.local_inference import filter_hub_model_ids_by_local_state
 
 
 def _strip(s: Any) -> str:
@@ -15,7 +16,7 @@ def collect_pipeline_models(config: Optional[Dict[str, Any]]) -> List[Dict[str, 
     """Return menu rows for ``/models``: ``model``, ``source``, ``provider_kind``.
 
     *provider_kind* is ``primary`` (current profile primary), ``huggingface``, or ``gemini``.
-    Order: primary, then Kimi router → tier models (deduped), then optional Gemini.
+    Order: primary, then tier router → tier hub models (deduped), then optional Gemini.
     """
     if not config or not isinstance(config, dict):
         return []
@@ -56,14 +57,16 @@ def collect_pipeline_models(config: Optional[Dict[str, Any]]) -> List[Dict[str, 
             _add_hf(rm, "free_model_routing.kimi_router (router)")
 
         tiers = normalize_kimi_tiers(kr.get("tiers"))
+        hub_filter = bool(fmr.get("filter_free_tier_models_by_local_hub", True))
         for tier in tiers:
             tid = _strip(tier.get("id")) or "tier"
             desc = _strip(tier.get("description"))
-            label = f"kimi tier {tid}"
+            label = f"routing tier {tid}"
             if desc:
                 label = f"{label}: {desc}"
-            for mid in tier.get("models") or []:
-                _add_hf(_strip(mid), label)
+            raw_models = [ _strip(x) for x in (tier.get("models") or []) if _strip(x) ]
+            for mid in filter_hub_model_ids_by_local_state(raw_models, enabled=hub_filter):
+                _add_hf(mid, label)
 
     og = fmr.get("optional_gemini") or {}
     if isinstance(og, dict) and og.get("enabled"):

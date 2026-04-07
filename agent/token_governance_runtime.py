@@ -326,3 +326,11 @@ def apply_per_turn_tier_model(agent: Any, user_message: str) -> None:
                 logger.info("%s", extra)
     except Exception:
         logger.info("Token governance: this turn Tier %s → %s", tier, mid)
+
+    # Native OpenAI consultant tiers need api.openai.com + OPENAI_API_KEY; restore baseline otherwise.
+    _rebind = getattr(agent, "_reconcile_runtime_after_tier_model_change", None)
+    if callable(_rebind):
+        try:
+            _rebind()
+        except Exception:
+            logger.debug("tier model runtime reconcile failed", exc_info=True)

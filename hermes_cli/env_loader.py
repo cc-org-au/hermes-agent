@@ -63,4 +63,10 @@ def load_hermes_dotenv(
         _load_dotenv_with_fallback(project_env_path, override=not loaded)
         loaded.append(project_env_path)
 
+    # VPS / split-env: allow OPENAI_API_KEY_DROPLET when OPENAI_API_KEY is unset.
+    _droplet_key = os.environ.get("OPENAI_API_KEY_DROPLET", "").strip()
+    _openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if _droplet_key and not _openai_key:
+        os.environ["OPENAI_API_KEY"] = _droplet_key
+
     return loaded

@@ -1,8 +1,8 @@
 # Free-model fallback when paid APIs fail (merge into ~/.hermes/config.yaml).
-# Hermes seeds defaults in DEFAULT_CONFIG (``_config_version`` 19+); override here as needed.
+# Hermes seeds defaults in DEFAULT_CONFIG (see ``_config_version``); override here as needed.
 #
 # Order after primary failure:
-#   1) kimi_router — Kimi router model picks one hub id from tiers (HF hub OpenAI-compatible API)
+#   1) kimi_router — tier router picks one HF hub id (default: router_provider gemini + gemma-4-31b-it)
 #   2) optional_gemini — optional last resort (hosted Gemma/Gemini API)
 #
 # If you prefer a fully explicit chain instead, set ``fallback_providers: [ ... ]``
@@ -10,24 +10,16 @@
 
 free_model_routing:
   enabled: true
+  # Hide tier hub ids not listed in local_models/hub/state.json downloaded (when that file exists).
+  filter_free_tier_models_by_local_hub: true
   kimi_router:
-    router_model: moonshotai/Kimi-K2-Thinking
+    router_provider: gemini
+    router_model: gemma-4-31b-it
     tiers:
-      - id: general
-        description: "General and multimodal"
+      - id: local
+        description: "Qwen (local vLLM/TGI); Gemma-4 via router + optional_gemini (Gemini API)"
         models:
-          - MiniMaxAI/MiniMax-M2.5
-          - google/gemma-3-27b-it
-      - id: reasoning
-        description: "Reasoning, math, and code"
-        models:
-          - deepseek-ai/DeepSeek-R1
-          - openai/gpt-oss-120b
           - Qwen/QwQ-32B
-      - id: router_thinking
-        description: "Long CoT / agentic"
-        models:
-          - moonshotai/Kimi-K2-Thinking
   optional_gemini:
     enabled: true
     model: gemma-4-31b-it
@@ -40,6 +32,7 @@ free_model_routing:
 # Or full manual override (disables synthesis from free_model_routing):
 # fallback_providers:
 #   - provider: huggingface
-#     model: moonshotai/Kimi-K2-Thinking
+#     model: gemma-4-31b-it
 #     hf_router: true
+#     router_provider: gemini
 #     hf_router_tiers: [ ... ]

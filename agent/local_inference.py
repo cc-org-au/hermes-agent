@@ -30,6 +30,45 @@ def load_local_hub_state() -> Optional[Dict[str, Any]]:
         return None
 
 
+def downloaded_hub_repo_ids() -> Optional[set[str]]:
+    """Return hub ids marked downloaded in ``state.json``, or None if unknown."""
+    state = load_local_hub_state()
+    if not state:
+        return None
+    raw = state.get("downloaded") or state.get("repos") or []
+    if isinstance(raw, dict):
+        ids = [str(k).strip() for k in raw if str(k).strip()]
+    elif isinstance(raw, list):
+        ids = [str(x).strip() for x in raw if str(x).strip()]
+    else:
+        return None
+    if not ids:
+        return None
+    return set(ids)
+
+
+def filter_hub_model_ids_by_local_state(
+    model_ids: list[str],
+    *,
+    enabled: bool = True,
+) -> list[str]:
+    """Drop tier hub ids that are not present in local ``state.json`` when enabled.
+
+    When ``local_models/hub/state.json`` is missing or has no ``downloaded`` entries,
+    returns *model_ids* unchanged. If filtering would remove every id, returns the
+    original list so the tier router still has candidates.
+    """
+    if not enabled or not model_ids:
+        return list(model_ids)
+    have = downloaded_hub_repo_ids()
+    if not have:
+        return list(model_ids)
+    filtered = [m.strip() for m in model_ids if m and str(m).strip() in have]
+    if not filtered:
+        return list(model_ids)
+    return filtered
+
+
 def local_inference_override_for_hub_model(fb_model: str) -> Optional[Tuple[str, str]]:
     """If ``HERMES_LOCAL_INFERENCE_BASE_URL`` is set and *fb_model* is in download state, return (base_url, api_key)."""
     base = os.environ.get("HERMES_LOCAL_INFERENCE_BASE_URL", "").strip()
