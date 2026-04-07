@@ -261,6 +261,7 @@ def apply_per_turn_tier_model(agent: Any, user_message: str) -> None:
     from agent.consultant_routing import (
         consultant_routing_enabled,
         format_status_line,
+        is_pushback_message,
         resolve_consultant_tier,
     )
     from agent.tier_model_routing import (
@@ -285,6 +286,17 @@ def apply_per_turn_tier_model(agent: Any, user_message: str) -> None:
     deterministic_tier = select_tier_for_message(user_message, cfg)
     tier = deterministic_tier
     audit: dict = {}
+
+    # Detect push-back and repeated-failure signals for escalation.
+    pushback = is_pushback_message(user_message)
+    retry_count = int(getattr(agent, "_same_task_retry_count", 0) or 0)
+    # Track retry count: increment when user pushes back, reset on apparent new task.
+    if pushback:
+        setattr(agent, "_same_task_retry_count", retry_count + 1)
+    elif len((user_message or "").strip()) > 200:
+        # Long new message = new task; reset retry counter.
+        setattr(agent, "_same_task_retry_count", 0)
+
     if cr_on:
         try:
             tier, audit = resolve_consultant_tier(
@@ -293,6 +305,8 @@ def apply_per_turn_tier_model(agent: Any, user_message: str) -> None:
                 deterministic_tier,
                 tier_models,
                 agent=agent,
+                pushback_signal=pushback,
+                retry_count=retry_count,
             )
         except Exception:
             logger.debug("resolve_consultant_tier failed", exc_info=True)

@@ -679,19 +679,34 @@ def _prompt_choice(question: str, choices: list, default: int = 0) -> int:
                 curses.use_default_colors()
                 curses.init_pair(1, curses.COLOR_GREEN, -1)
                 curses.init_pair(2, curses.COLOR_YELLOW, -1)
-            cursor = default
+                curses.init_pair(3, curses.COLOR_CYAN, -1)
+            cursor = min(default, len(choices) - 1) if choices else 0
+            scroll_offset = 0
 
             while True:
                 stdscr.clear()
                 max_y, max_x = stdscr.getmaxyx()
+                # Reserve row 0 for question, row 1 blank, bottom row for hint
+                visible_rows = max(1, max_y - 3)
+
+                # Keep cursor in view
+                if cursor < scroll_offset:
+                    scroll_offset = cursor
+                elif cursor >= scroll_offset + visible_rows:
+                    scroll_offset = cursor - visible_rows + 1
+
                 try:
                     stdscr.addnstr(0, 0, question, max_x - 1,
                                    curses.A_BOLD | (curses.color_pair(2) if curses.has_colors() else 0))
                 except curses.error:
                     pass
 
-                for i, c in enumerate(choices):
-                    y = i + 2
+                for slot in range(visible_rows):
+                    i = slot + scroll_offset
+                    if i >= len(choices):
+                        break
+                    c = choices[i]
+                    y = slot + 2
                     if y >= max_y - 1:
                         break
                     arrow = "→" if i == cursor else " "
@@ -706,6 +721,19 @@ def _prompt_choice(question: str, choices: list, default: int = 0) -> int:
                     except curses.error:
                         pass
 
+                # Scroll indicator at the bottom
+                if len(choices) > visible_rows:
+                    hint = (
+                        f" ↑↓/jk scroll  {cursor + 1}/{len(choices)}"
+                        + ("  ▲" if scroll_offset > 0 else "")
+                        + ("  ▼" if scroll_offset + visible_rows < len(choices) else "")
+                    )
+                    try:
+                        attr = curses.color_pair(3) if curses.has_colors() else curses.A_DIM
+                        stdscr.addnstr(max_y - 1, 0, hint, max_x - 1, attr)
+                    except curses.error:
+                        pass
+
                 stdscr.refresh()
                 key = stdscr.getch()
 
@@ -713,6 +741,14 @@ def _prompt_choice(question: str, choices: list, default: int = 0) -> int:
                     cursor = (cursor - 1) % len(choices)
                 elif key in (curses.KEY_DOWN, ord('j')):
                     cursor = (cursor + 1) % len(choices)
+                elif key in (curses.KEY_PPAGE,):  # Page Up
+                    cursor = max(0, cursor - visible_rows)
+                elif key in (curses.KEY_NPAGE,):  # Page Down
+                    cursor = min(len(choices) - 1, cursor + visible_rows)
+                elif key in (curses.KEY_HOME,):
+                    cursor = 0
+                elif key in (curses.KEY_END,):
+                    cursor = len(choices) - 1
                 elif key in (curses.KEY_ENTER, 10, 13):
                     result_holder[0] = cursor
                     return

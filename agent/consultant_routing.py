@@ -193,6 +193,61 @@ def _call_aux_task(
     return extract_content_or_reasoning(resp) or ""
 
 
+_PUSHBACK_PHRASES = (
+    "that's not what i asked",
+    "that's not what i said",
+    "that's not what i want",
+    "you didn't",
+    "you ignored",
+    "still not",
+    "still wrong",
+    "still incorrect",
+    "still not right",
+    "again wrong",
+    "no, you",
+    "no that's wrong",
+    "no that is wrong",
+    "not right",
+    "not correct",
+    "incorrect",
+    "wrong again",
+    "try again",
+    "do it again",
+    "redo this",
+    "do it properly",
+    "do it correctly",
+    "that missed",
+    "you missed",
+    "you failed",
+    "this is wrong",
+    "this is not",
+    "this isn't",
+    "still haven't",
+    "still not done",
+    "not what i meant",
+    "doesn't work",
+    "doesn't do what",
+    "fix it",
+    "please fix",
+    "please redo",
+    "please try again",
+    "still broken",
+    "not working",
+)
+
+
+def is_pushback_message(text: str) -> bool:
+    """Return True when the user message looks like explicit dissatisfaction / pushback."""
+    if not text:
+        return False
+    low = text.strip().lower()
+    # Very short emphatic openers
+    first_50 = low[:50]
+    if first_50.startswith(("no,", "no.", "wrong.", "wrong,", "nope", "incorrect")):
+        return True
+    return any(p in low for p in _PUSHBACK_PHRASES)
+
+
 def resolve_consultant_tier(
     user_message: str,
     gov_cfg: Dict[str, Any],
@@ -200,8 +255,15 @@ def resolve_consultant_tier(
     tier_models: Dict[str, str],
     *,
     agent: Any = None,
+    pushback_signal: bool = False,
+    retry_count: int = 0,
 ) -> Tuple[str, Dict[str, Any]]:
-    """Return (final_tier_letter, audit dict) after optional router + deliberation."""
+    """Return (final_tier_letter, audit dict) after optional router + deliberation.
+
+    Args:
+        pushback_signal: True when the user explicitly pushed back on the previous response.
+        retry_count: Number of times this task has already been attempted at the same tier.
+    """
     cr = _cr_cfg(gov_cfg)
     mode = str(cr.get("mode") or "hybrid").strip().lower()
     audit: Dict[str, Any] = {
@@ -209,7 +271,20 @@ def resolve_consultant_tier(
         "mode": mode,
         "deliberation": None,
         "router": None,
+        "pushback_signal": pushback_signal,
+        "retry_count": retry_count,
     }
+
+    # Hard-escalate on push-back or repeated failure: skip LLM routing, go straight to E.
+    if (pushback_signal or retry_count >= 3) and deterministic_tier not in ("E", "F"):
+        forced = "E"
+        audit["forced_escalation"] = (
+            "pushback" if pushback_signal else f"retry_count={retry_count}"
+        )
+        logger.info(
+            "consultant_routing: hard-escalating to %s (%s)", forced, audit["forced_escalation"]
+        )
+        deterministic_tier = forced
 
     if mode == "deterministic":
         return deterministic_tier, audit
@@ -236,37 +311,59 @@ def resolve_consultant_tier(
     gov_sig = governance_activation_signal(user_message, cr)
     audit["governance_activation_signal"] = gov_sig
 
+    pushback = audit.get("pushback_signal", False)
+    retry_count = int(audit.get("retry_count") or 0)
+
     # --- LLM router (hybrid / llm) ---
     if mode in ("hybrid", "llm"):
+        pushback_hint = ""
+        if pushback:
+            pushback_hint = (
+                "\n\n[ESCALATION SIGNAL] The user has explicitly pushed back on the previous "
+                "response — they indicated it did not meet their requirements. This is a strong "
+                "signal to escalate to E or F. Set request_consultant_escalation=true and "
+                "recommend at least tier E unless the task is trivially simple."
+            )
+        retry_hint = ""
+        if retry_count >= 2:
+            retry_hint = (
+                f"\n\n[RETRY LOOP SIGNAL] This task has failed or been rejected {retry_count} times. "
+                "The current tier is clearly insufficient. Escalate: recommend E or F and set "
+                "request_consultant_escalation=true."
+            )
         sys_router = (
-            "You are a cost-aware routing advisor for a multi-agent organization. "
-            "Tiers A–F increase in capability and cost (A lowest, F consultant). "
-            "Prefer the cheapest tier that can succeed for trivial work. "
-            "When the user message is a multi-step activation / governance session (Handoff, REM items, "
-            "ORG_REGISTRY / ORG_CHART, policy paths, deployment sequencing), you may recommend E or F "
-            "and set request_consultant_escalation true if that depth genuinely helps — but tier D or C "
-            "is often correct; you are never required to escalate. Declining consultant use is valid "
-            "when the work fits a strong mid-tier model."
+            "You are an intelligent routing advisor for a multi-tier AI organization. "
+            "Tiers B–F increase in capability and cost. Match tier to genuine task complexity.\n"
+            "- Tier B: ultra-simple ops (classify, format, short Q&A, one-liners)\n"
+            "- Tier C: routine reasoning, medium-length tasks without heavy code/architecture\n"
+            "- Tier D: solid general work — coding, debugging, multi-step reasoning, analysis\n"
+            "- Tier E: consultant — complex multi-file refactors, novel architectures, deep "
+            "security analysis, cross-system reconciliation, tasks that genuinely require "
+            "top-tier reasoning to get right the first time\n"
+            "- Tier F: coding consultant — the hardest coding/engineering tasks\n\n"
+            "IMPORTANT: Do not default to D. Recommend E or F whenever the task complexity "
+            "genuinely warrants it. Under-routing costs more in retries than a single E/F call. "
+            "Set request_consultant_escalation=true whenever you recommend E or F."
         )
         hint = ""
         if gov_sig:
             hint = (
                 "\n\n[CLASSIFIER] This message matches org activation/governance session heuristics "
                 "(long structured brief with handoff, registry, or remediation-style tasks). "
-                "Evaluate honestly whether E/F materially improves outcomes; if yes, recommend E or F "
-                "and set request_consultant_escalation true. If tier D (or C) is sufficient, say so — "
-                "do not escalate by default."
+                "These sessions almost always benefit from E or F. Recommend E or F and set "
+                "request_consultant_escalation=true unless the task is genuinely trivial."
             )
         user_router = (
-            f"Deterministic baseline tier (from org heuristics): {deterministic_tier}\n\n"
+            f"Deterministic baseline tier (from heuristics): {deterministic_tier}\n\n"
             f"User message:\n---\n{(user_message or '')[:12000]}\n---\n\n"
-            f"{hint}"
-            "Reply with ONLY a JSON object, no markdown fences, no other text:\n"
+            f"{hint}{pushback_hint}{retry_hint}"
+            "Reply with ONLY a JSON object, no markdown fences:\n"
             '{"recommended_tier":"B"|"C"|"D"|"E"|"F", '
             '"request_consultant_escalation": true or false, '
             '"rationale": "one short sentence"}\n'
-            "Rules: request_consultant_escalation true when E or F plausibly improves correctness "
-            "on security, registry alignment, or multi-artifact reconciliation."
+            "Rules: set request_consultant_escalation=true whenever recommended_tier is E or F. "
+            "Actively recommend E/F for complex multi-step, architectural, security-sensitive, "
+            "or previously-failed tasks."
         )
         try:
             raw_r = _call_aux_task(

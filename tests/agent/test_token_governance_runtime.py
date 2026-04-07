@@ -149,7 +149,7 @@ def test_resolve_tier_strings_without_runtime_file_uses_builtin_tiers(gov_env, m
     monkeypatch.delenv("HERMES_TOKEN_GOVERNANCE_DISABLE", raising=False)
     assert load_runtime_config() is None
     out = resolve_tier_strings_in_config({"model": {"default": "tier:D", "provider": "openrouter"}})
-    assert out["model"]["default"] == "openrouter/auto"
+    assert out["model"]["default"] == "google/gemini-2.5-flash"
 
 
 def test_apply_runtime_resolves_tier_when_governance_disabled(gov_env, monkeypatch):
@@ -170,7 +170,7 @@ def test_apply_runtime_resolves_tier_when_governance_disabled(gov_env, monkeypat
 
     a = _A()
     apply_token_governance_runtime(a)
-    assert a.model == "openrouter/auto"
+    assert a.model == "google/gemini-2.5-flash"
     assert getattr(a, "_token_governance_cfg", None) is None
 
 

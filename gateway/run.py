@@ -88,6 +88,16 @@ from hermes_cli.env_loader import load_hermes_dotenv
 _env_path = _hermes_home / '.env'
 load_hermes_dotenv(hermes_home=_hermes_home, project_env=Path(__file__).resolve().parents[1] / '.env')
 
+# Auto-run pending config migrations silently at gateway startup so config.yaml is always
+# clean before any routing code reads it (e.g. purge stale kimi/minimax/deepseek model IDs).
+try:
+    from hermes_cli.config import check_config_version, migrate_config as _migrate_config
+    _cur_ver, _latest_ver = check_config_version()
+    if _cur_ver < _latest_ver:
+        _migrate_config(interactive=False, quiet=True)
+except Exception:
+    pass
+
 # Bridge config.yaml values into the environment so os.getenv() picks them up.
 # config.yaml is authoritative for terminal settings — overrides .env.
 _config_path = _hermes_home / 'config.yaml'

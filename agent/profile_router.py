@@ -410,73 +410,38 @@ def _call_profile_router_llm(
                 exc,
             )
 
+    # Profile classification uses the Gemini router model directly — never HF Inference Providers.
+    # HF Inference Providers credits are often depleted; profile routing only needs a lightweight
+    # classification call, which Gemma-4 on Gemini API handles cleanly.
     kr = fmr.get("kimi_router") if isinstance(fmr.get("kimi_router"), dict) else {}
     router_model = str(kr.get("router_model") or "").strip()
-    tiers = normalize_kimi_tiers(raw_free_model_routing_tiers(fmr if isinstance(fmr, dict) else {}))
-    if router_model and not tiers:
-        fb = fallback_free_routed_model_id(fmr if isinstance(fmr, dict) else {})
-        tiers = normalize_kimi_tiers(
-            [{"id": "fallback-free-routed", "description": "", "models": [fb]}]
-        )
     router_prov = str(kr.get("router_provider") or "gemini").strip().lower()
-    if router_model and tiers:
-        if router_prov == "gemini":
-            gem = (
-                os.environ.get("GEMINI_API_KEY")
-                or os.environ.get("GOOGLE_API_KEY")
-                or ""
-            ).strip()
-            if not gem:
-                raise RuntimeError(
-                    "profile_router: free_model_routing.kimi_router.router_provider=gemini requires "
-                    "GEMINI_API_KEY or GOOGLE_API_KEY (set in ~/.hermes/.env or profile .env).",
-                )
-            try:
-                picked = resolve_gemini_routed_model(
-                    user_text,
-                    router_model=router_model,
-                    tiers=tiers,
-                )
-                _set_router_telemetry("gemini_tier_pick", picked)
-                logger.info(
-                    "profile_router: Gemini router model=%s → picked id=%s for classification JSON",
-                    router_model,
-                    picked,
-                )
-                _native = gemini_native_tier_model_set(fmr if isinstance(fmr, dict) else {})
-                if picked in _native:
-                    return call_llm(provider="gemini", model=picked, **kwargs)
-                return call_llm(provider="huggingface", model=picked, **kwargs)
-            except Exception as exc:
-                logger.warning("profile_router: Gemini tier pick failed: %s", exc)
-        else:
-            if not tok:
-                raise RuntimeError(
-                    "Profile router requires HF_TOKEN, HUGGING_FACE_HUB_TOKEN, or HUGGINGFACE_API_KEY "
-                    "for kimi_router (router_provider=huggingface) — "
-                    "set in ~/.hermes/.env or the profile .env.",
-                )
-            try:
-                picked = resolve_hf_routed_model(
-                    user_text,
-                    api_key=tok,
-                    base_url=base,
-                    router_model=router_model,
-                    tiers=tiers,
-                )
-                _set_router_telemetry("hf_tier_pick", picked)
-                logger.info(
-                    "profile_router: HF tier router model=%s → picked hub id=%s for classification JSON",
-                    router_model,
-                    picked,
-                )
-                return call_llm(provider="huggingface", model=picked, **kwargs)
-            except Exception as exc:
-                logger.warning("profile_router: HF tier router pick failed: %s", exc)
+
+    if router_prov == "gemini" and router_model:
+        gem = (
+            os.environ.get("GEMINI_API_KEY")
+            or os.environ.get("GOOGLE_API_KEY")
+            or ""
+        ).strip()
+        if gem:
+            _set_router_telemetry("gemini_direct", router_model)
+            logger.info("profile_router: Gemini direct classification model=%s", router_model)
+            return call_llm(provider="gemini", model=router_model, **kwargs)
+        logger.warning(
+            "profile_router: router_provider=gemini but no GEMINI_API_KEY/GOOGLE_API_KEY found"
+        )
+
+    # Fallback: try a local inference base URL if configured, else raise.
+    local_base = os.environ.get("HERMES_LOCAL_INFERENCE_BASE_URL", "").strip()
+    if router_model and local_base:
+        _set_router_telemetry("local_inference", router_model)
+        logger.info("profile_router: local inference model=%s base=%s", router_model, local_base)
+        return call_llm(provider="openai", model=router_model, base_url=local_base, **kwargs)
 
     raise RuntimeError(
-        "profile_router: set free_model_routing (kimi_router.router_model + tiers), "
-        "or agent.profile_router with router_provider=huggingface and router_model=<hub id>.",
+        "profile_router: set free_model_routing.kimi_router.router_provider=gemini and "
+        "router_model=gemma-4-31b-it (or another Gemini-compatible model), and ensure "
+        "GEMINI_API_KEY is set. HF Inference Providers are not used for profile classification.",
     )
 
 

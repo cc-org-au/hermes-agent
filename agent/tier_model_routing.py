@@ -19,11 +19,12 @@ TIER_DYNAMIC_SENTINEL = "tier:dynamic"
 # User YAML overrides these defaults per key; align with
 # ``memory/runtime/tasks/templates/script-templates/hermes_token_governance.runtime.example.yaml``.
 BUILTIN_TIER_MODELS: Dict[str, str] = {
-    # A–D: OpenRouter resolves the concrete endpoint (avoid fixed per-tier slugs in code).
-    "A": "openrouter/auto",
-    "B": "openrouter/auto",
-    "C": "openrouter/auto",
-    "D": "openrouter/auto",
+    # A–D: explicit diverse fallbacks so routing produces genuine model variety.
+    # These are overridden by hermes_token_governance.runtime.yaml tier_models — edit there.
+    "A": "google/gemini-2.5-flash",          # ultra-fast, free daily cap via Gemini
+    "B": "google/gemini-2.5-flash-lite",     # lightest Gemini, cheapest OpenRouter hop
+    "C": "google/gemini-2.5-pro",            # stronger Gemini for medium reasoning
+    "D": "google/gemini-2.5-flash",          # default workhorse — overridden by YAML
     # E/F: native api.openai.com consultants (OPENAI_API_KEY_DROPLET or OPENAI_API_KEY).
     "E": "gpt-5.4",
     "F": "gpt-5.3-codex",
