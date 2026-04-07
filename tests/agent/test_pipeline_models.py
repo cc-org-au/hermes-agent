@@ -3,8 +3,11 @@
 from agent.pipeline_models import (
     MENU_ACTION_CHOOSE_ROUTER,
     MENU_ACTION_OPENROUTER_BROWSE,
+    PROVIDER_KIND_OPENAI_NATIVE,
+    PROVIDER_KIND_OPENAI_NATIVE_ROUTER,
     collect_models_menu_entries,
     collect_pipeline_models,
+    collect_router_picker_model_rows,
 )
 
 
@@ -104,3 +107,13 @@ def test_collect_models_menu_entries_includes_actions_and_shortcuts():
     mids = [e["model"] for e in entries if e.get("kind") == "model"]
     assert "openrouter/auto" in mids
     assert "openai/gpt-5.4" in mids
+    assert "gpt-5.4" in mids
+    native = [e for e in entries if e.get("kind") == "model" and e["model"] == "gpt-5.4"]
+    assert any(r.get("provider_kind") == PROVIDER_KIND_OPENAI_NATIVE for r in native)
+
+
+def test_collect_router_picker_leads_with_native_openai_rows():
+    rows = collect_router_picker_model_rows()
+    assert rows[0]["model"] == "gpt-5.4"
+    assert rows[0]["provider_kind"] == PROVIDER_KIND_OPENAI_NATIVE_ROUTER
+    assert rows[1]["model"] == "gpt-5.3-codex"

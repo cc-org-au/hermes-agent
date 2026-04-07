@@ -156,7 +156,22 @@ def _call_aux_task(
     if isinstance(override, dict):
         prov = str(override.get("provider") or "").strip()
         mod = str(override.get("model") or "").strip()
+        bu = str(override.get("base_url") or "").strip()
+        ak = str(override.get("api_key") or "").strip()
         if prov and mod:
+            if prov == "custom" and bu:
+                ak = ak or os.getenv("OPENAI_API_KEY", "").strip()
+                resp = call_llm(
+                    task=None,
+                    provider="custom",
+                    model=mod,
+                    base_url=bu,
+                    api_key=ak or None,
+                    messages=msgs,
+                    temperature=0.2,
+                    max_tokens=max_tokens,
+                )
+                return extract_content_or_reasoning(resp) or ""
             resp = call_llm(
                 task=None,
                 provider=prov,

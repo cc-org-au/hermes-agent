@@ -15,6 +15,11 @@ from agent.routing_model_blocklist import filter_blocklisted_models, is_routing_
 MENU_ACTION_OPENROUTER_BROWSE = "openrouter_browse"
 MENU_ACTION_CHOOSE_ROUTER = "choose_router"
 
+# Next-prompt routing: api.openai.com + OPENAI_API_KEY (bare model ids).
+PROVIDER_KIND_OPENAI_NATIVE = "openai_native"
+# Session router row: same stack, stored as custom+base_url on the agent override.
+PROVIDER_KIND_OPENAI_NATIVE_ROUTER = "openai_native_router"
+
 
 def _strip(s: Any) -> str:
     return str(s).strip() if s is not None else ""
@@ -124,9 +129,22 @@ def list_openrouter_picker_model_ids() -> List[str]:
 
 
 def collect_router_picker_model_rows() -> List[Dict[str, Any]]:
-    """Flat rows for ``Choose-Router`` (deduped labels; OpenRouter provider)."""
+    """Flat rows for ``Choose-Router`` (native OpenAI pair first, then OpenRouter)."""
     rows: List[Dict[str, Any]] = []
     seen: set[str] = set()
+    for mid, src in (
+        ("gpt-5.4", "native OpenAI (session router)"),
+        ("gpt-5.3-codex", "native OpenAI (session router)"),
+    ):
+        seen.add(mid)
+        rows.append(
+            {
+                "kind": "model",
+                "model": mid,
+                "source": src,
+                "provider_kind": PROVIDER_KIND_OPENAI_NATIVE_ROUTER,
+            }
+        )
     for mid in list_openrouter_picker_model_ids():
         if mid in seen:
             continue
@@ -146,7 +164,12 @@ def collect_models_menu_entries(config: Optional[Dict[str, Any]]) -> List[Dict[s
     """Rows for interactive ``/models``: shortcuts, action rows, then pipeline models."""
     entries: List[Dict[str, Any]] = []
 
-    def _add_shortcut(model: str, source: str) -> None:
+    def _add_shortcut(
+        model: str,
+        source: str,
+        *,
+        provider_kind: str = "openrouter",
+    ) -> None:
         if is_routing_blocklisted(model):
             return
         entries.append(
@@ -154,12 +177,18 @@ def collect_models_menu_entries(config: Optional[Dict[str, Any]]) -> List[Dict[s
                 "kind": "model",
                 "model": model,
                 "source": source,
-                "provider_kind": "openrouter",
+                "provider_kind": provider_kind,
             }
         )
 
-    _add_shortcut("openai/gpt-5.4", "/models shortcut")
-    _add_shortcut("openai/gpt-5.3-codex", "/models shortcut")
+    _add_shortcut("gpt-5.4", "/models shortcut (native OpenAI)", provider_kind=PROVIDER_KIND_OPENAI_NATIVE)
+    _add_shortcut(
+        "gpt-5.3-codex",
+        "/models shortcut (native OpenAI)",
+        provider_kind=PROVIDER_KIND_OPENAI_NATIVE,
+    )
+    _add_shortcut("openai/gpt-5.4", "/models shortcut (OpenRouter)")
+    _add_shortcut("openai/gpt-5.3-codex", "/models shortcut (OpenRouter)")
     _add_shortcut("openrouter/auto", "/models shortcut (OpenRouter auto)")
 
     entries.append(

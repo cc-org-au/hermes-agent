@@ -114,7 +114,7 @@ COMMAND_REGISTRY: list[CommandDef] = [
                args_hint="[on|off|tts|status]", subcommands=("on", "off", "tts", "status")),
     CommandDef(
         "models",
-        "Pick next-prompt model (shortcuts, OpenRouter list, session router); sequential pickers",
+        "Pick next-prompt model (native OpenAI vs OpenRouter GPT-5 shortcuts, full OR list, session router)",
         "Configuration",
         cli_only=True,
         args_hint="[list|clear|router clear|<n>]",

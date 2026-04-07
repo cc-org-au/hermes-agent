@@ -2274,6 +2274,41 @@ class HermesCLI:
                         tuple(rt.get("args") or ()),
                     ),
                 }
+            if pk == "openai_native":
+                from agent.openai_native_runtime import native_openai_runtime_tuple
+
+                tup = native_openai_runtime_tuple()
+                if not tup:
+                    logging.warning("/models native OpenAI: OPENAI_API_KEY not set")
+                    self._pipeline_model_once = None
+                    return {
+                        **base,
+                        "skip_per_turn_tier_routing": base.get("skip_per_turn_tier_routing", False),
+                    }
+                bu, ak = tup
+                self._pipeline_model_once = None
+                return {
+                    "model": model,
+                    "runtime": {
+                        "api_key": ak,
+                        "base_url": bu,
+                        "provider": "custom",
+                        "api_mode": "codex_responses",
+                        "command": None,
+                        "args": [],
+                        "credential_pool": None,
+                    },
+                    "label": f"/models → {model} (native OpenAI)",
+                    "skip_per_turn_tier_routing": True,
+                    "signature": (
+                        model,
+                        "custom",
+                        bu,
+                        "codex_responses",
+                        None,
+                        (),
+                    ),
+                }
             self._pipeline_model_once = None
             return {**base, "skip_per_turn_tier_routing": base.get("skip_per_turn_tier_routing", False)}
         except Exception as exc:
@@ -5827,6 +5862,7 @@ class HermesCLI:
             from agent.pipeline_models import (
                 MENU_ACTION_CHOOSE_ROUTER,
                 MENU_ACTION_OPENROUTER_BROWSE,
+                PROVIDER_KIND_OPENAI_NATIVE_ROUTER,
                 collect_models_menu_entries,
                 collect_router_picker_model_rows,
                 list_openrouter_picker_model_ids,
@@ -5925,10 +5961,31 @@ class HermesCLI:
                 _cprint("  Cancelled.")
                 return
             mid = rrows[j]["model"]
-            self._session_router_override = {"provider": "openrouter", "model": mid}
-            if getattr(self, "agent", None) is not None:
-                self.agent._router_session_override = dict(self._session_router_override)
-            _cprint(f"  Session router → {mid} (OpenRouter). /models router clear to reset.")
+            pk_router = str(rrows[j].get("provider_kind") or "openrouter").strip()
+            if pk_router == PROVIDER_KIND_OPENAI_NATIVE_ROUTER:
+                from agent.openai_native_runtime import native_openai_runtime_tuple
+
+                tup = native_openai_runtime_tuple()
+                if not tup:
+                    _cprint("  OPENAI_API_KEY not set; cannot use native OpenAI session router.")
+                    return
+                bu, ak = tup
+                self._session_router_override = {
+                    "provider": "custom",
+                    "model": mid,
+                    "base_url": bu,
+                    "api_key": ak,
+                }
+                if getattr(self, "agent", None) is not None:
+                    self.agent._router_session_override = dict(self._session_router_override)
+                _cprint(
+                    f"  Session router → {mid} (native OpenAI). /models router clear to reset."
+                )
+            else:
+                self._session_router_override = {"provider": "openrouter", "model": mid}
+                if getattr(self, "agent", None) is not None:
+                    self.agent._router_session_override = dict(self._session_router_override)
+                _cprint(f"  Session router → {mid} (OpenRouter). /models router clear to reset.")
             return
 
         self._pipeline_model_once = _row_to_once(picked)
