@@ -296,6 +296,48 @@ def _build_child_agent(
 
     return child
 
+def _resolve_free_fallback_runtime(child: Any, parent_agent: Any) -> Optional[Dict[str, Any]]:
+    """HTTP stack for rerunning a subprocess with a free model id.
+
+    ``resolve_runtime_provider(requested=\"gemini\")`` only sees ``GEMINI_API_KEY``;
+    delegated children often use the *same* endpoint as the parent (OpenRouter,
+    pooled keys, or profile config). Reuse the blocked child's credentials first,
+    then the parent's, then explicit Gemini env resolution.
+    """
+
+    def _from_agent(agent: Any) -> Optional[Dict[str, Any]]:
+        if agent is None:
+            return None
+        ak = (getattr(agent, "api_key", None) or "").strip()
+        bu = (getattr(agent, "base_url", None) or "").strip()
+        if not ak and hasattr(agent, "_client_kwargs"):
+            ck = getattr(agent, "_client_kwargs", None) or {}
+            if isinstance(ck, dict):
+                ak = (ck.get("api_key") or "").strip()
+        if ak and bu:
+            return {
+                "provider": (getattr(agent, "provider", None) or "").strip() or None,
+                "base_url": bu.rstrip("/"),
+                "api_key": ak,
+                "api_mode": getattr(agent, "api_mode", None) or "chat_completions",
+            }
+        return None
+
+    for ag in (child, parent_agent):
+        rt = _from_agent(ag)
+        if rt:
+            return rt
+    try:
+        from hermes_cli.runtime_provider import resolve_runtime_provider
+
+        rt = resolve_runtime_provider(requested="gemini")
+        if rt and (rt.get("api_key") or "").strip():
+            return rt
+    except Exception:
+        pass
+    return None
+
+
 def _run_single_child(
     task_index: int,
     goal: str,
@@ -351,9 +393,7 @@ def _run_single_child(
                     and fb_model.strip().lower() != (child_model or "").strip().lower()
                 ):
                     try:
-                        from hermes_cli.runtime_provider import resolve_runtime_provider
-
-                        rt = resolve_runtime_provider(requested="gemini")
+                        rt = _resolve_free_fallback_runtime(child, parent_agent)
                         if rt and (rt.get("api_key") or "").strip():
                             _emit_fb = getattr(parent_agent, "_emit_status", None)
                             if callable(_emit_fb):
