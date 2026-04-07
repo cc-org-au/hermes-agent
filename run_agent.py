@@ -5005,6 +5005,29 @@ class AIAgent:
                     _loc = None
                     logger.debug("local_inference override failed", exc_info=True)
                 if _loc:
+                    # Before committing to local inference, check the server is
+                    # actually reachable. If not, auto-start on Mac or skip to
+                    # the next fallback — avoids 3×retry noise on a dead server.
+                    try:
+                        from agent.local_inference import (
+                            ensure_local_inference_server_running,
+                            is_local_inference_server_alive,
+                        )
+                        _orig_fb = fb_model  # keep hub id for hub_id lookup
+                        _alive = is_local_inference_server_alive()
+                        if not _alive:
+                            _alive = ensure_local_inference_server_running(_orig_fb)
+                    except Exception:
+                        _alive = False
+                    if not _alive:
+                        logging.info(
+                            "local_inference: server not reachable for %s — "
+                            "skipping to next fallback (gemma-4).",
+                            fb_model,
+                        )
+                        return self._try_activate_fallback(
+                            triggered_by_rate_limit=triggered_by_rate_limit
+                        )
                     explicit_base, explicit_key = _loc[0], _loc[1]
                     # Use the resolved local path as model name so the server
                     # reuses the already-loaded model instead of re-fetching.
@@ -5021,10 +5044,9 @@ class AIAgent:
                     except Exception:
                         _dl_ids = None
                     if _dl_ids and fb_model in _dl_ids:
-                        logging.warning(
-                            "free_model_routing: %s is locally downloaded but "
-                            "HERMES_LOCAL_INFERENCE_BASE_URL is not set — "
-                            "skipping HF inference. Run serve_local_models.sh to activate.",
+                        logging.info(
+                            "local_inference: %s is locally downloaded but no server URL set — "
+                            "skipping to gemma-4 fallback.",
                             fb_model,
                         )
                         return self._try_activate_fallback(
