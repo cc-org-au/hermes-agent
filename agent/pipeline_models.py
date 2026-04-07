@@ -34,11 +34,20 @@ def _strip(s: Any) -> str:
 def collect_pipeline_models(config: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Return menu rows for ``/models``: ``model``, ``source``, ``provider_kind``.
 
-    *provider_kind* is ``primary`` (current profile primary), ``huggingface``, or ``gemini``.
+    *provider_kind* is ``primary`` (current profile primary), ``local`` (downloaded hub model),
+    ``huggingface`` (HF inference), or ``gemini``.
     Order: primary, then tier router → tier hub models (deduped), then optional Gemini.
     """
     if not config or not isinstance(config, dict):
         return []
+
+    # Detect locally-downloaded hub model ids once (from state.json).
+    try:
+        from agent.local_inference import downloaded_hub_repo_ids as _dhri
+
+        _downloaded: set[str] = _dhri() or set()
+    except Exception:
+        _downloaded = set()
 
     out: List[Dict[str, Any]] = []
     seen_hf: set[str] = set()
@@ -49,7 +58,9 @@ def collect_pipeline_models(config: Optional[Dict[str, Any]]) -> List[Dict[str, 
         if not mid or mid in seen_hf or is_routing_blocklisted(mid):
             return
         seen_hf.add(mid)
-        out.append({"model": mid, "source": source, "provider_kind": "huggingface"})
+        # Show as 'local' when the model is present in local_models/hub/state.json.
+        pk = "local" if mid in _downloaded else "huggingface"
+        out.append({"model": mid, "source": source, "provider_kind": pk})
 
     def _add_gemini(model_id: str, source: str) -> None:
         mid = _strip(model_id)

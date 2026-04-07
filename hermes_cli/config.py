@@ -682,6 +682,25 @@ REQUIRED_ENV_VARS = {}
 
 # Optional environment variables that enhance functionality
 OPTIONAL_ENV_VARS = {
+    # ── Local inference (vLLM / llama.cpp / Ollama OpenAI-compatible server) ──
+    "HERMES_LOCAL_INFERENCE_BASE_URL": {
+        "description": "Base URL for a local OpenAI-compatible inference server (vLLM, llama.cpp, Ollama). "
+                       "When set, locally-downloaded models from local_models/hub/ are served via this URL "
+                       "instead of HuggingFace Inference Providers. Example: http://localhost:8000",
+        "prompt": "Local inference server base URL (e.g. http://localhost:8000)",
+        "url": None,
+        "password": False,
+        "category": "setting",
+        "advanced": True,
+    },
+    "HERMES_LOCAL_INFERENCE_API_KEY": {
+        "description": "API key for the local inference server (leave empty for 'dummy-local' default)",
+        "prompt": "Local inference server API key (leave empty for default)",
+        "url": None,
+        "password": True,
+        "category": "setting",
+        "advanced": True,
+    },
     # ── Provider (handled in provider selection, not shown in checklists) ──
     "NOUS_BASE_URL": {
         "description": "Nous Portal base URL override",

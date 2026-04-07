@@ -2281,6 +2281,52 @@ class HermesCLI:
                         tuple(rt.get("args") or ()),
                     ),
                 }
+            if pk == "local":
+                import os as _os_local
+
+                try:
+                    from agent.local_inference import local_inference_override_for_hub_model
+
+                    _loc = local_inference_override_for_hub_model(model)
+                except Exception:
+                    _loc = None
+                if _loc:
+                    _local_base, _local_key = _loc
+                else:
+                    # HERMES_LOCAL_INFERENCE_BASE_URL not set — assume default vLLM port.
+                    _local_base = (
+                        _os_local.environ.get("HERMES_LOCAL_INFERENCE_BASE_URL", "").strip()
+                        or "http://localhost:8000/v1"
+                    )
+                    if not _local_base.endswith("/v1"):
+                        _local_base = _local_base.rstrip("/") + "/v1"
+                    _local_key = (
+                        _os_local.environ.get("HERMES_LOCAL_INFERENCE_API_KEY", "").strip()
+                        or "dummy-local"
+                    )
+                    print(
+                        f"\n⚠  Local inference server URL not configured. "
+                        f"Trying {_local_base}\n"
+                        "   Set HERMES_LOCAL_INFERENCE_BASE_URL in your profile .env "
+                        "and run: scripts/local_models/serve_local_models.sh\n",
+                        flush=True,
+                    )
+                self._pipeline_model_once = None
+                return {
+                    "model": model,
+                    "runtime": {
+                        "api_key": _local_key,
+                        "base_url": _local_base,
+                        "provider": "openai",
+                        "api_mode": None,
+                        "command": None,
+                        "args": [],
+                        "credential_pool": None,
+                    },
+                    "label": f"/models → {model} (local)",
+                    "skip_per_turn_tier_routing": True,
+                    "signature": (model, "openai", _local_base, None, None, ()),
+                }
             if pk == "openrouter":
                 rt = resolve_runtime_provider(requested="openrouter")
                 self._pipeline_model_once = None

@@ -5007,6 +5007,25 @@ class AIAgent:
                 if _loc:
                     explicit_base, explicit_key = _loc[0], _loc[1]
                 else:
+                    # If the model is locally downloaded but no server is configured,
+                    # skip HF inference entirely and fall through to next fallback
+                    # (e.g. gemma-4 via optional_gemini).
+                    try:
+                        from agent.local_inference import downloaded_hub_repo_ids as _dhri
+
+                        _dl_ids = _dhri()
+                    except Exception:
+                        _dl_ids = None
+                    if _dl_ids and fb_model in _dl_ids:
+                        logging.warning(
+                            "free_model_routing: %s is locally downloaded but "
+                            "HERMES_LOCAL_INFERENCE_BASE_URL is not set — "
+                            "skipping HF inference. Run serve_local_models.sh to activate.",
+                            fb_model,
+                        )
+                        return self._try_activate_fallback(
+                            triggered_by_rate_limit=triggered_by_rate_limit
+                        )
                     _ek = (
                         _os.environ.get("HF_TOKEN")
                         or _os.environ.get("HUGGING_FACE_HUB_TOKEN")
