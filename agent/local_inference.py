@@ -51,20 +51,24 @@ def load_local_hub_state() -> Optional[Dict[str, Any]]:
 
 
 def downloaded_hub_repo_ids() -> Optional[set[str]]:
-    """Return hub ids marked downloaded in ``state.json``, or None if unknown."""
+    """Return hub ids marked downloaded in ``state.json``, or None if state is unknown.
+
+    Distinguishes between:
+    - ``None`` — state.json is missing or unreadable (caller should not filter)
+    - ``set()`` — state.json exists but nothing is marked downloaded (caller should filter everything out)
+    - ``{ids}`` — the set of downloaded hub ids
+    """
     state = load_local_hub_state()
-    if not state:
-        return None
+    if state is None:
+        return None  # file missing → don't filter
     raw = state.get("downloaded") or state.get("repos") or []
     if isinstance(raw, dict):
         ids = [str(k).strip() for k in raw if str(k).strip()]
     elif isinstance(raw, list):
         ids = [str(x).strip() for x in raw if str(x).strip()]
     else:
-        return None
-    if not ids:
-        return None
-    return set(ids)
+        return set()  # state.json present but malformed → treat as empty
+    return set(ids)  # may be empty set() when downloaded=[]
 
 
 def filter_hub_model_ids_by_local_state(
@@ -74,19 +78,19 @@ def filter_hub_model_ids_by_local_state(
 ) -> list[str]:
     """Drop tier hub ids that are not present in local ``state.json`` when enabled.
 
-    When ``local_models/hub/state.json`` is missing or has no ``downloaded`` entries,
-    returns *model_ids* unchanged. If filtering would remove every id, returns the
-    original list so the tier router still has candidates.
+    - state.json missing (``have is None``) → return *model_ids* unchanged (unknown state)
+    - state.json present but empty (``have == set()``) → return ``[]`` (nothing downloaded)
+    - state.json has ids → return only the intersection with *model_ids*
+      (if intersection is empty, return ``[]`` — respect the explicit empty state)
     """
     if not enabled or not model_ids:
         return list(model_ids)
     have = downloaded_hub_repo_ids()
-    if not have:
+    if have is None:
+        # state.json missing — don't filter (unknown state, avoid breaking things)
         return list(model_ids)
-    filtered = [m.strip() for m in model_ids if m and str(m).strip() in have]
-    if not filtered:
-        return list(model_ids)
-    return filtered
+    # state.json present: filter strictly to what is downloaded (may be empty)
+    return [m.strip() for m in model_ids if m and str(m).strip() in have]
 
 
 def _resolve_served_model_path(hub_id: str, state: dict) -> str:
