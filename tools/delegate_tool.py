@@ -272,6 +272,19 @@ def _build_child_agent(
     # Set delegation depth so children can't spawn grandchildren
     child._delegate_depth = getattr(parent_agent, '_delegate_depth', 0) + 1
 
+    # Stash build params so subprocess governance can rebuild with a free model if blocked
+    child._delegate_meta = {
+        "task_index": task_index,
+        "goal": goal,
+        "context": context,
+        "toolsets": toolsets,
+        "max_iterations": max_iterations,
+        "override_provider": override_provider,
+        "override_base_url": override_base_url,
+        "override_api_key": override_api_key,
+        "override_api_mode": override_api_mode,
+    }
+
     # Register child for interrupt propagation
     if hasattr(parent_agent, '_active_children'):
         lock = getattr(parent_agent, '_active_children_lock', None)
@@ -290,6 +303,7 @@ def _run_single_child(
     parent_agent=None,
     *,
     _subprocess_task_id: Optional[str] = None,
+    _free_fallback_depth: int = 0,
     **_kwargs,
 ) -> Dict[str, Any]:
     """
@@ -309,9 +323,11 @@ def _run_single_child(
     # ── Subprocess governance: enforce free-model-only policy ──────────────
     try:
         from agent.subprocess_governance import (
-            enforce_subprocess_model_policy,
-            notify_completion,
             SUBPROCESS_MAX_SECONDS,
+            default_free_subprocess_model_id,
+            enforce_subprocess_model_policy,
+            is_free_subprocess_model,
+            notify_completion,
         )
         _gov_approved, _gov_reason = enforce_subprocess_model_policy(
             child_model,
@@ -320,6 +336,70 @@ def _run_single_child(
             parent_agent=parent_agent,
         )
         if not _gov_approved:
+            # Auto-fallback: rerun with configured free model (gemma-4 on Gemini API)
+            # instead of blocking and forcing the parent to deliberate / ask for approval.
+            if (
+                _free_fallback_depth < 1
+                and str(_gov_reason).startswith("denied_paid_model")
+                and child is not None
+                and parent_agent is not None
+            ):
+                fb_model = default_free_subprocess_model_id()
+                if (
+                    fb_model
+                    and is_free_subprocess_model(fb_model)
+                    and fb_model.strip().lower() != (child_model or "").strip().lower()
+                ):
+                    try:
+                        from hermes_cli.runtime_provider import resolve_runtime_provider
+
+                        rt = resolve_runtime_provider(requested="gemini")
+                        if rt and (rt.get("api_key") or "").strip():
+                            _emit_fb = getattr(parent_agent, "_emit_status", None)
+                            if callable(_emit_fb):
+                                _emit_fb(
+                                    f"↪ Subprocess: paid model {child_model!r} not allowed for "
+                                    f"delegation — switching to free model {fb_model!r} and continuing.",
+                                    "subprocess_governance",
+                                )
+                            # Drop blocked child from interrupt list; replacement re-registers
+                            if hasattr(parent_agent, "_active_children") and child in getattr(
+                                parent_agent, "_active_children", []
+                            ):
+                                try:
+                                    parent_agent._active_children.remove(child)
+                                except ValueError:
+                                    pass
+                            meta = getattr(child, "_delegate_meta", None) or {}
+                            _mi = int(meta.get("max_iterations") or 50)
+                            new_child = _build_child_agent(
+                                task_index=int(meta.get("task_index", task_index)),
+                                goal=str(meta.get("goal", goal)),
+                                context=meta.get("context"),
+                                toolsets=meta.get("toolsets"),
+                                model=fb_model,
+                                max_iterations=_mi,
+                                parent_agent=parent_agent,
+                                override_provider=rt.get("provider"),
+                                override_base_url=rt.get("base_url"),
+                                override_api_key=rt.get("api_key"),
+                                override_api_mode=rt.get("api_mode"),
+                            )
+                            new_child._delegate_saved_tool_names = getattr(
+                                child, "_delegate_saved_tool_names", None
+                            )
+                            return _run_single_child(
+                                task_index,
+                                str(meta.get("goal", goal)),
+                                new_child,
+                                parent_agent,
+                                _subprocess_task_id=f"{task_id}-free-fallback",
+                                _free_fallback_depth=_free_fallback_depth + 1,
+                            )
+                    except Exception as _fb_err:
+                        logger.warning(
+                            "delegate_tool: free-model auto-fallback failed: %s", _fb_err
+                        )
             blocked_msg = (
                 f"Subprocess blocked by governance policy: model {child_model!r} "
                 f"requires operator approval for background/subprocess use. "

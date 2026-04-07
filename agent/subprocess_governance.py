@@ -107,6 +107,28 @@ def is_free_subprocess_model(model_id: str) -> bool:
     return classify_model_cost(model_id) == "free"
 
 
+def default_free_subprocess_model_id() -> str:
+    """Model id used when auto-falling back from a blocked paid subprocess model.
+
+    Reads ``free_model_routing.gemini_native_tier_models[0]`` from config when present,
+    else ``gemma-4-31b-it`` (Gemma-4 on Gemini API — classified as *free* for subprocess
+    policy because the slug matches ``gemma-4``).
+    """
+    try:
+        from hermes_cli.config import load_config
+
+        cfg = load_config()
+        fmr = (cfg or {}).get("free_model_routing") or {}
+        gn = fmr.get("gemini_native_tier_models") or []
+        if isinstance(gn, list) and gn:
+            mid = str(gn[0]).strip()
+            if mid:
+                return mid
+    except Exception:
+        pass
+    return "gemma-4-31b-it"
+
+
 def requires_operator_approval(model_id: str) -> bool:
     """True for any model that isn't genuinely free (i.e., has API costs)."""
     return not is_free_subprocess_model(model_id)
