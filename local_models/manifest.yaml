@@ -1,12 +1,9 @@
-# HF repos for local vLLM/TGI weights. Sizes are measured at download time; greedy pack
-# fills up to budget_gb. MiniMax (~214 GiB) + gpt-oss-120b (~182 GiB) need ~396 GiB total.
+# Single checkpoint that fits a ~100 GiB budget (VPS + many laptops). Weights under local_models/hub/ (gitignored).
 
 version: 1
-budget_gb: 420
+budget_gb: 90
 max_workers: 64
 
 repos:
-  - id: MiniMaxAI/MiniMax-M2.5
+  - id: Qwen/QwQ-32B
     priority: 10
-  - id: openai/gpt-oss-120b
-    priority: 20

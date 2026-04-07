@@ -2,48 +2,37 @@
 
 Downloaded checkpoints live under `hub/` (gitignored). Tracked files: `manifest.yaml`, this README.
 
-## Manifest (default)
+## Current manifest
 
-`MiniMaxAI/MiniMax-M2.5` and `openai/gpt-oss-120b` — together roughly **~400 GiB** LFS; `manifest.yaml` sets `budget_gb: 420` so both can be planned in one run. Adjust `budget_gb` if your disk differs.
-
-## Free-fallback routing (Gemini → local hub ids)
-
-Default **`free_model_routing.kimi_router`** uses **`router_provider: gemini`** and **`router_model: gemma-4-31b-it`** (Google AI) to pick **one** hub id per turn from the tier list (`MiniMaxAI/MiniMax-M2.5`, `openai/gpt-oss-120b`). Inference runs against **`HERMES_LOCAL_INFERENCE_BASE_URL`** when those ids appear in `hub/state.json`.
-
-Requires **`GEMINI_API_KEY`** or **`GOOGLE_API_KEY`** for routing; local serving uses your vLLM/TGI base URL (no HF token needed for routing when using the Gemini router).
-
-## Gated HF repos
-
-If you add a gated model to `manifest.yaml`, set **`HF_TOKEN`** and accept the license on the model page.
+**`Qwen/QwQ-32B`** (~61 GiB) — fits smaller disks and the default **90 GiB** budget in `manifest.yaml`. Raise `budget_gb` if you add more repos.
 
 ## Download (resume + max parallelism)
 
-From the repo root (use the project venv if you have one):
+From repo root (venv recommended):
 
 ```bash
 pip install 'huggingface_hub>=0.26' hf_transfer pyyaml
 export HF_HUB_ENABLE_HF_TRANSFER=1
-python scripts/local_models/download_models.py --max-workers 64
+python scripts/local_models/download_models.py --max-workers 64 --no-sync-droplet
 ```
 
-`max_workers` is also read from `manifest.yaml` (default **32**); pass **`--max-workers 64`** (or higher if your Hub client supports it) for maximum parallel shard downloads. **`--no-sync-droplet`** skips the post-step rsync.
+`max_workers` is also read from `manifest.yaml` (default **64**). **`--no-sync-droplet`** skips rsync (use `./scripts/local_models/sync_to_droplet.sh` or the parallel script when ready).
 
-After **all** repos in the plan finish without errors, the script **verifies** each snapshot (`config.json` + weights/index), then runs **`scripts/local_models/sync_to_droplet.sh`** automatically (unless `--no-sync-droplet`).
+Logs: `logs/download.log`, `logs/failures.jsonl`, `hub/state.json`.
 
-- **Resume**: `snapshot_download` resumes partial files; safe to stop and re-run.
-- **Logs**: `logs/download.log`, `logs/failures.jsonl`, `hub/state.json`.
+## Hosted inference for very large open models (MiniMax, gpt-oss, …)
 
-## Manual sync to droplet
+Those checkpoints are **too large** for Hugging Face’s free serverless GPU slots and for most “free API” tiers. Practical options:
 
-```bash
-./scripts/local_models/sync_to_droplet.sh
-```
+1. **Hugging Face Inference Providers** (OpenAI-compatible via `HF_TOKEN`): small monthly credits on free accounts, then pay-as-you-go; pick **models that are actually offered** on a provider (see [Inference Providers pricing](https://huggingface.co/docs/inference-providers/pricing)). Hermes already uses **`provider: huggingface`** with **`HF_TOKEN`** / **`HUGGINGFACE_API_KEY`** for routing and fallbacks (`free_model_routing`, `hf_router`).
+2. **Google AI (Gemma)** — free tier limits; Hermes can use **`router_provider: gemini`** in `free_model_routing.kimi_router` with **`GEMINI_API_KEY`** / **`GOOGLE_API_KEY`** for tier picking (not the same weights as MiniMax/gpt-oss, but zero local disk).
+3. **Swap tier lists** in `config.yaml` `free_model_routing.kimi_router.tiers` to **smaller hub ids** that your chosen provider actually serves (e.g. community Qwen/Llama instruct variants), instead of `MiniMaxAI/MiniMax-M2.5` / `openai/gpt-oss-120b`.
 
-Uses the same `~/.env/.env` SSH variables as `scripts/core/droplet_run.sh`. Syncs **`local_models/hub/`** → `/home/hermesuser/hermes-agent/local_models/hub/` (not `~/.hermes`).
+There is no durable **100% free** API that runs **those exact** multi‑100 GiB weights at scale; the sustainable pattern is **smaller hosted models** + credits, or **self‑host** where you have RAM/VRAM.
 
 ## Local OpenAI-compatible server
 
-Point vLLM/TGI at the downloaded dirs with **`--served-model-name`** equal to the hub id (`MiniMaxAI/MiniMax-M2.5`, `openai/gpt-oss-120b`). Then:
+Point vLLM/TGI at a downloaded tree; **`--served-model-name`** should match the hub id (e.g. `Qwen/QwQ-32B`). Then:
 
 ```bash
 export HERMES_LOCAL_INFERENCE_BASE_URL=http://127.0.0.1:8000/v1
