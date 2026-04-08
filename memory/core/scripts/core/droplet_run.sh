@@ -25,6 +25,9 @@
 #   ./scripts/core/droplet_pull_hermes_home.sh
 # Push local ~/.hermes to the VPS (backs up remote .hermes first; see script for gateway restart):
 #   ./scripts/core/droplet_push_hermes_home.sh
+# Append secrets on the VPS as hermesuser (after git pull so the script exists in ~/hermes-agent):
+#   ./scripts/core/droplet_run.sh --droplet-require-sudo --sudo-user hermesuser \
+#     'bash ~/hermes-agent/scripts/core/hermes_append_env.sh SLACK_BOT_TOKEN=xoxb-...'
 #
 # Same credentials as scripts/core/ssh_droplet.sh (~/.env/.env). HERMES_DROPLET_INTERACTIVE=1
 # keeps the IDE TTY gate satisfied; SSH key rules follow ssh_droplet.sh.
