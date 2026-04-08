@@ -38,6 +38,8 @@ DELEGATE_BLOCKED_TOOLS = frozenset([
     "clarify",         # no user interaction
     "memory",          # no writes to shared MEMORY.md
     "send_message",    # no cross-platform side effects
+    "slack_channel_admin",
+    "telegram_forum_topic",
     "execute_code",    # children should reason step-by-step, not write scripts
 ])
 
@@ -378,7 +380,7 @@ def _run_single_child(
             parent_agent=parent_agent,
         )
         if not _gov_approved:
-            # Auto-fallback: rerun with configured free model (gemma-4 on Gemini API)
+            # Auto-fallback: rerun with configured free model (gemma-4-31b-it on Gemini API)
             # instead of blocking and forcing the parent to deliberate / ask for approval.
             if (
                 _free_fallback_depth < 1
@@ -443,7 +445,7 @@ def _run_single_child(
             blocked_msg = (
                 f"Subprocess blocked by governance policy: model {child_model!r} "
                 f"requires operator approval for background/subprocess use. "
-                f"Only free local models (gemma-4, qwen) are permitted without approval. "
+                f"Only free local models (gemma-4-31b-it or local inference) are permitted without approval. "
                 f"Reason: {_gov_reason}"
             )
             logger.warning("delegate_tool: %s", blocked_msg)
@@ -1077,7 +1079,7 @@ DELEGATE_TASK_SCHEMA = {
         "- Subagents have NO memory of your conversation. Pass all relevant "
         "info (file paths, error messages, constraints) via the 'context' field.\n"
         "- Subagents CANNOT call: delegate_task, clarify, memory, send_message, "
-        "execute_code.\n"
+        "slack_channel_admin, telegram_forum_topic, execute_code.\n"
         "- Each subagent gets its own terminal session (separate working directory and state).\n"
         "- Optional hermes_profile: run the subagent under that named Hermes profile's "
         "HERMES_HOME (toolsets, keys, gateway state isolated). Single-task only; "

@@ -62,6 +62,9 @@ _HERMES_CORE_TOOLS = [
     "cronjob",
     # Cross-platform messaging (gated on gateway running via check_fn)
     "send_message",
+    # Slack / Telegram layout (gated on respective bot tokens via check_fn)
+    "slack_channel_admin",
+    "telegram_forum_topic",
     # Home Assistant smart home control (gated on HASS_TOKEN via check_fn)
     "ha_list_entities", "ha_get_state", "ha_list_services", "ha_call_service",
 ]
@@ -132,8 +135,20 @@ TOOLSETS = {
     
     "messaging": {
         "description": "Cross-platform messaging: send messages to Telegram, Discord, Slack, SMS, etc.",
-        "tools": ["send_message"],
+        "tools": ["send_message", "slack_channel_admin", "telegram_forum_topic"],
         "includes": []
+    },
+
+    "slack_workspace_admin": {
+        "description": "Create, rename, or archive Slack channels (requires SLACK_BOT_TOKEN + OAuth scopes)",
+        "tools": ["slack_channel_admin"],
+        "includes": [],
+    },
+
+    "telegram_forum_admin": {
+        "description": "Create and manage Telegram forum topics in forum supergroups (requires TELEGRAM_BOT_TOKEN)",
+        "tools": ["telegram_forum_topic"],
+        "includes": [],
     },
     
     "rl": {
