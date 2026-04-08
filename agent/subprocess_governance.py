@@ -288,17 +288,28 @@ def _is_openai_primary_mode_allowed(model_id: str, parent_agent: Any = None) -> 
     """
     try:
         from hermes_cli.config import load_config
+        from agent.token_governance_runtime import load_runtime_config
+
         cfg = load_config() or {}
-        opm = cfg.get("openai_primary_mode") or {}
+        rt = load_runtime_config() or {}
+
+        # Runtime YAML is authoritative for deployment-time governance knobs.
+        opm = rt.get("openai_primary_mode") or cfg.get("openai_primary_mode") or {}
         if not opm.get("enabled", False):
             return False
+
         allowed = opm.get("allowed_subprocess_models") or []
         mid = (model_id or "").strip().lower()
-        if not any(a.strip().lower() == mid for a in allowed):
+        if not any(str(a).strip().lower() == mid for a in allowed):
             return False
+
         if opm.get("require_direct_openai", True) and parent_agent is not None:
             bu = (getattr(parent_agent, "base_url", None) or "").strip().lower()
+            prov = (getattr(parent_agent, "provider", None) or "").strip().lower()
+            # Must be native api.openai.com and never OpenRouter.
             if "openrouter" in bu:
+                return False
+            if "api.openai.com" not in bu and prov not in ("openai", "openai-codex", "custom"):
                 return False
         return True
     except Exception:
