@@ -39,7 +39,8 @@ Usage:
     hermes uninstall           Uninstall Hermes Agent
     hermes acp                 Run as an ACP server for editor integration
     hermes sessions browse     Interactive session picker with search
-    hermes droplet             Run Hermes CLI on the VPS over SSH (needs scripts/core/agent-droplet)
+    hermes droplet             Run Hermes CLI on the VPS over SSH (bundled agent-droplet)
+    hermes tui droplet         Same with explicit TUI subcommand (tui == chat)
 
     hermes claw migrate --dry-run  # Preview migration without changes
 """
@@ -96,6 +97,22 @@ def _resolve_hermes_project_root() -> Path:
 # Checkout (or install site root) first on path — ``HERMES_AGENT_REPO`` wins when set.
 PROJECT_ROOT = _resolve_hermes_project_root()
 sys.path.insert(0, str(PROJECT_ROOT))
+
+
+def _resolve_agent_droplet_script() -> Optional[Path]:
+    """Path to ``agent-droplet`` (bundled under ``hermes_cli/scripts/core`` or repo ``scripts/core``)."""
+    pkg = Path(__file__).resolve().parent / "scripts" / "core" / "agent-droplet"
+    if pkg.is_file():
+        return pkg
+    legacy = PROJECT_ROOT / "scripts" / "core" / "agent-droplet"
+    if legacy.is_file():
+        return legacy
+    env_repo = os.environ.get("HERMES_AGENT_REPO", "").strip()
+    if env_repo:
+        p = Path(env_repo).expanduser().resolve() / "scripts" / "core" / "agent-droplet"
+        if p.is_file():
+            return p
+    return None
 
 
 def _rewrite_mistaken_profile_droplet_argv(argv: list) -> Optional[list]:
@@ -263,15 +280,15 @@ _p_droplet_fix = _rewrite_mistaken_profile_droplet_argv(list(sys.argv[1:]))
 if _p_droplet_fix is not None:
     sys.argv = [sys.argv[0]] + _p_droplet_fix
 _drop_argv = _strip_trailing_droplet_hop_argv(sys.argv[1:])
-_agent_droplet = PROJECT_ROOT / "scripts" / "core" / "agent-droplet"
-_delegate_droplet = bool(_drop_argv is not None and _agent_droplet.is_file())
+_agent_droplet_path = _resolve_agent_droplet_script()
+_delegate_droplet = bool(_drop_argv is not None and _agent_droplet_path is not None)
 if _delegate_droplet:
     sys.argv = [sys.argv[0]] + _drop_argv
 
 _apply_profile_override()
 
 if _delegate_droplet:
-    os.execv("/bin/bash", ["/bin/bash", str(_agent_droplet), *sys.argv[1:]])
+    os.execv("/bin/bash", ["/bin/bash", str(_agent_droplet_path), *sys.argv[1:]])
 
 # Load .env from ~/.hermes/.env first, then project root as dev fallback.
 # User-managed env files should override stale shell exports on restart.
@@ -796,6 +813,94 @@ def cmd_chat(args):
     except ValueError as e:
         print(f"Error: {e}")
         sys.exit(1)
+
+
+def _add_chat_cli_arguments(parser: argparse.ArgumentParser) -> None:
+    """Flags shared by ``hermes chat`` and ``hermes tui``."""
+    parser.add_argument(
+        "-q", "--query",
+        help="Single query (non-interactive mode)"
+    )
+    parser.add_argument(
+        "-m", "--model",
+        help="Model to use (e.g., anthropic/claude-sonnet-4)"
+    )
+    parser.add_argument(
+        "-t", "--toolsets",
+        help="Comma-separated toolsets to enable"
+    )
+    parser.add_argument(
+        "-s", "--skills",
+        action="append",
+        default=None,
+        help="Preload one or more skills for the session (repeat flag or comma-separate)"
+    )
+    parser.add_argument(
+        "--provider",
+        choices=["auto", "openrouter", "nous", "openai-codex", "copilot-acp", "copilot", "anthropic", "huggingface", "zai", "kimi-coding", "minimax", "minimax-cn", "kilocode"],
+        default=None,
+        help="Inference provider (default: auto)"
+    )
+    parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Verbose output"
+    )
+    parser.add_argument(
+        "-Q", "--quiet",
+        action="store_true",
+        help="Quiet mode for programmatic use: suppress banner, spinner, and tool previews. Only output the final response and session info."
+    )
+    parser.add_argument(
+        "--resume", "-r",
+        metavar="SESSION_ID",
+        help="Resume a previous session by ID (shown on exit)"
+    )
+    parser.add_argument(
+        "--continue", "-c",
+        dest="continue_last",
+        nargs="?",
+        const=True,
+        default=None,
+        metavar="SESSION_NAME",
+        help="Resume a session by name, or the most recent if no name given"
+    )
+    parser.add_argument(
+        "--worktree", "-w",
+        action="store_true",
+        default=False,
+        help="Run in an isolated git worktree (for parallel agents on the same repo)"
+    )
+    parser.add_argument(
+        "--checkpoints",
+        action="store_true",
+        default=False,
+        help="Enable filesystem checkpoints before destructive file operations (use /rollback to restore)"
+    )
+    parser.add_argument(
+        "--max-turns",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Maximum tool-calling iterations per conversation turn (default: 90, or agent.max_turns in config)"
+    )
+    parser.add_argument(
+        "--yolo",
+        action="store_true",
+        default=False,
+        help="Bypass all dangerous command approval prompts (use at your own risk)"
+    )
+    parser.add_argument(
+        "--pass-session-id",
+        action="store_true",
+        default=False,
+        help="Include the session ID in the agent's system prompt"
+    )
+    parser.add_argument(
+        "--source",
+        default=None,
+        help="Session source tag for filtering (default: cli). Use 'tool' for third-party integrations that should not appear in user session lists."
+    )
 
 
 def cmd_gateway(args):
@@ -3599,7 +3704,7 @@ def _coalesce_session_name_args(argv: list) -> list:
     or a known top-level subcommand.
     """
     _SUBCOMMANDS = {
-        "chat", "model", "gateway", "setup", "whatsapp", "login", "logout", "auth",
+        "chat", "tui", "model", "gateway", "setup", "whatsapp", "login", "logout", "auth",
         "status", "cron", "doctor", "config", "pairing", "skills", "tools",
         "mcp", "sessions", "insights", "version", "update", "uninstall",
         "profile", "droplet",
@@ -4028,91 +4133,16 @@ For more help on a command:
         help="Interactive chat with the agent",
         description="Start an interactive chat session with Hermes Agent"
     )
-    chat_parser.add_argument(
-        "-q", "--query",
-        help="Single query (non-interactive mode)"
-    )
-    chat_parser.add_argument(
-        "-m", "--model",
-        help="Model to use (e.g., anthropic/claude-sonnet-4)"
-    )
-    chat_parser.add_argument(
-        "-t", "--toolsets",
-        help="Comma-separated toolsets to enable"
-    )
-    chat_parser.add_argument(
-        "-s", "--skills",
-        action="append",
-        default=None,
-        help="Preload one or more skills for the session (repeat flag or comma-separate)"
-    )
-    chat_parser.add_argument(
-        "--provider",
-        choices=["auto", "openrouter", "nous", "openai-codex", "copilot-acp", "copilot", "anthropic", "huggingface", "zai", "kimi-coding", "minimax", "minimax-cn", "kilocode"],
-        default=None,
-        help="Inference provider (default: auto)"
-    )
-    chat_parser.add_argument(
-        "-v", "--verbose",
-        action="store_true",
-        help="Verbose output"
-    )
-    chat_parser.add_argument(
-        "-Q", "--quiet",
-        action="store_true",
-        help="Quiet mode for programmatic use: suppress banner, spinner, and tool previews. Only output the final response and session info."
-    )
-    chat_parser.add_argument(
-        "--resume", "-r",
-        metavar="SESSION_ID",
-        help="Resume a previous session by ID (shown on exit)"
-    )
-    chat_parser.add_argument(
-        "--continue", "-c",
-        dest="continue_last",
-        nargs="?",
-        const=True,
-        default=None,
-        metavar="SESSION_NAME",
-        help="Resume a session by name, or the most recent if no name given"
-    )
-    chat_parser.add_argument(
-        "--worktree", "-w",
-        action="store_true",
-        default=False,
-        help="Run in an isolated git worktree (for parallel agents on the same repo)"
-    )
-    chat_parser.add_argument(
-        "--checkpoints",
-        action="store_true",
-        default=False,
-        help="Enable filesystem checkpoints before destructive file operations (use /rollback to restore)"
-    )
-    chat_parser.add_argument(
-        "--max-turns",
-        type=int,
-        default=None,
-        metavar="N",
-        help="Maximum tool-calling iterations per conversation turn (default: 90, or agent.max_turns in config)"
-    )
-    chat_parser.add_argument(
-        "--yolo",
-        action="store_true",
-        default=False,
-        help="Bypass all dangerous command approval prompts (use at your own risk)"
-    )
-    chat_parser.add_argument(
-        "--pass-session-id",
-        action="store_true",
-        default=False,
-        help="Include the session ID in the agent's system prompt"
-    )
-    chat_parser.add_argument(
-        "--source",
-        default=None,
-        help="Session source tag for filtering (default: cli). Use 'tool' for third-party integrations that should not appear in user session lists."
-    )
+    _add_chat_cli_arguments(chat_parser)
     chat_parser.set_defaults(func=cmd_chat)
+
+    tui_parser = subparsers.add_parser(
+        "tui",
+        help="Interactive terminal UI (same as hermes chat; use with … droplet for VPS)",
+        description="Start the interactive Hermes CLI — alias for hermes chat",
+    )
+    _add_chat_cli_arguments(tui_parser)
+    tui_parser.set_defaults(func=cmd_chat)
 
     # =========================================================================
     # model command
@@ -5415,12 +5445,12 @@ For more help on a command:
     )
 
     def cmd_droplet(args):
-        script = PROJECT_ROOT / "scripts" / "core" / "agent-droplet"
-        if not script.is_file():
+        script = _resolve_agent_droplet_script()
+        if script is None or not script.is_file():
             print(
-                "hermes droplet: scripts/core/agent-droplet not found.\n"
-                "  Install from a hermes-agent git checkout (editable pip install), or run:\n"
-                "    bash $HERMES_AGENT_REPO/scripts/core/agent-droplet",
+                "hermes droplet: agent-droplet script not found (bundled with hermes_cli).\n"
+                "  Reinstall: pip install -U -e '.[dev]' from a git checkout, or set\n"
+                "  HERMES_AGENT_REPO to your clone if scripts live only under scripts/core/.",
                 file=sys.stderr,
             )
             sys.exit(1)

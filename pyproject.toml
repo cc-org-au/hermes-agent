@@ -107,6 +107,9 @@ py-modules = ["run_agent", "model_tools", "toolsets", "batch_runner", "trajector
 [tool.setuptools.packages.find]
 include = ["agent", "tools", "tools.*", "hermes_cli", "gateway", "gateway.*", "cron", "acp_adapter", "plugins", "plugins.*"]
 
+[tool.setuptools.package-data]
+hermes_cli = ["scripts/core/agent-droplet", "scripts/core/ssh_droplet.sh", "scripts/core/droplet_remote_venv.sh"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [

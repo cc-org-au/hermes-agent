@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# VPS hop: run Hermes CLI on the server (see AGENTS.md — Remote VPS CLI).
+# Invoked by hermes_cli.main when argv ends with "droplet", or via: hermes droplet [args...]
+#
+# Reads workstation ~/.hermes/active_profile for remote -p (default: chief-orchestrator).
+# Override with AGENT_DROPLET_PROFILE. "droplet" is never a valid profile name.
+#
+set -euo pipefail
+_HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+PROFILE="${AGENT_DROPLET_PROFILE:-}"
+if [[ -z "$PROFILE" && -f "${HOME}/.hermes/active_profile" ]]; then
+  PROFILE="$(tr -d '\r\n' < "${HOME}/.hermes/active_profile" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+fi
+if [[ -z "$PROFILE" || "$PROFILE" == "default" ]]; then
+  PROFILE="chief-orchestrator"
+fi
+_profile_lc=$(printf '%s' "$PROFILE" | tr '[:upper:]' '[:lower:]')
+if [[ "$_profile_lc" == "droplet" ]]; then
+  PROFILE="chief-orchestrator"
+fi
+unset _profile_lc
+
+# Single shell word-sequence for ssh_droplet (printf %q per token; trim trailing space).
+REMOTE_CMD=$(printf '%q ' "./venv/bin/python" "-m" "hermes_cli.main" "-p" "$PROFILE" "$@")
+REMOTE_CMD=${REMOTE_CMD%% }
+
+export HERMES_DROPLET_WORKSTATION_CLI=1
+export HERMES_DROPLET_INTERACTIVE="${HERMES_DROPLET_INTERACTIVE:-1}"
+
+# Do not allow env-file SSH passphrase auto-fill for operator interactive hop (AGENTS.md).
+exec env -u HERMES_DROPLET_ALLOW_ENV_PASSPHRASE \
+  HERMES_DROPLET_REQUIRE_SUDO="${HERMES_DROPLET_REQUIRE_SUDO:-1}" \
+  bash "${_HERE}/ssh_droplet.sh" --droplet-require-sudo --sudo-user "${HERMES_DROPLET_VENV_USER:-hermesuser}" \
+  "$REMOTE_CMD"

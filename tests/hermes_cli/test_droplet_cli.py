@@ -3,6 +3,14 @@
 import pytest
 
 
+def test_resolve_agent_droplet_script_exists():
+    from hermes_cli.main import _resolve_agent_droplet_script
+
+    p = _resolve_agent_droplet_script()
+    assert p is not None and p.is_file()
+    assert p.name == "agent-droplet"
+
+
 def test_rewrite_mistaken_profile_droplet_argv():
     from hermes_cli.main import _rewrite_mistaken_profile_droplet_argv
 
