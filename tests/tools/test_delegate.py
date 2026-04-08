@@ -374,52 +374,24 @@ class TestToolNamePreservation(unittest.TestCase):
                     f"_saved_tool_names leaked back into wrong scope: {exc}"
                 )
 
-    def test_opm_passes_empty_fallback_model_to_child(self):
-        """Subagents must not inherit free_model_routing → Gemma fallback under OPM."""
+    def test_delegate_child_omits_fallback_model_kwarg(self):
+        """Gemma fallback is cleared inside AIAgent.__init__ when OPM applies; delegate stays simple."""
         parent = _make_mock_parent(depth=0)
         with patch("run_agent.AIAgent") as MockAgent:
             MockAgent.return_value = MagicMock()
-            with patch(
-                "tools.delegate_tool.resolve_openai_primary_mode",
-                return_value=({"enabled": True}, {"enabled": True, "source": "test"}),
-            ):
-                _build_child_agent(
-                    task_index=0,
-                    goal="x",
-                    context=None,
-                    toolsets=None,
-                    model="gpt-5.4",
-                    max_iterations=10,
-                    parent_agent=parent,
-                    override_provider="custom",
-                    override_base_url="https://api.openai.com/v1",
-                    override_api_key="k",
-                    override_api_mode="codex_responses",
-                )
-            kwargs = MockAgent.call_args.kwargs
-            self.assertEqual(kwargs.get("fallback_model"), [])
-
-    def test_non_opm_child_omits_fallback_model_kwarg(self):
-        parent = _make_mock_parent(depth=0)
-        with patch("run_agent.AIAgent") as MockAgent:
-            MockAgent.return_value = MagicMock()
-            with patch(
-                "tools.delegate_tool.resolve_openai_primary_mode",
-                return_value=({}, {"enabled": False}),
-            ):
-                _build_child_agent(
-                    task_index=0,
-                    goal="x",
-                    context=None,
-                    toolsets=None,
-                    model="gpt-5.4",
-                    max_iterations=10,
-                    parent_agent=parent,
-                    override_provider="custom",
-                    override_base_url="https://api.openai.com/v1",
-                    override_api_key="k",
-                    override_api_mode="codex_responses",
-                )
+            _build_child_agent(
+                task_index=0,
+                goal="x",
+                context=None,
+                toolsets=None,
+                model="gpt-5.4",
+                max_iterations=10,
+                parent_agent=parent,
+                override_provider="custom",
+                override_base_url="https://api.openai.com/v1",
+                override_api_key="k",
+                override_api_mode="codex_responses",
+            )
             kwargs = MockAgent.call_args.kwargs
             self.assertNotIn("fallback_model", kwargs)
 

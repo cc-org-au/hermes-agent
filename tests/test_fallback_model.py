@@ -355,7 +355,8 @@ class TestFallbackInit:
         assert agent._fallback_model is not None
         assert agent._fallback_model["provider"] == "gemini"
         assert agent._fallback_model.get("gemini_tier_router") is True
-        assert len(agent._fallback_chain) == 1
+        assert len(agent._fallback_chain) >= 1
+        assert agent._fallback_chain[0]["provider"] == "gemini"
         assert agent._fallback_activated is False
 
     def test_fallback_none_for_non_dict(self):

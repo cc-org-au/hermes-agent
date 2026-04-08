@@ -26,7 +26,7 @@ from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional
 
-from agent.openai_primary_mode import resolve_openai_primary_mode
+from agent.openai_primary_mode import opm_suppresses_free_model_fallback, resolve_openai_primary_mode
 from agent.routing_trace import emit_routing_decision_trace
 
 # Serialize delegate_task when switching HERMES_HOME for a child profile (process-global env).
@@ -320,18 +320,6 @@ def _build_child_agent(
     )
     # endregion
 
-    # OpenAI-primary mode: do not attach the global free_model_routing fallback chain
-    # to subprocesses. Otherwise a transient GPT failure triggers
-    # ``_try_activate_fallback()`` and swaps the subagent to Gemma/Gemini tier
-    # even though delegation credentials were intentionally upgraded to GPT.
-    _opm_child_kwargs: Dict[str, Any] = {}
-    try:
-        _, _opm_fb_meta = resolve_openai_primary_mode(parent_agent)
-        if _opm_fb_meta.get("enabled", False):
-            _opm_child_kwargs["fallback_model"] = []
-    except Exception:
-        pass
-
     child = AIAgent(
         base_url=effective_base_url,
         api_key=effective_api_key,
@@ -359,7 +347,6 @@ def _build_child_agent(
         provider_sort=parent_agent.provider_sort,
         tool_progress_callback=child_progress_cb,
         iteration_budget=None,  # fresh budget per subagent
-        **_opm_child_kwargs,
     )
     # Set delegation depth so children can't spawn grandchildren
     child._delegate_depth = getattr(parent_agent, '_delegate_depth', 0) + 1
@@ -911,17 +898,17 @@ def delegate_task(
         return json.dumps({"error": "delegate_task requires a parent agent context."})
 
     def _enforce_opm_baseline(creds: dict, goal_text: str) -> dict:
-        """Hard baseline override: OPM-on delegations default to GPT, never Gemma."""
+        """Under OPM + native OpenAI, delegations always use GPT on api.openai.com."""
         try:
-            from agent.openai_native_runtime import native_openai_runtime_tuple
+            if not opm_suppresses_free_model_fallback(parent_agent):
+                return creds
+            c = dict(creds or {})
+            m = str(c.get("model") or "").lower()
+            bu = str(c.get("base_url") or "").lower()
+            if "api.openai.com" in bu and m.startswith("gpt-"):
+                return c
 
             _opm, _opm_meta = resolve_openai_primary_mode(parent_agent)
-            if not _opm_meta.get("enabled", False):
-                return creds
-
-            if not _delegation_creds_need_opm_uplift(creds):
-                return creds
-
             _coding = any(
                 k in (goal_text or "").lower()
                 for k in (
@@ -941,33 +928,18 @@ def delegate_task(
                 _opm.get("codex_model") if _coding else _opm.get("default_model")
             ).strip() or ("gpt-5.3-codex" if _coding else "gpt-5.4")
 
-            _base = (getattr(parent_agent, "base_url", None) or "").strip()
-            _key = (getattr(parent_agent, "api_key", None) or "").strip()
-            _prov = (getattr(parent_agent, "provider", None) or "").strip().lower()
-            if (
-                "api.openai.com" in _base.lower()
-                and _key
-                and _prov in ("custom", "openai", "openai-codex")
-            ):
-                return {
-                    **(creds or {}),
-                    "model": _target,
-                    "provider": "custom",
-                    "base_url": _base.rstrip("/"),
-                    "api_key": _key,
-                    "api_mode": "codex_responses",
-                }
+            from agent.openai_native_runtime import native_openai_runtime_tuple
 
             tup = native_openai_runtime_tuple()
             if not tup:
                 return creds
-            bu, ak = tup
+            obu, oak = tup
             _next = {
-                **(creds or {}),
+                **c,
                 "model": _target,
                 "provider": "custom",
-                "base_url": bu,
-                "api_key": ak,
+                "base_url": obu,
+                "api_key": oak,
                 "api_mode": "codex_responses",
             }
             emit_routing_decision_trace(

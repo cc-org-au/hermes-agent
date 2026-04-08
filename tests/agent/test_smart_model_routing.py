@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from agent.smart_model_routing import choose_cheap_model_route
 
 
@@ -13,6 +15,14 @@ _BASE_CONFIG = {
 def test_returns_none_when_disabled():
     cfg = {**_BASE_CONFIG, "enabled": False}
     assert choose_cheap_model_route("what time is it in tokyo?", cfg) is None
+
+
+def test_skips_cheap_route_when_opm_suppresses_free_fallback():
+    with patch(
+        "agent.openai_primary_mode.opm_suppresses_free_model_fallback",
+        return_value=True,
+    ):
+        assert choose_cheap_model_route("hi", _BASE_CONFIG) is None
 
 
 def test_routes_short_simple_prompt():
@@ -36,6 +46,28 @@ def test_skips_code_like_prompt():
 def test_skips_tool_heavy_prompt_keywords():
     prompt = "implement a patch for this docker error"
     assert choose_cheap_model_route(prompt, _BASE_CONFIG) is None
+
+
+def test_resolve_turn_route_primary_when_opm_suppresses_cheap():
+    from agent.smart_model_routing import resolve_turn_route
+
+    primary = {
+        "model": "gpt-5.4",
+        "provider": "openai",
+        "base_url": "https://api.openai.com/v1",
+        "api_mode": "codex_responses",
+        "api_key": "sk-primary",
+        "command": None,
+        "args": [],
+    }
+    with patch(
+        "agent.openai_primary_mode.opm_suppresses_free_model_fallback",
+        return_value=True,
+    ):
+        result = resolve_turn_route("what time is it in tokyo?", _BASE_CONFIG, primary)
+    assert result["model"] == "gpt-5.4"
+    assert result["runtime"]["provider"] == "openai"
+    assert result["label"] is None
 
 
 def test_resolve_turn_route_falls_back_to_primary_when_route_runtime_cannot_be_resolved(monkeypatch):

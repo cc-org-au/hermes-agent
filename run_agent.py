@@ -928,6 +928,13 @@ class AIAgent:
                 self._fallback_chain = resolve_fallback_providers(load_config())
             except Exception:
                 pass
+        try:
+            from agent.openai_primary_mode import opm_suppresses_free_model_fallback
+
+            if opm_suppresses_free_model_fallback():
+                self._fallback_chain = []
+        except Exception:
+            pass
         self._fallback_index = 0
         self._fallback_activated = False
         # Legacy attribute kept for backward compat (tests, external callers)

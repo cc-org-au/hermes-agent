@@ -65,6 +65,14 @@ def choose_cheap_model_route(user_message: str, routing_config: Optional[Dict[st
     Conservative by design: if the message has signs of code/tool/debugging/
     long-form work, keep the primary model.
     """
+    try:
+        from agent.openai_primary_mode import opm_suppresses_free_model_fallback
+
+        if opm_suppresses_free_model_fallback():
+            return None
+    except Exception:
+        pass
+
     cfg = routing_config or {}
     if not _coerce_bool(cfg.get("enabled"), False):
         return None

@@ -447,11 +447,17 @@ def test_opm_clamp_replaces_google_gemini_tier_slug():
     from agent import token_governance_runtime as tgr
 
     agent = object()
-    with patch(
-        "agent.token_governance_runtime.resolve_openai_primary_mode",
-        return_value=(
-            {"default_model": "gpt-5.4", "codex_model": "gpt-5.3-codex"},
-            {"enabled": True},
+    with (
+        patch(
+            "agent.token_governance_runtime.opm_suppresses_free_model_fallback",
+            return_value=True,
+        ),
+        patch(
+            "agent.token_governance_runtime.resolve_openai_primary_mode",
+            return_value=(
+                {"default_model": "gpt-5.4", "codex_model": "gpt-5.3-codex"},
+                {"enabled": True},
+            ),
         ),
     ):
         out = tgr._opm_clamp_tier_resolved_model(
@@ -476,15 +482,15 @@ def test_enforce_opm_runtime_after_per_turn_routing_fixes_skipped_tier_path():
     agent = _StubAgent()
     with (
         patch(
+            "agent.token_governance_runtime.opm_suppresses_free_model_fallback",
+            return_value=True,
+        ),
+        patch(
             "agent.token_governance_runtime.resolve_openai_primary_mode",
             return_value=(
                 {"default_model": "gpt-5.4", "codex_model": "gpt-5.3-codex"},
                 {"enabled": True, "source": "test"},
             ),
-        ),
-        patch(
-            "agent.openai_native_runtime.native_openai_runtime_tuple",
-            return_value=("https://api.openai.com/v1", "sk-test"),
         ),
     ):
         enforce_opm_runtime_after_per_turn_routing(agent, "summarize the doc")

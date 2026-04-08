@@ -1054,6 +1054,15 @@ class GatewayRunner:
             pass
         return None
 
+    def _fallback_cache_signature_token(self) -> str:
+        """Include OPM fallback suppression in cache key (see :func:`opm_suppresses_free_model_fallback`)."""
+        try:
+            from agent.openai_primary_mode import opm_suppresses_free_model_fallback
+
+            return "opmfb:" + str(bool(opm_suppresses_free_model_fallback()))
+        except Exception:
+            return "opmfb:?"
+
     @staticmethod
     def _load_smart_model_routing() -> dict:
         """Load optional smart cheap-vs-strong model routing config."""
@@ -5403,7 +5412,8 @@ class GatewayRunner:
         runtime: dict,
         enabled_toolsets: list,
         ephemeral_prompt: str,
-        skip_context_files: bool,
+        skip_context_files: bool = False,
+        fallback_fingerprint: str = "",
     ) -> str:
         """Compute a stable string key from agent config values.
 
@@ -5434,6 +5444,7 @@ class GatewayRunner:
                 ephemeral_prompt or "",
                 skip_context_files,
                 _memory_integration_fingerprint(),
+                fallback_fingerprint or "",
             ],
             sort_keys=True,
             default=str,
@@ -5994,6 +6005,7 @@ class GatewayRunner:
                 enabled_toolsets,
                 combined_ephemeral,
                 _skip_ctx,
+                self._fallback_cache_signature_token(),
             )
             agent = None
             _cache_lock = getattr(self, "_agent_cache_lock", None)

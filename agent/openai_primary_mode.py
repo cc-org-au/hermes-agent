@@ -82,3 +82,23 @@ def resolve_openai_primary_mode(parent_agent: Any = None) -> Tuple[Dict[str, Any
     }
     return merged, meta
 
+
+def opm_suppresses_free_model_fallback(agent: Any = None) -> bool:
+    """True when OpenAI-primary mode is on and native OpenAI API credentials exist.
+
+    Single gate for: no Gemma/Gemini fallback chain, no smart cheap-route downgrades,
+    tier picks forced to GPT, delegation baseline forced to native OpenAI.
+
+    Pass *agent* so parent's ``_token_governance_cfg`` merges into OPM resolution
+    (same as :func:`resolve_openai_primary_mode`).
+    """
+    try:
+        opm, _ = resolve_openai_primary_mode(agent)
+        if not opm.get("enabled"):
+            return False
+        from agent.openai_native_runtime import native_openai_runtime_tuple
+
+        return bool(native_openai_runtime_tuple())
+    except Exception:
+        return False
+

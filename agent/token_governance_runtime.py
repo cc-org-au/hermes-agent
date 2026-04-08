@@ -21,7 +21,7 @@ import os
 import time
 from typing import Any, Dict, Optional
 
-from agent.openai_primary_mode import resolve_openai_primary_mode
+from agent.openai_primary_mode import opm_suppresses_free_model_fallback, resolve_openai_primary_mode
 from agent.routing_trace import emit_routing_decision_trace
 
 logger = logging.getLogger(__name__)
@@ -162,10 +162,10 @@ def apply_token_governance_runtime(agent: Any) -> None:
         is_tier_dynamic(_raw_model)
         or bool(TIER_SENTINEL_RE.match(_raw_model))
     )
-    # With OpenAI-primary mode enabled, keep per-turn routing active even if
+    # With OpenAI-primary mode + native OpenAI, keep per-turn routing active even if
     # model.default is currently a concrete slug (legacy/stale profile config).
     _, _opm_meta = resolve_openai_primary_mode(agent)
-    if _opm_meta.get("enabled", False):
+    if opm_suppresses_free_model_fallback(agent):
         _is_tier_placeholder = True
     agent._model_is_tier_routed = _is_tier_placeholder
     # region agent log
@@ -340,7 +340,7 @@ def inherit_token_governance_from_parent(child: Any, parent: Any) -> None:
     _raw = (getattr(child, "model", None) or "").strip()
     _is_tier_placeholder = is_tier_dynamic(_raw) or bool(TIER_SENTINEL_RE.match(_raw))
     _, _opm_meta = resolve_openai_primary_mode(child)
-    if _opm_meta.get("enabled", False):
+    if opm_suppresses_free_model_fallback(child):
         _is_tier_placeholder = True
     child._model_is_tier_routed = _is_tier_placeholder
     child._last_opm_meta = _opm_meta
@@ -359,7 +359,7 @@ def _opm_clamp_tier_resolved_model(
     ``_reconcile_runtime_after_tier_model_change`` may leave the Gemini snapshot
     while the model id is wrong, or keep the subagent on a free tier despite OPM.
     """
-    if not mid or not (opm_meta or {}).get("enabled", False):
+    if not mid or not opm_suppresses_free_model_fallback(agent):
         return mid
     mlow = str(mid).lower()
     try:
@@ -440,12 +440,7 @@ def enforce_opm_runtime_after_per_turn_routing(agent: Any, user_message: str) ->
     any remaining Gemma / Gemini / free model id before the first LLM call.
     """
     try:
-        _, meta = resolve_openai_primary_mode(agent)
-        if not meta.get("enabled", False):
-            return
-        from agent.openai_native_runtime import native_openai_runtime_tuple
-
-        if not native_openai_runtime_tuple():
+        if not opm_suppresses_free_model_fallback(agent):
             return
         cur = (getattr(agent, "model", None) or "").strip()
         if not _opm_turn_needs_native_openai_fix(agent, cur):
@@ -579,7 +574,7 @@ def apply_per_turn_tier_model(agent: Any, user_message: str) -> None:
 
     # openai_primary_mode: override low-cost deterministic tier with E/F
     _opm_meta = getattr(agent, "_last_opm_meta", None) or {}
-    if _opm_meta.get("enabled", False) and tier in ("A", "B", "C"):
+    if opm_suppresses_free_model_fallback(agent) and tier in ("A", "B", "C"):
         _is_coding = any(
             kw in (user_message or "").lower()
             for kw in ("code", "implement", "debug", "refactor", "function",
@@ -620,7 +615,7 @@ def apply_per_turn_tier_model(agent: Any, user_message: str) -> None:
 
     # Enforce OpenAI-primary mode after consultant routing too, so no later
     # router step can drop back to low-cost Gemma tiers when the flag is on.
-    if _opm_meta.get("enabled", False) and tier in ("A", "B", "C", "D"):
+    if opm_suppresses_free_model_fallback(agent) and tier in ("A", "B", "C", "D"):
         _router_rec2 = audit.get("router") if isinstance(audit, dict) else {}
         _coding_hint = bool(
             isinstance(_router_rec2, dict) and _router_rec2.get("coding_task", False)

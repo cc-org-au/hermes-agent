@@ -255,6 +255,13 @@ def resolve_fallback_providers(config: Optional[Dict[str, Any]]) -> List[Dict[st
     - Legacy ``fallback_model`` single dict: plain HF without router is ignored in favor of synthesis.
     - If ``fallback_providers`` is missing or ``None`` → build from ``free_model_routing``.
     """
+    try:
+        from agent.openai_primary_mode import opm_suppresses_free_model_fallback
+
+        if opm_suppresses_free_model_fallback():
+            return []
+    except Exception:
+        pass
     if not config or not isinstance(config, dict):
         return []
     synth = build_free_fallback_chain(config)
