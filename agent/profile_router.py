@@ -415,6 +415,9 @@ def classify_profile_for_prompt(
     router_cfg: Dict[str, Any],
 ) -> Tuple[Optional[str], float, str]:
     """Call auxiliary LLM; return (target_profile or None, confidence, reason)."""
+    from utils import normalize_line_endings
+
+    user_message = normalize_line_endings(user_message or "")
     clear_profile_router_telemetry()
     if not candidates:
         return None, 0.0, "no profiles"

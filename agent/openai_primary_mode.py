@@ -102,7 +102,10 @@ def opm_non_gemma_replacement_model(agent: Any = None) -> str:
     """Cheap non-Gemma id for auxiliary calls and last-resort fallbacks under OPM.
 
     Config override: ``openai_primary_mode.non_gemma_auxiliary_model`` (must not contain ``gemma``).
-    Default: ``google/gemini-2.5-flash`` on the Gemini API (not Gemma).
+    Default: ``gemini-2.5-flash`` (direct Gemini API). OpenRouter-style
+    ``google/gemini-…`` ids are normalized to bare ``gemini-…`` when using
+    provider ``gemini`` (see ``normalize_gemini_api_model_id`` in
+    ``agent/auxiliary_client.py``).
     """
     try:
         opm, _ = resolve_openai_primary_mode(agent)
@@ -111,7 +114,7 @@ def opm_non_gemma_replacement_model(agent: Any = None) -> str:
             return raw
     except Exception:
         pass
-    return "google/gemini-2.5-flash"
+    return "gemini-2.5-flash"
 
 
 def filter_fallback_chain_strip_gemma(chain: Any) -> list:

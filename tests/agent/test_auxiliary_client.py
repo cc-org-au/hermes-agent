@@ -11,6 +11,7 @@ from agent.auxiliary_client import (
     get_text_auxiliary_client,
     get_vision_auxiliary_client,
     get_available_vision_backends,
+    normalize_gemini_api_model_id,
     resolve_vision_provider_client,
     resolve_provider_client,
     auxiliary_max_tokens_param,
@@ -1104,6 +1105,22 @@ class TestTaskSpecificOverrides:
             client, model = get_text_auxiliary_client("compression")
         assert model == "glm-4.7"
         assert mock_openai.call_args.kwargs["base_url"] == "https://api.z.ai/api/coding/paas/v4"
+
+
+class TestNormalizeGeminiApiModelId:
+    def test_strips_google_gemini_prefix(self):
+        assert normalize_gemini_api_model_id("google/gemini-2.5-flash") == "gemini-2.5-flash"
+        assert normalize_gemini_api_model_id("  google/gemini-2.5-pro  ") == "gemini-2.5-pro"
+        assert normalize_gemini_api_model_id("gemini-2.5-flash") == "gemini-2.5-flash"
+        assert normalize_gemini_api_model_id(None) is None
+
+    def test_resolve_provider_client_normalizes_gemini_model(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "gkey-test")
+        with patch("agent.auxiliary_client.OpenAI"):
+            _c, model = resolve_provider_client(
+                "gemini", model="google/gemini-2.5-flash", async_mode=False
+            )
+        assert model == "gemini-2.5-flash"
 
 
 class TestAuxiliaryMaxTokensParam:

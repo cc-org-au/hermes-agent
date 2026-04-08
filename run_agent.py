@@ -7042,8 +7042,12 @@ class AIAgent:
         # that are invalid UTF-8 and crash JSON serialization in the OpenAI SDK.
         if isinstance(user_message, str):
             user_message = _sanitize_surrogates(user_message)
+            user_message = user_message.replace("\r\n", "\n").replace("\r", "\n")
         if isinstance(persist_user_message, str):
             persist_user_message = _sanitize_surrogates(persist_user_message)
+            persist_user_message = persist_user_message.replace("\r\n", "\n").replace(
+                "\r", "\n"
+            )
 
         # Store stream callback for _interruptible_api_call to pick up
         self._stream_callback = stream_callback

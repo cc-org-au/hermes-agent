@@ -12,6 +12,13 @@ import yaml
 TRUTHY_STRINGS = frozenset({"1", "true", "yes", "on"})
 
 
+def normalize_line_endings(text: str) -> str:
+    """Normalize CRLF and lone CR to LF (fixes ^M in pasted or bridge text)."""
+    if not text:
+        return text
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
 def is_truthy_value(value: Any, default: bool = False) -> bool:
     """Coerce bool-ish values using the project's shared truthy string set."""
     if value is None:

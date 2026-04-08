@@ -78,7 +78,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Resolve Hermes home directory (respects HERMES_HOME override)
 from hermes_constants import get_hermes_home
-from utils import atomic_yaml_write
+from utils import atomic_yaml_write, normalize_line_endings
 _hermes_home = get_hermes_home()
 
 # Load environment variables from ~/.hermes/.env first.
@@ -2583,7 +2583,7 @@ class GatewayRunner:
         # attachments (documents, audio, etc.) are not sent to the vision
         # tool even when they appear in the same message.
         # -----------------------------------------------------------------
-        message_text = event.text or ""
+        message_text = normalize_line_endings(event.text or "")
         if event.media_urls:
             image_paths = []
             for i, path in enumerate(event.media_urls):

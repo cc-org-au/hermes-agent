@@ -1,6 +1,6 @@
 """Tests for shared truthy-value helpers."""
 
-from utils import env_var_enabled, is_truthy_value
+from utils import env_var_enabled, is_truthy_value, normalize_line_endings
 
 
 def test_is_truthy_value_accepts_common_truthy_strings():
@@ -19,6 +19,11 @@ def test_is_truthy_value_rejects_falsey_strings():
     assert is_truthy_value("false") is False
     assert is_truthy_value("0") is False
     assert is_truthy_value("off") is False
+
+
+def test_normalize_line_endings_crlf_and_lone_cr():
+    assert normalize_line_endings("a\r\nb\rc") == "a\nb\nc"
+    assert normalize_line_endings("") == ""
 
 
 def test_env_var_enabled_uses_shared_truthy_rules(monkeypatch):

@@ -53,6 +53,21 @@ from hermes_constants import OPENROUTER_BASE_URL
 
 logger = logging.getLogger(__name__)
 
+def normalize_gemini_api_model_id(model_id: Optional[str]) -> Optional[str]:
+    """Map OpenRouter-style ``google/gemini-*`` ids to Gemini API model names.
+
+    Direct Gemini (generativelanguage / OpenAI-compat) expects ``gemini-2.5-flash``,
+    not ``models/google/gemini-2.5-flash`` (404 NOT_FOUND).
+    """
+    if not model_id:
+        return model_id
+    m = model_id.strip()
+    low = m.lower()
+    if low.startswith("google/gemini-"):
+        return m.split("/", 1)[1]
+    return m
+
+
 # Default auxiliary models for direct API-key providers (cheap/fast for side tasks)
 _API_KEY_PROVIDER_AUX_MODELS: Dict[str, str] = {
     "zai": "glm-4.5-flash",
@@ -1095,6 +1110,8 @@ def resolve_provider_client(
 
         default_model = _API_KEY_PROVIDER_AUX_MODELS.get(provider, "")
         final_model = model or default_model
+        if provider == "gemini" and final_model:
+            final_model = normalize_gemini_api_model_id(final_model) or final_model
 
         # Provider-specific headers
         headers = {}
@@ -1480,6 +1497,10 @@ def _get_cached_client(
     cache key for async clients includes the current event loop's identity
     so each loop gets its own client instance.
     """
+    provider = (provider or "").strip().lower()
+    if provider == "gemini" and model:
+        model = normalize_gemini_api_model_id(model)
+
     # Include loop identity for async clients to prevent cross-loop reuse.
     # httpx.AsyncClient (inside AsyncOpenAI) is bound to the loop where it
     # was created — reusing it on a different loop causes deadlocks (#2681).

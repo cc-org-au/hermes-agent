@@ -177,7 +177,7 @@ def default_free_subprocess_model_id(parent_agent: Any = None) -> str:
         try:
             return opm_non_gemma_replacement_model(parent_agent)
         except Exception:
-            return "google/gemini-2.5-flash"
+            return "gemini-2.5-flash"
     return "gemma-4-31b-it"
 
 
