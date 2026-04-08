@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Tuple
 
+from utils import is_truthy_value
+
 
 def _as_dict(value: Any) -> Dict[str, Any]:
     return value if isinstance(value, dict) else {}
@@ -79,7 +81,7 @@ def resolve_openai_primary_mode(parent_agent: Any = None) -> Tuple[Dict[str, Any
     _delegation_opm_overlay = False
     if _anchor is not None:
         anchor_merged, _ = resolve_openai_primary_mode(_anchor)
-        if anchor_merged.get("enabled"):
+        if is_truthy_value(anchor_merged.get("enabled"), default=False):
             merged = _merge_dicts(merged, anchor_merged)
             _delegation_opm_overlay = True
 
@@ -102,7 +104,7 @@ def resolve_openai_primary_mode(parent_agent: Any = None) -> Tuple[Dict[str, Any
         has_native_openai_runtime = False
 
     meta = {
-        "enabled": bool(merged.get("enabled", False)),
+        "enabled": is_truthy_value(merged.get("enabled"), default=False),
         "source": source,
         "has_runtime_yaml": bool(rt_opm),
         "has_config_yaml": bool(cfg_opm),
@@ -126,9 +128,55 @@ def opm_blocks_gemma(agent: Any = None) -> bool:
     """When OpenAI-primary mode is enabled (merged config), Gemma must never run."""
     try:
         opm, _ = resolve_openai_primary_mode(agent)
-        return bool(opm.get("enabled"))
+        return is_truthy_value(opm.get("enabled"), default=False)
     except Exception:
         return False
+
+
+def is_opm_blocked_openrouter_auto_slug(model_id: str) -> bool:
+    """True for OpenRouter server-side auto routing (can pick Gemma though the request slug has no 'gemma')."""
+    m = str(model_id or "").strip().lower().replace("_", "/").replace(" ", "")
+    return m in ("openrouter/auto", "openrouter-auto")
+
+
+def _opm_primary_non_auto_model(agent: Any) -> str:
+    """Resolved primary slug: not Gemma, not ``openrouter/auto``; prefers OPM defaults then native OpenAI."""
+    try:
+        opm, _ = resolve_openai_primary_mode(agent)
+        for key in ("default_model", "fallback_model"):
+            cand = str(opm.get(key) or "").strip()
+            if cand and not is_gemma_model_id(cand) and not is_opm_blocked_openrouter_auto_slug(cand):
+                return cand
+    except Exception:
+        pass
+    try:
+        from agent.openai_native_runtime import native_openai_api_key, native_openai_runtime_tuple
+
+        rt = native_openai_runtime_tuple()
+        if rt and rt[0] and native_openai_api_key():
+            return "gpt-5.4"
+    except Exception:
+        pass
+    return "gpt-5.4"
+
+
+def coerce_opm_disallowed_routing_slugs(model_id: Any, agent: Any = None) -> Any:
+    """Under OPM, coerce Gemma ids and OpenRouter auto-router slugs to a fixed primary model.
+
+    ``openrouter/auto`` never contains the substring ``gemma`` but OpenRouter may still route
+    to Gemma; treat it like Gemma for OPM hard-gate purposes.
+    """
+    if model_id is None:
+        return None
+    s = str(model_id).strip()
+    if not s:
+        return s
+    s = coerce_model_off_gemma_under_opm(s, agent)
+    if not opm_blocks_gemma(agent):
+        return s
+    if is_opm_blocked_openrouter_auto_slug(s):
+        return _opm_primary_non_auto_model(agent)
+    return s
 
 
 def coerce_model_off_gemma_under_opm(model: Any, agent: Any = None) -> Any:
@@ -217,7 +265,7 @@ def opm_suppresses_free_model_fallback(agent: Any = None) -> bool:
     """
     try:
         opm, _ = resolve_openai_primary_mode(agent)
-        if not opm.get("enabled"):
+        if not is_truthy_value(opm.get("enabled"), default=False):
             return False
         from agent.openai_native_runtime import native_openai_runtime_tuple
 

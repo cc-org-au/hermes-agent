@@ -1758,16 +1758,31 @@ def call_llm(
         task, provider, model, base_url, api_key)
     resolved_model = _resolve_tier_dynamic_for_auxiliary(resolved_model, messages)
     try:
-        from agent.openai_primary_mode import coerce_model_off_gemma_under_opm
+        from agent.openai_primary_mode import (
+            coerce_opm_disallowed_routing_slugs,
+            is_gemma_model_id,
+            is_opm_blocked_openrouter_auto_slug,
+        )
 
         _prev = resolved_model
-        resolved_model = coerce_model_off_gemma_under_opm(resolved_model, None)
+        resolved_model = coerce_opm_disallowed_routing_slugs(resolved_model, None)
         if resolved_model != _prev:
             _rp = (resolved_provider or "").strip().lower()
-            if _rp in ("", "auto", "huggingface", "openrouter"):
+            if is_gemma_model_id(_prev) and _rp in ("", "auto", "huggingface", "openrouter"):
                 resolved_provider = "gemini"
                 resolved_base_url = None
                 resolved_api_key = None
+            elif is_opm_blocked_openrouter_auto_slug(_prev) and _rp in ("", "auto", "openrouter"):
+                try:
+                    from agent.openai_native_runtime import native_openai_api_key, native_openai_runtime_tuple
+
+                    rt = native_openai_runtime_tuple()
+                    if rt and rt[0] and native_openai_api_key():
+                        resolved_provider = "custom"
+                        resolved_base_url = rt[0]
+                        resolved_api_key = native_openai_api_key()
+                except Exception:
+                    pass
     except Exception:
         pass
 
@@ -1929,16 +1944,31 @@ async def async_call_llm(
         task, provider, model, base_url, api_key)
     resolved_model = _resolve_tier_dynamic_for_auxiliary(resolved_model, messages)
     try:
-        from agent.openai_primary_mode import coerce_model_off_gemma_under_opm
+        from agent.openai_primary_mode import (
+            coerce_opm_disallowed_routing_slugs,
+            is_gemma_model_id,
+            is_opm_blocked_openrouter_auto_slug,
+        )
 
         _prev = resolved_model
-        resolved_model = coerce_model_off_gemma_under_opm(resolved_model, None)
+        resolved_model = coerce_opm_disallowed_routing_slugs(resolved_model, None)
         if resolved_model != _prev:
             _rp = (resolved_provider or "").strip().lower()
-            if _rp in ("", "auto", "huggingface", "openrouter"):
+            if is_gemma_model_id(_prev) and _rp in ("", "auto", "huggingface", "openrouter"):
                 resolved_provider = "gemini"
                 resolved_base_url = None
                 resolved_api_key = None
+            elif is_opm_blocked_openrouter_auto_slug(_prev) and _rp in ("", "auto", "openrouter"):
+                try:
+                    from agent.openai_native_runtime import native_openai_api_key, native_openai_runtime_tuple
+
+                    rt = native_openai_runtime_tuple()
+                    if rt and rt[0] and native_openai_api_key():
+                        resolved_provider = "custom"
+                        resolved_base_url = rt[0]
+                        resolved_api_key = native_openai_api_key()
+                except Exception:
+                    pass
     except Exception:
         pass
 

@@ -123,14 +123,46 @@ def choose_cheap_model_route(user_message: str, routing_config: Optional[Dict[st
     return route
 
 
-def resolve_turn_route(user_message: str, routing_config: Optional[Dict[str, Any]], primary: Dict[str, Any]) -> Dict[str, Any]:
+def _apply_opm_model_coercion(out: Dict[str, Any], agent: Any = None) -> Dict[str, Any]:
+    """Under OPM, replace Gemma and ``openrouter/auto`` primary slugs (no agent → config-only OPM)."""
+    try:
+        from agent.openai_primary_mode import coerce_opm_disallowed_routing_slugs
+
+        m = out.get("model")
+        if m is None or not str(m).strip():
+            return out
+        ms = str(m).strip()
+        new_model = coerce_opm_disallowed_routing_slugs(ms, agent)
+        if new_model == ms:
+            return out
+        out2 = dict(out)
+        out2["model"] = new_model
+        sig = out2.get("signature")
+        if isinstance(sig, tuple) and sig:
+            out2["signature"] = (new_model,) + tuple(sig[1:])
+        lbl = out2.get("label")
+        if isinstance(lbl, str) and lbl:
+            rt = out2.get("runtime") or {}
+            prov = rt.get("provider")
+            out2["label"] = f"smart route → {new_model} ({prov})"
+        return out2
+    except Exception:
+        return out
+
+
+def resolve_turn_route(
+    user_message: str,
+    routing_config: Optional[Dict[str, Any]],
+    primary: Dict[str, Any],
+    agent: Any = None,
+) -> Dict[str, Any]:
     """Resolve the effective model/runtime for one turn.
 
     Returns a dict with model/runtime/signature/label fields.
     """
     route = choose_cheap_model_route(user_message, routing_config)
     if not route:
-        return {
+        out = {
             "model": primary.get("model"),
             "runtime": {
                 "api_key": primary.get("api_key"),
@@ -152,6 +184,7 @@ def resolve_turn_route(user_message: str, routing_config: Optional[Dict[str, Any
                 tuple(primary.get("args") or ()),
             ),
         }
+        return _apply_opm_model_coercion(out, agent)
 
     from hermes_cli.runtime_provider import resolve_runtime_provider
 
@@ -167,7 +200,7 @@ def resolve_turn_route(user_message: str, routing_config: Optional[Dict[str, Any
             explicit_base_url=route.get("base_url"),
         )
     except Exception:
-        return {
+        out = {
             "model": primary.get("model"),
             "runtime": {
                 "api_key": primary.get("api_key"),
@@ -189,8 +222,9 @@ def resolve_turn_route(user_message: str, routing_config: Optional[Dict[str, Any
                 tuple(primary.get("args") or ()),
             ),
         }
+        return _apply_opm_model_coercion(out, agent)
 
-    return {
+    out = {
         "model": route.get("model"),
         "runtime": {
             "api_key": runtime.get("api_key"),
@@ -211,3 +245,5 @@ def resolve_turn_route(user_message: str, routing_config: Optional[Dict[str, Any
             tuple(runtime.get("args") or ()),
         ),
     }
+    return _apply_opm_model_coercion(out, agent)
+    return _apply_opm_model_coercion(out, agent)

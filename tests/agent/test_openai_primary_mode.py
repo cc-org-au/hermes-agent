@@ -3,8 +3,10 @@ from unittest.mock import MagicMock
 from agent.openai_primary_mode import (
     _opm_merge_parent_anchor,
     coerce_model_off_gemma_under_opm,
+    coerce_opm_disallowed_routing_slugs,
     filter_fallback_chain_strip_gemma,
     is_gemma_model_id,
+    is_opm_blocked_openrouter_auto_slug,
     opm_blocks_gemma,
     opm_suppresses_free_model_fallback,
     resolve_openai_primary_mode,
@@ -147,6 +149,40 @@ def test_opm_blocks_gemma_follows_enabled_flag(monkeypatch):
         lambda: {"openai_primary_mode": {"enabled": False}},
     )
     assert opm_blocks_gemma() is False
+
+
+def test_opm_blocks_gemma_truthy_string_enabled(monkeypatch):
+    monkeypatch.setattr(
+        "hermes_cli.config.load_config",
+        lambda: {"openai_primary_mode": {"enabled": "true"}},
+    )
+    monkeypatch.setattr("agent.token_governance_runtime.load_runtime_config", lambda: {})
+    assert opm_blocks_gemma() is True
+
+
+def test_is_opm_blocked_openrouter_auto_slug():
+    assert is_opm_blocked_openrouter_auto_slug("openrouter/auto")
+    assert is_opm_blocked_openrouter_auto_slug("openrouter-auto")
+    assert is_opm_blocked_openrouter_auto_slug("OpenRouter_Auto")
+    assert not is_opm_blocked_openrouter_auto_slug("openai/gpt-5.4")
+
+
+def test_coerce_opm_disallowed_openrouter_auto(monkeypatch):
+    monkeypatch.setattr(
+        "hermes_cli.config.load_config",
+        lambda: {"openai_primary_mode": {"enabled": True, "default_model": "gpt-5.4"}},
+    )
+    monkeypatch.setattr("agent.token_governance_runtime.load_runtime_config", lambda: {})
+    assert coerce_opm_disallowed_routing_slugs("openrouter/auto", None) == "gpt-5.4"
+
+
+def test_coerce_opm_passthrough_auto_when_opm_off(monkeypatch):
+    monkeypatch.setattr(
+        "hermes_cli.config.load_config",
+        lambda: {"openai_primary_mode": {"enabled": False}},
+    )
+    monkeypatch.setattr("agent.token_governance_runtime.load_runtime_config", lambda: {})
+    assert coerce_opm_disallowed_routing_slugs("openrouter/auto", None) == "openrouter/auto"
 
 
 def test_filter_fallback_chain_strip_gemma():

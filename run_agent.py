@@ -616,27 +616,29 @@ class AIAgent:
         except Exception:
             logger.debug("token_governance_runtime apply failed", exc_info=True)
 
-        # OpenAI-primary mode: never run Gemma (canonical slug, tier picks, or misconfig).
+        # OpenAI-primary mode: never Gemma; also block OpenRouter auto-router (can pick Gemma).
         try:
-            from agent.openai_primary_mode import (
-                is_gemma_model_id,
-                opm_blocks_gemma,
-                opm_non_gemma_replacement_model,
-                resolve_openai_primary_mode,
-            )
+            from agent.openai_primary_mode import coerce_opm_disallowed_routing_slugs, opm_blocks_gemma
 
-            if self.model and opm_blocks_gemma(self) and is_gemma_model_id(self.model):
-                opm_cfg, _ = resolve_openai_primary_mode(self)
-                repl = str(opm_cfg.get("default_model") or "").strip()
-                if not repl or is_gemma_model_id(repl):
-                    repl = opm_non_gemma_replacement_model(self)
-                self.model = repl
-                if not self.quiet_mode:
-                    print(
-                        f"openai_primary_mode: Gemma is disabled — using primary model {self.model!r}"
-                    )
+            if self.model and opm_blocks_gemma(self):
+                prev = str(self.model).strip()
+                new_m = str(coerce_opm_disallowed_routing_slugs(prev, self) or "").strip()
+                if new_m and new_m != prev:
+                    self.model = new_m
+                    try:
+                        if hasattr(self, "_reconcile_runtime_after_tier_model_change"):
+                            self._reconcile_runtime_after_tier_model_change()
+                    except Exception:
+                        logger.debug(
+                            "openai_primary_mode init _reconcile_runtime_after_tier_model_change failed",
+                            exc_info=True,
+                        )
+                    if not self.quiet_mode:
+                        print(
+                            f"openai_primary_mode: primary model adjusted under OPM — using {self.model!r}"
+                        )
         except Exception:
-            logger.debug("openai_primary_mode Gemma primary rewrite failed", exc_info=True)
+            logger.debug("openai_primary_mode primary rewrite failed", exc_info=True)
 
         # Pre-warm OpenRouter model metadata cache in a background thread.
         # fetch_model_metadata() is cached for 1 hour; this avoids a blocking
@@ -3244,9 +3246,9 @@ class AIAgent:
             raise ValueError("Codex Responses request 'model' must be a non-empty string.")
         model = model.strip()
         try:
-            from agent.openai_primary_mode import coerce_model_off_gemma_under_opm
+            from agent.openai_primary_mode import coerce_opm_disallowed_routing_slugs
 
-            model = str(coerce_model_off_gemma_under_opm(model, self) or "").strip() or model
+            model = str(coerce_opm_disallowed_routing_slugs(model, self) or "").strip() or model
         except Exception:
             pass
 
@@ -4975,16 +4977,22 @@ class AIAgent:
     def _opm_reconcile_primary_if_gemma(self) -> None:
         """Hard block: with OPM enabled, primary ``self.model`` must never stay on Gemma.
 
+        Also coerces ``openrouter/auto`` (server-side router can select Gemma without ``gemma`` in the slug).
+
         Called every main-loop iteration and at API chokepoints (:meth:`_build_api_kwargs`,
         :meth:`_openai_compatible_model_param`, memory flush, iteration-limit summary).
         """
         try:
-            from agent.openai_primary_mode import coerce_model_off_gemma_under_opm, is_gemma_model_id
+            from agent.openai_primary_mode import (
+                coerce_opm_disallowed_routing_slugs,
+                is_gemma_model_id,
+                is_opm_blocked_openrouter_auto_slug,
+            )
 
             if not self.model:
                 return
             prev = str(self.model).strip()
-            new = coerce_model_off_gemma_under_opm(prev, self)
+            new = coerce_opm_disallowed_routing_slugs(prev, self)
             if new == prev or not new:
                 return
             self.model = new
@@ -4993,11 +5001,16 @@ class AIAgent:
             try:
                 from agent.routing_trace import emit_routing_decision_trace
 
+                reason = (
+                    "coerce_openrouter_auto_primary"
+                    if is_opm_blocked_openrouter_auto_slug(prev)
+                    else "coerce_gemma_off_primary"
+                )
                 emit_routing_decision_trace(
                     stage="opm_hard_gate",
                     chosen_model=str(self.model or ""),
                     chosen_provider=str(getattr(self, "provider", "") or ""),
-                    reason_code="coerce_gemma_off_primary",
+                    reason_code=reason,
                     opm_enabled=True,
                     opm_source="",
                     tier_source="api_boundary",
