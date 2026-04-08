@@ -37,7 +37,7 @@ import os
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Set
 
 from agent.disallowed_model_family import model_id_contains_disallowed_family
 from agent.openai_primary_mode import (
@@ -48,6 +48,46 @@ from agent.openai_primary_mode import (
 from agent.routing_trace import emit_routing_decision_trace
 
 logger = logging.getLogger(__name__)
+
+# When ``allowed_subprocess_models`` is missing or empty after YAML merge, treat as
+# “use OPM primary defaults” (same ids as ``hermes_cli.config.DEFAULT_CONFIG``).
+_DEFAULT_OPM_SUBPROCESS_CORE_MODELS: tuple[str, ...] = ("gpt-5.4", "gpt-5.3-codex")
+
+
+def _opm_subprocess_core_model(mid: str) -> str:
+    m = (mid or "").strip().lower()
+    if m.startswith("openai/"):
+        return m.split("/", 1)[1]
+    return m
+
+
+def _opm_effective_subprocess_allowlist_cores(opm: Dict[str, Any]) -> Set[str]:
+    """Canonical short model ids allowed for subprocesses under OPM."""
+    raw = opm.get("allowed_subprocess_models")
+    if isinstance(raw, list) and len(raw) > 0:
+        return {_opm_subprocess_core_model(str(a)) for a in raw if str(a).strip()}
+    cores = {_opm_subprocess_core_model(x) for x in _DEFAULT_OPM_SUBPROCESS_CORE_MODELS}
+    for key in ("default_model", "codex_model", "fallback_model"):
+        s = str(opm.get(key) or "").strip()
+        if s:
+            cores.add(_opm_subprocess_core_model(s))
+    return {c for c in cores if c}
+
+
+def _refresh_openai_credentials_from_hermes_home() -> None:
+    """Load profile/root ``.env`` so ``native_openai_runtime_tuple()`` sees keys.
+
+    Gateway and some workers may not have run ``run_agent``'s early dotenv load; keys
+    often live only under ``HERMES_HOME`` / default ``~/.hermes``.
+    """
+    try:
+        from hermes_cli.env_loader import load_hermes_dotenv
+        from hermes_constants import get_hermes_home
+
+        load_hermes_dotenv(hermes_home=get_hermes_home())
+    except Exception:
+        pass
+
 
 # ---------------------------------------------------------------------------
 # Policy constants
@@ -318,16 +358,8 @@ def _is_openai_primary_mode_allowed(model_id: str, parent_agent: Any = None) -> 
         if not opm.get("enabled", False):
             return False
 
-        allowed = opm.get("allowed_subprocess_models") or []
-
-        def _core_model(mid: str) -> str:
-            m = (mid or "").strip().lower()
-            if m.startswith("openai/"):
-                return m.split("/", 1)[1]
-            return m
-
-        mid = _core_model(model_id)
-        allowed_core = {_core_model(str(a)) for a in allowed if str(a).strip()}
+        mid = _opm_subprocess_core_model(model_id)
+        allowed_core = _opm_effective_subprocess_allowlist_cores(opm)
         if mid not in allowed_core:
             return False
 
@@ -335,6 +367,7 @@ def _is_openai_primary_mode_allowed(model_id: str, parent_agent: Any = None) -> 
             # Direct-OpenAI requirement applies to the subprocess runtime, not
             # necessarily the current parent runtime. Parent can be on Gemini
             # while child delegates to native api.openai.com.
+            _refresh_openai_credentials_from_hermes_home()
             from agent.openai_native_runtime import native_openai_runtime_tuple
 
             if not native_openai_runtime_tuple():
