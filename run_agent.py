@@ -5098,13 +5098,21 @@ class AIAgent:
                     fb_context_length * self.context_compressor.threshold_percent
                 )
 
-            self._emit_status(
-                f"🔄 Primary model failed — switching to fallback: "
-                f"{fb_model} via {fb_provider}"
-            )
+            _or_last = fb.get("openrouter_last_resort", False)
+            if _or_last:
+                self._emit_status(
+                    f"⚠️ All free/direct API sources exhausted — "
+                    f"last resort: {fb_model} via OpenRouter (paid)"
+                )
+            else:
+                self._emit_status(
+                    f"🔄 Primary model failed — switching to fallback: "
+                    f"{fb_model} via {fb_provider}"
+                )
             logging.info(
-                "Fallback activated: %s → %s (%s)",
+                "Fallback activated: %s → %s (%s)%s",
                 old_model, fb_model, fb_provider,
+                " [openrouter_last_resort]" if _or_last else "",
             )
             return True
         except Exception as e:

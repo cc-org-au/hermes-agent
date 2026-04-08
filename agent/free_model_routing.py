@@ -210,6 +210,24 @@ def build_free_fallback_chain(config: Optional[Dict[str, Any]]) -> List[Dict[str
             }
         )
 
+    # Last resort: OpenRouter with gemma-4-31b-it, then any low-cost
+    # alternative.  Only reached when ALL direct Gemini API entries above
+    # have failed (errors, quota, unavailable).  OpenRouter is always paid
+    # but is cheaper than most alternatives when using gemma.
+    or_fallback = fmr.get("openrouter_last_resort", {})
+    if isinstance(or_fallback, dict) and or_fallback.get("enabled", True):
+        _or_model = canonical_gemma_model_id(
+            _strip(or_fallback.get("model")) or "google/gemma-4-31b-it"
+        )
+        chain.append(
+            {
+                "provider": "openrouter",
+                "model": _or_model,
+                "only_rate_limit": True,
+                "openrouter_last_resort": True,
+            }
+        )
+
     return chain
 
 

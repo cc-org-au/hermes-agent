@@ -274,6 +274,10 @@ DEFAULT_CONFIG = {
             "only_rate_limit": True,
             "restore_health_check": True,
         },
+        "openrouter_last_resort": {
+            "enabled": True,
+            "model": "google/gemma-4-31b-it",
+        },
     },
     "credential_pool_strategies": {},
     "toolsets": ["hermes-cli"],

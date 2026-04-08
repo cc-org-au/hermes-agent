@@ -5,8 +5,7 @@ Enforces that all background tasks and delegated subagents use only truly free
 before a subprocess or background task can run.
 
 TRULY FREE models (zero API cost — local inference only):
-  - gemma-4 variants: any model whose ID contains "gemma-4" or "gemma4"
-  - Qwen/QwQ: any model whose ID contains "qwen"
+  - Gemma-4 on Gemini API (``gemma-4-31b-it``) and matching local slugs; alternate ``gemma4`` spellings
   - Any model served via HERMES_LOCAL_INFERENCE_BASE_URL (self-hosted)
 
 LOW-COST models (Gemini API — small but non-zero cost per call):
@@ -48,11 +47,10 @@ logger = logging.getLogger(__name__)
 
 SUBPROCESS_MAX_SECONDS: int = 300  # 5 minutes hard limit
 
-# Case-insensitive substrings that identify zero-cost local models.
+# Substrings that identify models treated as free for subprocess policy (see classify_model_cost).
 _FREE_LOCAL_MODEL_SUBSTRINGS: tuple[str, ...] = (
-    "gemma-4",
+    "gemma-4-31b-it",
     "gemma4",
-    "qwen",
     "local/",       # catch-all for self-hosted slugs prefixed with "local/"
 )
 
@@ -78,18 +76,40 @@ def _has_local_inference_url() -> bool:
     return bool(os.environ.get("HERMES_LOCAL_INFERENCE_BASE_URL", "").strip())
 
 
-def classify_model_cost(model_id: str) -> str:
+def classify_model_cost(model_id: str, *, provider: str = "", base_url: str = "") -> str:
     """Return 'free', 'low_cost', or 'paid' for a given model ID.
 
-    'free'     = zero API cost (local inference only).
-    'low_cost' = Gemini API calls — small cost, NOT free.
-    'paid'     = mid/high-cost API model.
+    'free'     = zero API cost (direct Gemini API for gemma-4-31b-it, or local inference).
+    'low_cost' = Gemini API calls (gemini-* models) — small cost, NOT free.
+    'paid'     = mid/high-cost API model, or ANY model routed through OpenRouter.
+
+    The *provider* and *base_url* parameters allow distinguishing the same model
+    name served via different backends.  ``gemma-4-31b-it`` via direct Gemini API
+    is free; the same model via OpenRouter is paid (OpenRouter charges for every
+    model it proxies).
     """
-    mid = (model_id or "").lower().strip()
+    from agent.tier_model_routing import canonical_gemma_model_id
+
+    mid = canonical_gemma_model_id((model_id or "").strip()).lower()
+    prov = (provider or "").strip().lower()
+    burl = (base_url or "").strip().lower()
+
+    _is_openrouter = (
+        "openrouter" in prov
+        or "openrouter" in burl
+        or "openrouter.ai" in burl
+    )
+
+    # OpenRouter charges for every model — never free, always at least low_cost
+    if _is_openrouter:
+        if any(s in mid for s in _FREE_LOCAL_MODEL_SUBSTRINGS):
+            return "low_cost"
+        return "paid"
+
     # Local inference base URL makes any model effectively free
     if _has_local_inference_url():
         return "free"
-    # Free local models by slug
+    # Free models by slug (direct Gemini API or local)
     if any(s in mid for s in _FREE_LOCAL_MODEL_SUBSTRINGS):
         return "free"
     # Gemini API: low-cost but not free
@@ -111,8 +131,7 @@ def default_free_subprocess_model_id() -> str:
     """Model id used when auto-falling back from a blocked paid subprocess model.
 
     Reads ``free_model_routing.gemini_native_tier_models[0]`` from config when present,
-    else ``gemma-4-31b-it`` (Gemma-4 on Gemini API — classified as *free* for subprocess
-    policy because the slug matches ``gemma-4``).
+    else ``gemma-4-31b-it`` (Gemma-4 on Gemini API — classified as *free* for subprocess policy).
     """
     try:
         from hermes_cli.config import load_config
@@ -229,7 +248,7 @@ def request_operator_approval(
         f"A background task wants to use a {cost_label} model:\n"
         f"  Model:  {model_id}\n"
         f"  Goal:   {goal[:120]}\n"
-        f"\nBackground tasks should only use free local models (gemma-4, qwen).\n"
+        f"\nBackground tasks should only use free local models (gemma-4-31b-it or local inference).\n"
         f"Approve this subprocess to proceed with the paid model? [y/N]: "
     )
 

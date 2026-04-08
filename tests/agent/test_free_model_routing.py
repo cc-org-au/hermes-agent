@@ -78,6 +78,7 @@ def test_build_chain_kimi_then_optional_gemini():
                 "only_rate_limit": True,
                 "restore_health_check": True,
             },
+            "openrouter_last_resort": {"enabled": False},
         }
     }
     ch = build_free_fallback_chain(cfg)
@@ -121,6 +122,7 @@ def test_build_chain_router_provider_gemini():
                 "router_model": "gemma-4-31b-it",
                 "tiers": [{"id": "t", "models": ["org/a", "org/b"]}],
             },
+            "openrouter_last_resort": {"enabled": False},
         },
     }
     ch = build_free_fallback_chain(cfg)
@@ -149,6 +151,7 @@ def test_resolve_explicit_plain_hf_dropped_for_gemini_synthesis():
                 "router_model": "gemma-4-31b-it",
                 "tiers": [{"id": "g", "models": ["some/hub-a"]}],
             },
+            "openrouter_last_resort": {"enabled": False},
         },
     }
     out = resolve_fallback_providers(cfg)
@@ -189,6 +192,7 @@ def test_build_chain_gemini_direct():
                 "router_model": "gemma-4-31b-it",
                 "tiers": [{"id": "t", "models": ["org/a", "org/b"]}],
             },
+            "openrouter_last_resort": {"enabled": False},
         },
     }
     ch = build_free_fallback_chain(cfg)
@@ -198,8 +202,75 @@ def test_build_chain_gemini_direct():
     assert ch[0]["model"] == "gemma-4-31b-it"
 
 
+def test_openrouter_last_resort_appended_by_default():
+    cfg = {
+        "free_model_routing": {
+            "enabled": True,
+            "kimi_router": {
+                "router_model": "gemma-4-31b-it",
+                "tiers": [{"id": "t", "models": ["org/a"]}],
+            },
+        },
+    }
+    ch = build_free_fallback_chain(cfg)
+    assert len(ch) == 2
+    assert ch[0]["provider"] == "gemini"
+    assert ch[1]["provider"] == "openrouter"
+    assert ch[1]["openrouter_last_resort"] is True
+    assert ch[1]["only_rate_limit"] is True
+    assert "gemma" in ch[1]["model"]
+
+
+def test_openrouter_last_resort_disabled():
+    cfg = {
+        "free_model_routing": {
+            "enabled": True,
+            "kimi_router": {
+                "router_model": "gemma-4-31b-it",
+                "tiers": [{"id": "t", "models": ["org/a"]}],
+            },
+            "openrouter_last_resort": {"enabled": False},
+        },
+    }
+    ch = build_free_fallback_chain(cfg)
+    assert len(ch) == 1
+    assert ch[0]["provider"] == "gemini"
+
+
 def test_resolve_legacy_fallback_model_dict():
     cfg = {
         "fallback_model": {"provider": "zai", "model": "glm-9"},
     }
     assert resolve_fallback_providers(cfg) == [{"provider": "zai", "model": "glm-9"}]
+
+
+# ── classify_model_cost provider-awareness ────────────────────────────
+
+
+def test_classify_gemma_direct_gemini_is_free():
+    from agent.subprocess_governance import classify_model_cost
+
+    assert classify_model_cost("gemma-4-31b-it") == "free"
+    assert classify_model_cost("gemma-4-31b-it", provider="gemini") == "free"
+
+
+def test_classify_gemma_openrouter_is_low_cost():
+    from agent.subprocess_governance import classify_model_cost
+
+    assert classify_model_cost(
+        "google/gemma-4-31b-it", provider="openrouter"
+    ) == "low_cost"
+    assert classify_model_cost(
+        "gemma-4-31b-it", base_url="https://openrouter.ai/api/v1"
+    ) == "low_cost"
+
+
+def test_classify_openrouter_paid_model():
+    from agent.subprocess_governance import classify_model_cost
+
+    assert classify_model_cost(
+        "anthropic/claude-sonnet-4.6", provider="openrouter"
+    ) == "paid"
+    assert classify_model_cost(
+        "openai/gpt-5.4", base_url="https://openrouter.ai/api/v1"
+    ) == "paid"

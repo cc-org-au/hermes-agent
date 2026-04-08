@@ -79,24 +79,34 @@ TIER TABLE (ascending capability/cost — ALL tiers cost money via API):
   E = gpt-5.4            — hardest non-coding reasoning, ambiguous multi-domain problems
   F = gpt-5.3-codex      — deep engineering, architecture, refactors, complex codegen
 
-NOTE: The only genuinely free (zero API cost) models are: gemma-4-31b-it (local or Gemini API) and self-hosted local inference.
-These are available for subprocess/background tasks but NOT listed above as interactive tiers.
+COST HIERARCHY (cheapest to most expensive):
+  FREE:     gemma-4-31b-it via direct Google Gemini API, self-hosted local inference
+  LOW-COST: Gemini Flash/Pro via direct Google API (tiers A/B/C)
+  PAID:     ANY model routed via OpenRouter (including gemma-4-31b-it on OpenRouter)
+  HIGH:     claude-sonnet-4.6, gpt-5.4, gpt-5.3-codex, claude-opus-4.6
+
+CRITICAL: OpenRouter is ALWAYS paid — even for models that are free via their native API.
+Always prefer the direct API source (Google for Gemini/Gemma, OpenAI for GPT, Anthropic for \
+Claude) before falling back to OpenRouter. OpenRouter is a last resort when direct APIs fail.
 
 ROUTING RULES:
 1. Match tier strictly to genuine complexity. NEVER default to D unless the task is complex.
    Use A/B/C for the bulk of routine/menial work — they have the lowest API cost.
-2. Escalate to D only when depth/quality genuinely warrants it (most complex tasks).
-3. Escalate to E/F only for the hardest tasks or after repeated failures.
-4. coding_task=true when the primary work is software engineering (prefers F for consultant
+2. Optimize for the lowest cost at the highest performance the task requires.
+   Under-routing cost is always lower than over-routing.
+3. Escalate to D only when depth/quality genuinely warrants it (most complex tasks).
+4. Escalate to E/F only for the hardest tasks or after repeated failures.
+5. coding_task=true when the primary work is software engineering (prefers F for consultant
    escalation over E). This also hints to use gpt-5.3-codex for any code-heavy background work.
-5. low_cost_brief: REQUIRED when tier is A, B, or C. Write a direct, concise,
+6. low_cost_brief: REQUIRED when tier is A, B, or C. Write a direct, concise,
    machine-readable restatement of the task optimised for a capable-but-limited model.
    Use imperative sentences. Max 3 sentences. Omit pleasantries.
-6. low_cost_brief must be null when tier is D, E, or F.
-7. profile: suggest the most suitable profile by EXACT name, or null for default.
-8. background_task: true if the request explicitly asks to run something in the background,
-   spawn a subprocess, or run a parallel process. Background tasks MUST use only local/free
-   models (gemma-4-31b-it, local inference) — any paid model requires operator approval.
+7. low_cost_brief must be null when tier is D, E, or F.
+8. profile: suggest the most suitable profile by EXACT name, or null for default.
+9. background_task: true if the request explicitly asks to run something in the background,
+   spawn a subprocess, or run a parallel process. Background tasks MUST use only free
+   models (gemma-4-31b-it via direct Gemini API, local inference) — any paid model \
+requires operator approval.
 
 PROFILES:
 {profiles_desc}
