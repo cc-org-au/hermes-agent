@@ -770,6 +770,80 @@ def delegate_task(
     if parent_agent is None:
         return json.dumps({"error": "delegate_task requires a parent agent context."})
 
+    def _enforce_opm_baseline(creds: dict, goal_text: str) -> dict:
+        """Hard baseline override: OPM-on delegations default to GPT, never Gemma."""
+        try:
+            from agent.openai_native_runtime import native_openai_runtime_tuple
+            from hermes_cli.config import load_config
+
+            _rt = (getattr(parent_agent, "_token_governance_cfg", None) or {})
+            if not isinstance(_rt, dict):
+                _rt = {}
+            _cfg = load_config() or {}
+            _opm = _rt.get("openai_primary_mode") or _cfg.get("openai_primary_mode") or {}
+            if not _opm.get("enabled", False):
+                return creds
+
+            _m = (str((creds or {}).get("model") or "")).strip().lower()
+            _is_gemma = (
+                not _m
+                or _m in ("gemma-4-31b-it", "gemma-4", "google/gemma-4-31b-it")
+                or _m.endswith("/gemma-4-31b-it")
+            )
+            if not _is_gemma:
+                return creds
+
+            _coding = any(
+                k in (goal_text or "").lower()
+                for k in (
+                    "code",
+                    "implement",
+                    "debug",
+                    "refactor",
+                    "function",
+                    "class",
+                    "script",
+                    "test",
+                    "bug",
+                    "compile",
+                )
+            )
+            _target = str(
+                _opm.get("codex_model") if _coding else _opm.get("default_model")
+            ).strip() or ("gpt-5.3-codex" if _coding else "gpt-5.4")
+
+            _base = (getattr(parent_agent, "base_url", None) or "").strip()
+            _key = (getattr(parent_agent, "api_key", None) or "").strip()
+            _prov = (getattr(parent_agent, "provider", None) or "").strip().lower()
+            if (
+                "api.openai.com" in _base.lower()
+                and _key
+                and _prov in ("custom", "openai", "openai-codex")
+            ):
+                return {
+                    **(creds or {}),
+                    "model": _target,
+                    "provider": "custom",
+                    "base_url": _base.rstrip("/"),
+                    "api_key": _key,
+                    "api_mode": "codex_responses",
+                }
+
+            tup = native_openai_runtime_tuple()
+            if not tup:
+                return creds
+            bu, ak = tup
+            return {
+                **(creds or {}),
+                "model": _target,
+                "provider": "custom",
+                "base_url": bu,
+                "api_key": ak,
+                "api_mode": "codex_responses",
+            }
+        except Exception:
+            return creds
+
     # Depth limit
     depth = getattr(parent_agent, '_delegate_depth', 0)
     if depth >= MAX_DEPTH:
@@ -861,6 +935,7 @@ def delegate_task(
             creds = _resolve_delegation_credentials(cfg, parent_agent, prompt_for)
         except ValueError as exc:
             return json.dumps({"error": str(exc)})
+        creds = _enforce_opm_baseline(creds, t.get("goal", ""))
         try:
             with _hermes_profile_env(hp):
                 child = _build_child_agent(
@@ -889,6 +964,7 @@ def delegate_task(
                     creds = _resolve_delegation_credentials(cfg, parent_agent, prompt_for)
                 except ValueError as exc:
                     return json.dumps({"error": str(exc)})
+                creds = _enforce_opm_baseline(creds, t.get("goal", ""))
                 child = _build_child_agent(
                     task_index=i, goal=t["goal"], context=t.get("context"),
                     toolsets=t.get("toolsets") or toolsets, model=creds["model"],

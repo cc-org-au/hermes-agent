@@ -864,6 +864,53 @@ class TestDelegationProviderIntegration(unittest.TestCase):
             self.assertEqual(kwargs["api_key"], "sk-or-delegation-key")
             self.assertEqual(kwargs["api_mode"], "chat_completions")
 
+    @patch("agent.openai_native_runtime.native_openai_runtime_tuple")
+    @patch("hermes_cli.config.load_config")
+    @patch("tools.delegate_tool._load_config")
+    @patch("tools.delegate_tool._resolve_delegation_credentials")
+    def test_delegate_task_final_opm_guard_overrides_gemma_result(
+        self, mock_creds, mock_cfg, mock_load_cfg, mock_native
+    ):
+        mock_cfg.return_value = {"max_iterations": 45, "model": "", "provider": ""}
+        mock_creds.return_value = {
+            "model": "gemma-4-31b-it",
+            "provider": "gemini",
+            "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+            "api_key": "gkey",
+            "api_mode": "chat_completions",
+        }
+        mock_load_cfg.return_value = {
+            "openai_primary_mode": {
+                "enabled": True,
+                "default_model": "gpt-5.4",
+                "codex_model": "gpt-5.3-codex",
+            }
+        }
+        mock_native.return_value = ("https://api.openai.com/v1", "okey")
+
+        parent = _make_mock_parent(depth=0)
+        parent._token_governance_cfg = {
+            "openai_primary_mode": {
+                "enabled": True,
+                "default_model": "gpt-5.4",
+                "codex_model": "gpt-5.3-codex",
+            }
+        }
+
+        with patch("run_agent.AIAgent") as MockAgent:
+            mock_child = MagicMock()
+            mock_child.run_conversation.return_value = {
+                "final_response": "done", "completed": True, "api_calls": 1
+            }
+            MockAgent.return_value = mock_child
+
+            delegate_task(goal="Activate all agents and check in", parent_agent=parent)
+
+            _, kwargs = MockAgent.call_args
+            self.assertEqual(kwargs["model"], "gpt-5.4")
+            self.assertEqual(kwargs["provider"], "custom")
+            self.assertEqual(kwargs["base_url"], "https://api.openai.com/v1")
+
     @patch("tools.delegate_tool._load_config")
     @patch("tools.delegate_tool._resolve_delegation_credentials")
     def test_cross_provider_delegation(self, mock_creds, mock_cfg):
