@@ -312,16 +312,12 @@ def _is_openai_primary_mode_allowed(model_id: str, parent_agent: Any = None) -> 
             return False
 
         if opm.get("require_direct_openai", True) and parent_agent is not None:
-            bu = (getattr(parent_agent, "base_url", None) or "").strip().lower()
-            prov = (getattr(parent_agent, "provider", None) or "").strip().lower()
-            # Must be native api.openai.com and never OpenRouter.
-            if "openrouter" in bu:
-                return False
-            # For custom/openai/openai-codex providers, enforce OpenAI host explicitly.
-            if prov in ("custom", "openai", "openai-codex"):
-                if "api.openai.com" not in bu:
-                    return False
-            elif "api.openai.com" not in bu:
+            # Direct-OpenAI requirement applies to the subprocess runtime, not
+            # necessarily the current parent runtime. Parent can be on Gemini
+            # while child delegates to native api.openai.com.
+            from agent.openai_native_runtime import native_openai_runtime_tuple
+
+            if not native_openai_runtime_tuple():
                 return False
         return True
     except Exception:
