@@ -19,6 +19,24 @@ def _merge_dicts(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, An
     return out
 
 
+def _opm_merge_parent_anchor(parent_agent: Any) -> Any:
+    """Return ``parent_agent._opm_merge_parent`` when set, else None.
+
+    ``unittest.mock.MagicMock`` implements ``__getattr__`` so
+    ``getattr(mock, "_opm_merge_parent", None)`` yields a bogus child mock.
+    Tests and callers without an anchor must see None so OPM resolution does not recurse.
+    """
+    if parent_agent is None:
+        return None
+    d = getattr(parent_agent, "__dict__", None)
+    if isinstance(d, dict) and "_opm_merge_parent" in d:
+        return d["_opm_merge_parent"]
+    try:
+        return object.__getattribute__(parent_agent, "_opm_merge_parent")
+    except AttributeError:
+        return None
+
+
 def resolve_openai_primary_mode(parent_agent: Any = None) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """Return merged OPM config + source metadata.
 
@@ -57,7 +75,7 @@ def resolve_openai_primary_mode(parent_agent: Any = None) -> Tuple[Dict[str, Any
 
     # Delegated subagent under hermes_profile: child's config/YAML may omit OPM while
     # the chief has it enabled. Overlay the parent's merged OPM when the anchor is on.
-    _anchor = getattr(parent_agent, "_opm_merge_parent", None) if parent_agent is not None else None
+    _anchor = _opm_merge_parent_anchor(parent_agent)
     _delegation_opm_overlay = False
     if _anchor is not None:
         anchor_merged, _ = resolve_openai_primary_mode(_anchor)
@@ -96,7 +114,10 @@ def resolve_openai_primary_mode(parent_agent: Any = None) -> Tuple[Dict[str, Any
 
 
 def is_gemma_model_id(model_id: str) -> bool:
-    """True for any Gemma-family id (never used when openai_primary_mode is enabled)."""
+    """True for any Gemma-family id (never used when openai_primary_mode is enabled).
+
+    Matches ``gemma-4-31b-it``, ``google/gemma-…``, hub ids containing ``gemma``, etc.
+    """
     m = (model_id or "").strip().lower()
     return bool(m) and "gemma" in m
 

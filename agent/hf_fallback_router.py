@@ -21,6 +21,24 @@ from agent.tier_model_routing import canonical_gemma_model_id
 logger = logging.getLogger(__name__)
 
 
+def _opm_clamp_routed_model(selected: str, routing_agent: Any) -> str:
+    """Never return a Gemma id when openai_primary_mode is enabled."""
+    try:
+        from agent.openai_primary_mode import (
+            is_gemma_model_id,
+            opm_blocks_gemma,
+            opm_non_gemma_replacement_model,
+        )
+
+        if not opm_blocks_gemma(routing_agent):
+            return selected
+        if not is_gemma_model_id(selected):
+            return selected
+        return opm_non_gemma_replacement_model(routing_agent)
+    except Exception:
+        return selected
+
+
 def _flatten_tier_models(tiers: List[Dict[str, Any]]) -> List[str]:
     seen: set[str] = set()
     out: List[str] = []
@@ -33,9 +51,27 @@ def _flatten_tier_models(tiers: List[Dict[str, Any]]) -> List[str]:
     return out
 
 
-def first_tier_hub_fallback(tiers: List[Dict[str, Any]], router_model: str) -> str:
-    """First hub id in tier order; else *router_model*."""
+def first_tier_hub_fallback(
+    tiers: List[Dict[str, Any]],
+    router_model: str,
+    routing_agent: Any = None,
+) -> str:
+    """First hub id in tier order; else *router_model*. Under OPM, skip Gemma tier targets."""
     flat = _flatten_tier_models(tiers)
+    try:
+        from agent.openai_primary_mode import (
+            is_gemma_model_id,
+            opm_blocks_gemma,
+            opm_non_gemma_replacement_model,
+        )
+
+        if opm_blocks_gemma(routing_agent):
+            for m in flat:
+                if m and not is_gemma_model_id(m):
+                    return m
+            return opm_non_gemma_replacement_model(routing_agent)
+    except Exception:
+        pass
     return flat[0] if flat else router_model
 
 
@@ -44,22 +80,37 @@ def resolve_gemini_routed_model(
     *,
     router_model: str,
     tiers: List[Dict[str, Any]],
+    routing_agent: Any = None,
 ) -> str:
     """Pick one hub id from *tiers* using Google AI (Gemini / Gemma API) *router_model*.
 
     Uses ``GEMINI_API_KEY`` or ``GOOGLE_API_KEY``. Same JSON shape as the HF router path.
     """
     router_model = canonical_gemma_model_id((router_model or "").strip())
+    try:
+        from agent.openai_primary_mode import (
+            is_gemma_model_id,
+            opm_blocks_gemma,
+            opm_non_gemma_replacement_model,
+        )
+
+        if opm_blocks_gemma(routing_agent) and is_gemma_model_id(router_model):
+            router_model = opm_non_gemma_replacement_model(routing_agent)
+    except Exception:
+        pass
     if os.environ.get("HERMES_HF_ROUTER_DISABLE", "").strip().lower() in ("1", "true", "yes"):
-        return first_tier_hub_fallback(tiers, router_model)
+        return _opm_clamp_routed_model(
+            first_tier_hub_fallback(tiers, router_model, routing_agent=routing_agent),
+            routing_agent,
+        )
 
     if not tiers:
-        return router_model
+        return _opm_clamp_routed_model(router_model, routing_agent)
 
     flat = _flatten_tier_models(tiers)
-    fallback = first_tier_hub_fallback(tiers, router_model)
+    fallback = first_tier_hub_fallback(tiers, router_model, routing_agent=routing_agent)
     if not router_model.strip():
-        return fallback
+        return _opm_clamp_routed_model(fallback, routing_agent)
 
     tier_lines: List[str] = []
     for i, t in enumerate(tiers):
@@ -88,7 +139,7 @@ def resolve_gemini_routed_model(
         from agent.auxiliary_client import call_llm, extract_content_or_reasoning
     except Exception:
         logger.warning("hf_fallback_router: auxiliary client unavailable")
-        return fallback
+        return _opm_clamp_routed_model(fallback, routing_agent)
 
     try:
         resp = call_llm(
@@ -104,15 +155,15 @@ def resolve_gemini_routed_model(
         content = extract_content_or_reasoning(resp)
     except Exception as exc:
         logger.info("hf_fallback_router: Gemini router call failed: %s", exc)
-        return fallback
+        return _opm_clamp_routed_model(fallback, routing_agent)
 
     picked = _parse_tier_model_json(content, tiers, flat)
     if picked:
-        return picked
+        return _opm_clamp_routed_model(picked, routing_agent)
     for c in flat:
         if c in content:
-            return c
-    return fallback
+            return _opm_clamp_routed_model(c, routing_agent)
+    return _opm_clamp_routed_model(fallback, routing_agent)
 
 
 def resolve_hf_routed_model(

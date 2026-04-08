@@ -228,6 +228,13 @@ def build_free_fallback_chain(config: Optional[Dict[str, Any]]) -> List[Dict[str
             }
         )
 
+    try:
+        from agent.openai_primary_mode import opm_blocks_gemma
+
+        if opm_blocks_gemma():
+            return _opm_finalize_fallback_chain(chain)
+    except Exception:
+        pass
     return chain
 
 

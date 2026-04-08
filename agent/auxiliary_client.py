@@ -1757,6 +1757,22 @@ def call_llm(
     resolved_provider, resolved_model, resolved_base_url, resolved_api_key = _resolve_task_provider_model(
         task, provider, model, base_url, api_key)
     resolved_model = _resolve_tier_dynamic_for_auxiliary(resolved_model, messages)
+    try:
+        from agent.openai_primary_mode import (
+            is_gemma_model_id,
+            opm_blocks_gemma,
+            opm_non_gemma_replacement_model,
+        )
+
+        if opm_blocks_gemma(None) and is_gemma_model_id(resolved_model):
+            resolved_model = opm_non_gemma_replacement_model(None)
+            _rp = (resolved_provider or "").strip().lower()
+            if _rp in ("", "auto", "huggingface", "openrouter"):
+                resolved_provider = "gemini"
+                resolved_base_url = None
+                resolved_api_key = None
+    except Exception:
+        pass
 
     if task == "vision":
         effective_provider, client, final_model = resolve_vision_provider_client(
@@ -1915,6 +1931,22 @@ async def async_call_llm(
     resolved_provider, resolved_model, resolved_base_url, resolved_api_key = _resolve_task_provider_model(
         task, provider, model, base_url, api_key)
     resolved_model = _resolve_tier_dynamic_for_auxiliary(resolved_model, messages)
+    try:
+        from agent.openai_primary_mode import (
+            is_gemma_model_id,
+            opm_blocks_gemma,
+            opm_non_gemma_replacement_model,
+        )
+
+        if opm_blocks_gemma(None) and is_gemma_model_id(resolved_model):
+            resolved_model = opm_non_gemma_replacement_model(None)
+            _rp = (resolved_provider or "").strip().lower()
+            if _rp in ("", "auto", "huggingface", "openrouter"):
+                resolved_provider = "gemini"
+                resolved_base_url = None
+                resolved_api_key = None
+    except Exception:
+        pass
 
     if task == "vision":
         effective_provider, client, final_model = resolve_vision_provider_client(

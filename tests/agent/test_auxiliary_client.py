@@ -633,7 +633,14 @@ class TestVisionClientFallback:
     def test_vision_returns_none_without_any_credentials(self):
         with (
             patch("agent.auxiliary_client._read_nous_auth", return_value=None),
+            patch("agent.auxiliary_client._try_openrouter", return_value=(None, None)),
+            patch("agent.auxiliary_client._try_codex", return_value=(None, None)),
             patch("agent.auxiliary_client._try_anthropic", return_value=(None, None)),
+            patch("agent.auxiliary_client._try_custom_endpoint", return_value=(None, None)),
+            patch(
+                "agent.auxiliary_client.resolve_provider_client",
+                return_value=(None, None),
+            ),
         ):
             client, model = get_vision_auxiliary_client()
         assert client is None

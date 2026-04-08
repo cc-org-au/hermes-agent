@@ -1,10 +1,25 @@
+from unittest.mock import MagicMock
+
 from agent.openai_primary_mode import (
+    _opm_merge_parent_anchor,
     filter_fallback_chain_strip_gemma,
     is_gemma_model_id,
     opm_blocks_gemma,
     opm_suppresses_free_model_fallback,
     resolve_openai_primary_mode,
 )
+
+
+def test_opm_merge_parent_anchor_magicmock_unset_is_none():
+    """MagicMock.__getattr__ must not fabricate a delegation anchor."""
+    assert _opm_merge_parent_anchor(MagicMock()) is None
+
+
+def test_opm_merge_parent_anchor_explicit_on_mock():
+    chief = object()
+    m = MagicMock()
+    m._opm_merge_parent = chief
+    assert _opm_merge_parent_anchor(m) is chief
 
 
 def test_opm_suppresses_free_model_fallback_true_when_enabled_and_native(monkeypatch):

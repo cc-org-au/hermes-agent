@@ -26,7 +26,13 @@ from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional
 
-from agent.openai_primary_mode import opm_suppresses_free_model_fallback, resolve_openai_primary_mode
+from agent.openai_primary_mode import (
+    is_gemma_model_id,
+    opm_blocks_gemma,
+    opm_non_gemma_replacement_model,
+    opm_suppresses_free_model_fallback,
+    resolve_openai_primary_mode,
+)
 from agent.routing_trace import emit_routing_decision_trace
 
 # Serialize delegate_task when switching HERMES_HOME for a child profile (process-global env).
@@ -899,15 +905,13 @@ def delegate_task(
         return json.dumps({"error": "delegate_task requires a parent agent context."})
 
     def _enforce_opm_baseline(creds: dict, goal_text: str) -> dict:
-        """Under OPM + native OpenAI, delegations always use GPT on api.openai.com."""
+        """Under OPM: never delegate on Gemma; prefer native GPT when available."""
         try:
-            if not opm_suppresses_free_model_fallback(parent_agent):
+            if not opm_blocks_gemma(parent_agent):
                 return creds
             c = dict(creds or {})
-            m = str(c.get("model") or "").lower()
+            m = str(c.get("model") or "")
             bu = str(c.get("base_url") or "").lower()
-            if "api.openai.com" in bu and m.startswith("gpt-"):
-                return c
 
             _opm, _opm_meta = resolve_openai_primary_mode(parent_agent)
             _coding = any(
@@ -929,11 +933,81 @@ def delegate_task(
                 _opm.get("codex_model") if _coding else _opm.get("default_model")
             ).strip() or ("gpt-5.3-codex" if _coding else "gpt-5.4")
 
+            # Hard block Gemma (any provider) while OPM is active.
+            if is_gemma_model_id(m):
+                if opm_suppresses_free_model_fallback(parent_agent):
+                    from agent.openai_native_runtime import native_openai_runtime_tuple
+
+                    tup = native_openai_runtime_tuple()
+                    if tup:
+                        obu, oak = tup
+                        _next = {
+                            **c,
+                            "model": _target,
+                            "provider": "custom",
+                            "base_url": obu,
+                            "api_key": oak,
+                            "api_mode": "codex_responses",
+                        }
+                        emit_routing_decision_trace(
+                            stage="delegation_credentials_resolution",
+                            chosen_model=str(_next.get("model") or ""),
+                            chosen_provider=str(_next.get("provider") or ""),
+                            reason_code="opm_baseline_override_gemma_blocked",
+                            opm_enabled=True,
+                            opm_source=str(_opm_meta.get("source", "")),
+                            tier_source="delegation_baseline",
+                            fallback_activated=False,
+                            explicit_user_model=False,
+                            profile=str(getattr(parent_agent, "profile", "") or ""),
+                            session_id=str(getattr(parent_agent, "session_id", "") or ""),
+                        )
+                        return _next
+                try:
+                    from hermes_cli.runtime_provider import resolve_runtime_provider
+
+                    rt = resolve_runtime_provider(requested="gemini")
+                    if (rt.get("api_key") or "").strip():
+                        nm = opm_non_gemma_replacement_model(parent_agent)
+                        _next = {
+                            **c,
+                            "model": nm,
+                            "provider": rt.get("provider"),
+                            "base_url": rt.get("base_url"),
+                            "api_key": rt.get("api_key"),
+                            "api_mode": rt.get("api_mode"),
+                            "command": rt.get("command"),
+                            "args": list(rt.get("args") or []),
+                        }
+                        emit_routing_decision_trace(
+                            stage="delegation_credentials_resolution",
+                            chosen_model=str(nm),
+                            chosen_provider=str(rt.get("provider") or ""),
+                            reason_code="opm_replace_gemma_with_non_gemma_gemini",
+                            opm_enabled=True,
+                            opm_source=str(_opm_meta.get("source", "")),
+                            tier_source="delegation_baseline",
+                            fallback_activated=True,
+                            explicit_user_model=False,
+                            profile=str(getattr(parent_agent, "profile", "") or ""),
+                            session_id=str(getattr(parent_agent, "session_id", "") or ""),
+                        )
+                        return _next
+                except Exception:
+                    pass
+                c["model"] = opm_non_gemma_replacement_model(parent_agent)
+                return c
+
+            if not opm_suppresses_free_model_fallback(parent_agent):
+                return c
+            if "api.openai.com" in bu and m.lower().startswith("gpt-"):
+                return c
+
             from agent.openai_native_runtime import native_openai_runtime_tuple
 
             tup = native_openai_runtime_tuple()
             if not tup:
-                return creds
+                return c
             obu, oak = tup
             _next = {
                 **c,

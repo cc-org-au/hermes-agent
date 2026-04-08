@@ -4965,6 +4965,30 @@ class AIAgent:
             return True
         return False
 
+    def _opm_reconcile_primary_if_gemma(self) -> None:
+        """Hard block: with OPM enabled, primary ``self.model`` must never stay on Gemma."""
+        try:
+            from agent.openai_primary_mode import (
+                is_gemma_model_id,
+                opm_blocks_gemma,
+                opm_non_gemma_replacement_model,
+                resolve_openai_primary_mode,
+            )
+
+            if not opm_blocks_gemma(self) or not self.model:
+                return
+            if not is_gemma_model_id(self.model):
+                return
+            opm_cfg, _ = resolve_openai_primary_mode(self)
+            repl = str(opm_cfg.get("default_model") or "").strip()
+            if not repl or is_gemma_model_id(repl):
+                repl = opm_non_gemma_replacement_model(self)
+            self.model = repl
+            if hasattr(self, "_reconcile_runtime_after_tier_model_change"):
+                self._reconcile_runtime_after_tier_model_change()
+        except Exception:
+            logger.debug("_opm_reconcile_primary_if_gemma failed", exc_info=True)
+
     def _try_activate_fallback(self, *, triggered_by_rate_limit: bool = False) -> bool:
         """Switch to the next fallback model/provider in the chain.
 
@@ -5041,16 +5065,17 @@ class AIAgent:
                             _user_turn,
                             router_model=fb_model,
                             tiers=_tiers,
+                            routing_agent=self,
                         )
                     except Exception as _exc:
                         logging.warning("Gemini tier router failed: %s", _exc)
-                        fb_model = first_tier_hub_fallback(_tiers, fb_model)
+                        fb_model = first_tier_hub_fallback(_tiers, fb_model, routing_agent=self)
                 else:
                     logging.warning(
                         "free fallback: no GEMINI_API_KEY/GOOGLE_API_KEY — "
                         "using first tier hub id",
                     )
-                    fb_model = first_tier_hub_fallback(_tiers, fb_model)
+                    fb_model = first_tier_hub_fallback(_tiers, fb_model, routing_agent=self)
 
         # Legacy hf_router entries: remap to gemini provider
         elif fb.get("hf_router"):
@@ -5076,12 +5101,13 @@ class AIAgent:
                             _user_turn,
                             router_model=fb_model,
                             tiers=_tiers,
+                            routing_agent=self,
                         )
                     except Exception as _exc:
                         logging.warning("Gemini tier router failed: %s", _exc)
-                        fb_model = first_tier_hub_fallback(_tiers, fb_model)
+                        fb_model = first_tier_hub_fallback(_tiers, fb_model, routing_agent=self)
                 else:
-                    fb_model = first_tier_hub_fallback(_tiers, fb_model)
+                    fb_model = first_tier_hub_fallback(_tiers, fb_model, routing_agent=self)
             fb_provider = "gemini"
 
         _gn = fb.get("gemini_native_tier_models")
@@ -5188,6 +5214,8 @@ class AIAgent:
                 self.context_compressor.threshold_tokens = int(
                     fb_context_length * self.context_compressor.threshold_percent
                 )
+
+            self._opm_reconcile_primary_if_gemma()
 
             _or_last = fb.get("openrouter_last_resort", False)
             if _or_last:
@@ -7509,7 +7537,9 @@ class AIAgent:
             if (self._skill_nudge_interval > 0
                     and "skill_manage" in self.valid_tool_names):
                 self._iters_since_skill += 1
-            
+
+            self._opm_reconcile_primary_if_gemma()
+
             # Prepare messages for API call
             # If we have an ephemeral system prompt, prepend it to the messages
             # Note: Reasoning is embedded in content via <think> tags for trajectory storage.
