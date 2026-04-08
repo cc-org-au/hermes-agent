@@ -1072,11 +1072,31 @@ def _resolve_delegation_credentials(
             from agent.openai_native_runtime import native_openai_runtime_tuple
             from hermes_cli.config import load_config
 
-            rt_cfg = load_runtime_config() or {}
+            # Prefer live per-turn governance already attached to the parent agent.
+            _parent_raw = (
+                getattr(parent_agent, "_token_governance_cfg", None)
+                if parent_agent is not None
+                else None
+            )
+            parent_rt = _parent_raw if isinstance(_parent_raw, dict) else {}
+            rt_cfg = parent_rt or load_runtime_config() or {}
             cfg_full = load_config() or {}
             opm = rt_cfg.get("openai_primary_mode") or cfg_full.get("openai_primary_mode") or {}
             if opm.get("enabled", False):
-                tup = native_openai_runtime_tuple()
+                tup = None
+                # If parent already runs on direct OpenAI, reuse that runtime.
+                if parent_agent is not None:
+                    _p_base = (getattr(parent_agent, "base_url", None) or "").strip()
+                    _p_key = (getattr(parent_agent, "api_key", None) or "").strip()
+                    _p_prov = (getattr(parent_agent, "provider", None) or "").strip().lower()
+                    if (
+                        "api.openai.com" in _p_base.lower()
+                        and _p_key
+                        and _p_prov in ("custom", "openai", "openai-codex")
+                    ):
+                        tup = (_p_base.rstrip("/"), _p_key)
+                if not tup:
+                    tup = native_openai_runtime_tuple()
                 if tup:
                     bu, ak = tup
                     txt = (prompt_for_tier or "").lower()
