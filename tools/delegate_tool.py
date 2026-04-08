@@ -484,6 +484,42 @@ def _run_single_child(
     _saved_tool_names = getattr(child, "_delegate_saved_tool_names",
                                 list(model_tools._last_resolved_tool_names))
 
+    # ── Delegation context review & model gating ─────────────────────────
+    try:
+        from agent.delegation_review import gate_delegate_model, review_delegation_context
+
+        _gated_model, _gate_reason = gate_delegate_model(
+            child_model, getattr(parent_agent, "model", "") if parent_agent else "",
+        )
+        if _gated_model != child_model:
+            _emit = getattr(parent_agent, "_emit_status", None) if parent_agent else None
+            if callable(_emit):
+                _emit(f"[Delegate] {_gate_reason}", "delegation_review")
+            logger.info("delegation gating: %s", _gate_reason)
+
+        _review = review_delegation_context(goal, _kwargs.get("context"), child_model)
+        if _review.get("improved_context"):
+            _extra = _review["improved_context"]
+            goal = f"{goal}\n\nAdditional guidance: {_extra}"
+            _emit = getattr(parent_agent, "_emit_status", None) if parent_agent else None
+            if callable(_emit):
+                _emit(f"[Delegate] Context enriched: {_extra[:60]}", "delegation_review")
+    except Exception as _dr_err:
+        logger.debug("delegation review skipped: %s", _dr_err)
+
+    _emit = getattr(parent_agent, "_emit_status", None) if parent_agent else None
+    _cost_cls = "unknown"
+    try:
+        from agent.subprocess_governance import classify_model_cost
+        _cost_cls = classify_model_cost(child_model)
+    except Exception:
+        pass
+    if callable(_emit):
+        _emit(
+            f"[Delegate] Task: {goal[:60]} -> {child_model} ({_cost_cls})",
+            "delegation",
+        )
+
     try:
         result = child.run_conversation(user_message=goal)
 

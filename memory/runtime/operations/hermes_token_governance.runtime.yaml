@@ -1,8 +1,34 @@
-version: 1
+version: 2
 enabled: true
 max_agent_turns: 50
 dynamic_tier_routing: true
 default_routing_tier: D
+
+cost_governance:
+  daily_budget_usd: 10.0
+  session_budget_usd: 2.50
+  spike_threshold_usd_per_min: 0.50
+  summary_review_enabled: true
+  stall_timeout_expensive_seconds: 120
+  stall_timeout_cheap_seconds: 60
+  max_nudges_per_turn: 2
+
+provider_health:
+  huggingface_max_failures: 1
+  default_max_failures: 3
+
+escalation:
+  opus_enabled: true
+  opus_max_tokens: 4096
+  opus_max_per_session: 2
+  require_deliberation_for_openrouter_consultant: true
+
+delegation:
+  require_context_review: true
+  max_model_tier_for_delegates: D
+  prefer_free_for_large_context: true
+  large_context_threshold_tokens: 10000
+
 notes: |
   Runtime governance source of truth is the active file under
   WORKSPACE/memory/runtime/state/hermes-token-governance.runtime.yaml.

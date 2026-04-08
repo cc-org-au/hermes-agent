@@ -227,6 +227,19 @@ DEFAULT_CONFIG = {
     # free tier). Provider is left unset so ``resolve_provider(auto)`` picks from API keys.
     "model": {"default": "gemini-2.5-flash"},
     "fallback_providers": None,
+    "cost_governance": {
+        "daily_budget_usd": 10.0,
+        "session_budget_usd": 2.50,
+        "spike_threshold_usd_per_min": 0.50,
+        "summary_review_enabled": True,
+        "stall_timeout_expensive_seconds": 120,
+        "stall_timeout_cheap_seconds": 60,
+        "max_nudges_per_turn": 2,
+    },
+    "provider_health": {
+        "huggingface_max_failures": 1,
+        "default_max_failures": 3,
+    },
     "free_model_routing": {
         "enabled": True,
         # When local_models/hub/state.json lists downloads, tier hub ids not marked

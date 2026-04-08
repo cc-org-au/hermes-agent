@@ -28,7 +28,7 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-_TIER_LETTERS = frozenset("ABCDEF")
+_TIER_LETTERS = frozenset("ABCDEFG")
 
 # ---------------------------------------------------------------------------
 # Route decision dataclass
@@ -56,7 +56,7 @@ class UnifiedRouteDecision:
 
     background_task: bool = False
     """True when the request explicitly involves a background/subprocess task.
-    Background tasks must use only free local models (gemma-4, qwen).
+    Background tasks must use only free local models (gemma-4-31b-it or local inference).
     Chief orchestrator must be consulted before any paid background task launches."""
 
     audit: Dict[str, Any] = field(default_factory=dict)
@@ -79,7 +79,7 @@ TIER TABLE (ascending capability/cost — ALL tiers cost money via API):
   E = gpt-5.4            — hardest non-coding reasoning, ambiguous multi-domain problems
   F = gpt-5.3-codex      — deep engineering, architecture, refactors, complex codegen
 
-NOTE: The only genuinely free (zero API cost) models are: gemma-4 (local) and qwen (local).
+NOTE: The only genuinely free (zero API cost) models are: gemma-4-31b-it (local or Gemini API) and self-hosted local inference.
 These are available for subprocess/background tasks but NOT listed above as interactive tiers.
 
 ROUTING RULES:
@@ -96,7 +96,7 @@ ROUTING RULES:
 7. profile: suggest the most suitable profile by EXACT name, or null for default.
 8. background_task: true if the request explicitly asks to run something in the background,
    spawn a subprocess, or run a parallel process. Background tasks MUST use only local/free
-   models (gemma-4, qwen) — any paid model requires operator approval.
+   models (gemma-4-31b-it, local inference) — any paid model requires operator approval.
 
 PROFILES:
 {profiles_desc}
@@ -309,3 +309,68 @@ def route_prompt(
         tier=fallback_tier,
         audit={"raw_excerpt": raw[:100] if raw else "", "parsed": False},
     )
+
+
+# ---------------------------------------------------------------------------
+# Summary review (post-response alignment check)
+# ---------------------------------------------------------------------------
+
+_REVIEW_SYSTEM = (
+    "You are a quality reviewer. Compare the user's original request with the "
+    "agent's final response summary. Respond ONLY with JSON:\n"
+    '{"aligned": true} if the response addresses the request, OR\n'
+    '{"aligned": false, "reason": "one sentence", '
+    '"action": "reroute"} if fundamentally misaligned, failed, or blocked.'
+)
+
+
+def review_agent_summary(
+    user_prompt_excerpt: str,
+    agent_response_excerpt: str,
+    current_tier: str = "",
+    current_model: str = "",
+) -> Dict[str, Any]:
+    """Ultra-concise post-response alignment check using the free model.
+
+    Returns ``{"aligned": True}`` on success or review failure (fail-open).
+    Returns ``{"aligned": False, "reason": "...", "action": "reroute"}`` on
+    misalignment.
+
+    Total budget: ~500 input tokens, ~50 output tokens.
+    """
+    user_snip = (user_prompt_excerpt or "")[:300]
+    resp_snip = (agent_response_excerpt or "")[:200]
+
+    if not user_snip.strip() or not resp_snip.strip():
+        return {"aligned": True}
+
+    user_msg = (
+        f"User request (first 300 chars):\n{user_snip}\n\n"
+        f"Agent response (last 200 chars):\n{resp_snip}\n\n"
+        f"Current tier: {current_tier}, model: {current_model}"
+    )
+
+    try:
+        from agent.auxiliary_client import call_llm
+
+        raw = call_llm(
+            prompt=user_msg,
+            system=_REVIEW_SYSTEM,
+            model="gemma-4-31b-it",
+            provider="gemini",
+            max_tokens=60,
+            temperature=0.0,
+        )
+        text = (raw or "").strip()
+        m = re.search(r"\{.*\}", text, re.DOTALL)
+        if m:
+            obj = json.loads(m.group())
+            return {
+                "aligned": bool(obj.get("aligned", True)),
+                "reason": str(obj.get("reason", ""))[:200],
+                "action": str(obj.get("action", ""))[:20],
+            }
+    except Exception as exc:
+        logger.debug("review_agent_summary failed: %s", exc)
+
+    return {"aligned": True}

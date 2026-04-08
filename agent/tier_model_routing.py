@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, Optional
 
-TIER_SENTINEL_RE = re.compile(r"^tier:([A-Fa-f])$")
+TIER_SENTINEL_RE = re.compile(r"^tier:([A-Ga-g])$")
 TIER_DYNAMIC_SENTINEL = "tier:dynamic"
 
 # When ``workspace/operations/hermes_token_governance.runtime.yaml`` is missing or
@@ -28,6 +28,8 @@ BUILTIN_TIER_MODELS: Dict[str, str] = {
     # E/F: native api.openai.com consultants (OPENAI_API_KEY_DROPLET or OPENAI_API_KEY).
     "E": "gpt-5.4",                          # hardest non-coding reasoning
     "F": "gpt-5.3-codex",                    # coding specialist, preferred for engineering
+    # G: consultant-only; requires deliberation+approval; single-turn scope.
+    "G": "anthropic/claude-opus-4.6",
 }
 
 
@@ -82,6 +84,19 @@ def prompt_text_for_tier_from_messages(messages: Optional[Any]) -> str:
     return "\n".join(parts)[:12000]
 
 
+def canonical_gemma_model_id(model_id: Optional[str]) -> str:
+    """Map a legacy short Gemma id to ``gemma-4-31b-it``.
+
+    Some prompts/configs may use the short alias; OpenRouter and other APIs
+    reject the short form as an invalid model id. Call this on any user- or
+    YAML-sourced model string before resolving providers.
+    """
+    s = (model_id or "").strip()
+    if s.lower() == "gemma-4":
+        return "gemma-4-31b-it"
+    return s
+
+
 def resolve_tier_dynamic_model(
     user_text: str,
     gov_cfg: Optional[Dict[str, Any]] = None,
@@ -100,7 +115,7 @@ def resolve_tier_dynamic_model(
 
 
 def _normalize_openrouter_auto_slug(model_id: str) -> str:
-    s = (model_id or "").strip()
+    s = canonical_gemma_model_id((model_id or "").strip())
     collapsed = s.lower().replace("_", "-").replace("/", "-")
     if collapsed == "openrouter-auto":
         return "openrouter/auto"
@@ -140,7 +155,7 @@ def resolve_tier_placeholder(
         return merged.get(fallback_tier.upper(), "") or merged.get("D", "")
     m = TIER_SENTINEL_RE.match(str(model).strip())
     if not m:
-        return str(model).strip()
+        return canonical_gemma_model_id(str(model).strip())
     tier = m.group(1).upper()
     fb = fallback_tier.upper() if len(str(fallback_tier).strip()) == 1 else "D"
     if fb not in "ABCDEF":

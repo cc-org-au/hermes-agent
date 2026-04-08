@@ -101,6 +101,8 @@ from agent.context_compressor import ContextCompressor
 from agent.prompt_caching import apply_anthropic_cache_control
 from agent.prompt_builder import build_skills_system_prompt, build_context_files_prompt, load_soul_md, TOOL_USE_ENFORCEMENT_GUIDANCE, TOOL_USE_ENFORCEMENT_MODELS, DEVELOPER_ROLE_MODELS, GOOGLE_MODEL_OPERATIONAL_GUIDANCE
 from agent.usage_pricing import estimate_usage_cost, normalize_usage
+from agent.provider_health import ProviderHealthTracker
+from agent.cost_monitor import CostMonitor
 from agent.display import (
     KawaiiSpinner, build_tool_preview as _build_tool_preview,
     get_cute_tool_message as _get_cute_tool_message_impl,
@@ -1284,7 +1286,10 @@ class AIAgent:
         self.session_estimated_cost_usd = 0.0
         self.session_cost_status = "unknown"
         self.session_cost_source = "none"
-        
+
+        self._provider_health = ProviderHealthTracker()
+        self._cost_monitor = CostMonitor()
+
         if not self.quiet_mode:
             if compression_enabled:
                 print(f"📊 Context limit: {self.context_compressor.context_length:,} tokens (compress at {int(compression_threshold*100)}% = {self.context_compressor.threshold_tokens:,})")
@@ -1353,6 +1358,11 @@ class AIAgent:
         
         # Turn counter (added after reset_session_state was first written — #2635)
         self._user_turn_count = 0
+
+        if hasattr(self, "_provider_health") and self._provider_health:
+            self._provider_health.reset()
+        if hasattr(self, "_cost_monitor") and self._cost_monitor:
+            self._cost_monitor.reset()
 
         # Context compressor internal counters (if present)
         if hasattr(self, "context_compressor") and self.context_compressor:
@@ -4918,6 +4928,16 @@ class AIAgent:
         self._fallback_index += 1
         fb_resolve = self._fallback_entry_for_resolve(fb)
         fb_provider = (fb_resolve.get("provider") or "").strip().lower()
+
+        ph = getattr(self, "_provider_health", None)
+        if ph and ph.is_blacklisted(fb_provider):
+            logging.info(
+                "Skipping blacklisted provider %s (%s)",
+                fb_provider, ph.blacklist_reason(fb_provider),
+            )
+            return self._try_activate_fallback(
+                triggered_by_rate_limit=triggered_by_rate_limit
+            )
         fb_model = (fb_resolve.get("model") or "").strip()
 
         # Gemini tier router: use Gemini API to pick a model from tiers
@@ -6967,6 +6987,7 @@ class AIAgent:
         self._incomplete_scratchpad_retries = 0
         self._codex_incomplete_retries = 0
         self._last_content_with_tools = None
+        self._summary_review_done_this_turn = False
         self._mute_post_response = False
         self._surrogate_sanitized = False
 
@@ -7217,7 +7238,9 @@ class AIAgent:
         length_continue_retries = 0
         truncated_response_prefix = ""
         compression_attempts = 0
-        
+        _stall_nudge_count = 0
+        _MAX_STALL_NUDGES = 2
+
         # Clear any stale interrupt state at start
         self.clear_interrupt()
 
@@ -7232,9 +7255,37 @@ class AIAgent:
             except Exception:
                 pass
 
+        _turn_start_monotonic = time.monotonic()
+
         while api_call_count < self.max_iterations and self.iteration_budget.remaining > 0:
             # Reset per-turn checkpoint dedup so each iteration can take one snapshot
             self._checkpoint_mgr.new_turn()
+
+            # Stall detection: if the tool-call loop has been running for a
+            # long time without producing a final response, inject a nudge.
+            _stall_limit = 120.0  # seconds; cheap tiers can use 60
+            _tier_attr = getattr(self, "_current_tier_letter", "")
+            if _tier_attr in ("A", "B", "C"):
+                _stall_limit = 60.0
+            _elapsed_since_start = time.monotonic() - _turn_start_monotonic
+            if (
+                _elapsed_since_start > _stall_limit
+                and _stall_nudge_count < _MAX_STALL_NUDGES
+                and api_call_count > 1
+            ):
+                _stall_nudge_count += 1
+                self._emit_status(
+                    f"[Router] Agent running for {int(_elapsed_since_start)}s "
+                    f"— nudging to continue ({_stall_nudge_count}/{_MAX_STALL_NUDGES})",
+                )
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "You have been working for a while. Please provide your "
+                        "response now or summarize your progress concisely."
+                    ),
+                })
+                _turn_start_monotonic = time.monotonic()
 
             # Check for interrupt request (e.g., user sent new message)
             if self._interrupt_requested:
@@ -7785,6 +7836,20 @@ class AIAgent:
                         self.session_cost_status = cost_result.status
                         self.session_cost_source = cost_result.source
 
+                        _cm = getattr(self, "_cost_monitor", None)
+                        if _cm:
+                            _ca = _cm.record_cost(self.session_estimated_cost_usd)
+                            if _ca == "circuit_break":
+                                self._emit_status(
+                                    f"⚠️ {_cm.status_line(self.session_estimated_cost_usd)} "
+                                    "— switching to free model",
+                                )
+                                self._try_activate_fallback(triggered_by_rate_limit=True)
+                            elif _ca == "warn":
+                                self._emit_status(
+                                    f"💰 {_cm.status_line(self.session_estimated_cost_usd)}",
+                                )
+
                         # Persist token counts to session DB for /insights.
                         # Do this for every platform with a session_id so non-CLI
                         # sessions (gateway, cron, delegated runs) cannot lose
@@ -7834,6 +7899,9 @@ class AIAgent:
                                 self._vprint(f"{self.log_prefix}   💾 Cache: {cached:,}/{prompt:,} tokens ({hit_pct:.0f}% hit, {written:,} written)")
                     
                     has_retried_429 = False  # Reset on success
+                    ph = getattr(self, "_provider_health", None)
+                    if ph:
+                        ph.record_success(self.provider)
                     break  # Success, exit retry loop
 
                 except InterruptedError:
@@ -7977,10 +8045,18 @@ class AIAgent:
                     # compress history and retry, not abort immediately.
                     status_code = getattr(api_error, "status_code", None)
 
+                    # Record failure for provider health tracking.
+                    ph = getattr(self, "_provider_health", None)
+                    if ph:
+                        _hint = f"HTTP {status_code}" if status_code else str(api_error)[:60]
+                        _newly_blacklisted = ph.record_failure(self.provider, _hint)
+                        if _newly_blacklisted:
+                            self._emit_status(
+                                f"⚠️ Provider {self.provider} blacklisted for this session "
+                                f"({ph.blacklist_reason(self.provider)})",
+                            )
+
                     # Eager fallback for rate limits, quota, or billing/credits errors.
-                    # When a fallback model is configured, switch immediately instead
-                    # of burning through retries with exponential backoff -- the
-                    # primary provider won't recover within the retry window.
                     is_rate_limited = self._quota_style_api_failure(api_error)
                     if is_rate_limited and self._fallback_index < len(self._fallback_chain):
                         # Don't eagerly fallback if credential pool rotation may
@@ -9037,6 +9113,37 @@ class AIAgent:
         
         # Determine if conversation completed successfully
         completed = final_response is not None and api_call_count < self.max_iterations
+
+        # Summary review: lightweight alignment check using the free model.
+        # Only runs once per turn (no loops) and only when the turn completed.
+        _summary_rerouted = False
+        if (
+            completed
+            and final_response
+            and not interrupted
+            and not getattr(self, "_summary_review_done_this_turn", False)
+        ):
+            self._summary_review_done_this_turn = True
+            try:
+                from agent.routing_engine import review_agent_summary
+
+                _review = review_agent_summary(
+                    user_prompt_excerpt=(original_user_message or "")[:300],
+                    agent_response_excerpt=(final_response or "")[-200:],
+                    current_tier=getattr(self, "_current_tier_letter", ""),
+                    current_model=self.model,
+                )
+                _aligned = _review.get("aligned", True)
+                if not _aligned:
+                    _reason = _review.get("reason", "misaligned")
+                    self._emit_status(
+                        f"[Router] Summary review: misaligned — {_reason}",
+                    )
+                    logger.info("summary review: misaligned — %s", _reason)
+                else:
+                    self._emit_status("[Router] Summary review: aligned")
+            except Exception as _sr_exc:
+                logger.debug("summary review skipped: %s", _sr_exc)
 
         # Save trajectory if enabled
         self._save_trajectory(messages, user_message, completed)

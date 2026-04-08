@@ -329,7 +329,7 @@ def resolve_consultant_tier(
         audit["skipped_router"] = "deterministic_tier_in_skip_list"
         return deterministic_tier, audit
 
-    tiers_delib = cr.get("tiers_requiring_deliberation") or ["E", "F"]
+    tiers_delib = cr.get("tiers_requiring_deliberation") or ["E", "F", "G"]
     if isinstance(tiers_delib, str):
         tiers_delib = [tiers_delib]
     tiers_delib_u = {str(x).strip().upper() for x in tiers_delib if x}
@@ -363,20 +363,23 @@ def resolve_consultant_tier(
             )
         sys_router = (
             "You are an intelligent routing advisor for a multi-tier AI organization. "
-            "Tiers A–F all have API costs — NONE are free. Match tier strictly to genuine task complexity.\n"
+            "Tiers A–G all have API costs — NONE are free. Match tier strictly to genuine task complexity.\n"
             "- Tier A: one-liners, trivial ack/lookup, pure formatting (low-cost Gemini)\n"
             "- Tier B: short/simple tasks, renames, single-file edits (low-cost Gemini)\n"
             "- Tier C: multi-step reasoning, moderate analysis, batch ops (low-cost Gemini Pro)\n"
             "- Tier D: complex tasks, most consultations, writing, planning, debugging (claude-sonnet-4.6)\n"
             "- Tier E: hardest non-coding reasoning, ambiguous multi-domain problems (gpt-5.4)\n"
-            "- Tier F: deep engineering, architecture, refactors, complex code generation (gpt-5.3-codex)\n\n"
+            "- Tier F: deep engineering, architecture, refactors, complex code generation (gpt-5.3-codex)\n"
+            "- Tier G: RARE — Claude Opus 4.6 consultant; only when the router believes Opus can route "
+            "better/cheaper/more comprehensively than the OpenAI router, or for the absolute hardest "
+            "multi-domain problems. Single-turn only. Always requires deliberation+approval.\n\n"
             "ROUTING BIAS: Use A/B/C for the bulk of routine/menial work (lowest API cost). "
             "Only escalate to D for genuinely complex tasks. Only escalate to E/F for the hardest tasks "
-            "or after repeated failures. Under-routing cost is lower than over-routing.\n"
-            "CONSULTANT ESCALATION: When the task genuinely warrants D/E/F, set request_consultant_escalation=true "
+            "or after repeated failures. Tier G is reserved for extraordinary cases.\n"
+            "CONSULTANT ESCALATION: When the task genuinely warrants D/E/F/G, set request_consultant_escalation=true "
             "and the deliberation system (challenger + chief review) will run an agentic discussion before approving. "
             "Do NOT suppress escalation — the deliberation system is the gatekeeping mechanism.\n"
-            "IMPORTANT: Set request_consultant_escalation=true whenever you recommend E or F. "
+            "IMPORTANT: Set request_consultant_escalation=true whenever you recommend E, F, or G. "
             "For coding/engineering tasks that warrant consultant escalation, prefer F over E."
         )
         hint = ""
@@ -392,10 +395,10 @@ def resolve_consultant_tier(
             f"User message:\n---\n{(user_message or '')[:12000]}\n---\n\n"
             f"{hint}{pushback_hint}{retry_hint}"
             "Reply with ONLY a JSON object, no markdown fences:\n"
-            '{"recommended_tier":"B"|"C"|"D"|"E"|"F", '
+            '{"recommended_tier":"B"|"C"|"D"|"E"|"F"|"G", '
             '"request_consultant_escalation": true or false, '
             '"rationale": "one short sentence"}\n'
-            "Rules: set request_consultant_escalation=true whenever recommended_tier is E or F. "
+            "Rules: set request_consultant_escalation=true whenever recommended_tier is E, F, or G. "
             "Actively recommend E/F for complex multi-step, architectural, security-sensitive, "
             "or previously-failed tasks."
         )
@@ -420,7 +423,7 @@ def resolve_consultant_tier(
             )
             if _route.audit.get("parsed"):
                 rec = _normalize_tier_letter(_route.tier, tier_models)
-                esc = _route.tier in ("E", "F")
+                esc = _route.tier in ("E", "F", "G")
                 free_model_brief = _route.free_model_brief
                 coding_task_hint = _route.coding_task
                 audit["router"] = {
@@ -487,6 +490,17 @@ def resolve_consultant_tier(
                     audit["governance_deliberation_floor"] = fl
 
         need_delib = merged in tiers_delib_u or esc
+        # When the live model is openrouter/auto, require deliberation for upper tiers
+        # so expensive consultant-class routes are explicitly approved by challenger+chief.
+        _agent_model = str(getattr(agent, "model", "") or "").strip().lower() if agent is not None else ""
+        if _agent_model == "openrouter/auto" and merged in ("D", "E", "F", "G"):
+            need_delib = True
+            audit["auto_router_deliberation_guard"] = True
+
+        if "openrouter" in _agent_model and merged == "G":
+            need_delib = True
+            audit["openrouter_consultant_deliberation_guard"] = True
+
         max_sess = cr.get("max_deliberations_per_session")
         if need_delib and max_sess is not None and agent is not None:
             try:
@@ -518,7 +532,7 @@ def resolve_consultant_tier(
             f"Router recommended tier {merged} for this request. Rationale: "
             f"{audit['router'].get('rationale', '')}\n\n"
             f"Request excerpt:\n{excerpt}\n\n"
-            '{"challenge":"...", "max_reasonable_tier":"B"|"C"|"D"|"E"|"F"}'
+            '{"challenge":"...", "max_reasonable_tier":"B"|"C"|"D"|"E"|"F"|"G"}'
         )
         try:
             raw_ch = _call_aux_task(
@@ -533,9 +547,10 @@ def resolve_consultant_tier(
 
         sys_chef = (
             "You are the Chief Orchestrator. You alone approve use of premium consultant tiers "
-            "(E/F) after internal challenge. Operators are not asked for approval. "
+            "(E/F/G) after internal challenge. Operators are not asked for approval. "
             "Approve consultant-class tiers only when the request truly requires them. "
-            "Reply JSON only."
+            "Tier G (Claude Opus 4.6) is the most expensive — approve ONLY for extraordinary "
+            "tasks and only for a single turn. Reply JSON only."
         )
         user_chef = (
             f"Deterministic baseline: {deterministic_tier}. Router tier: {merged}. "
@@ -543,8 +558,11 @@ def resolve_consultant_tier(
             f"Challenger: {ch_p.get('challenge', '')}\n"
             f"Challenger max_reasonable_tier: {max_rt}\n\n"
             f"Full request:\n{excerpt}\n\n"
-            '{"approved_consultant_tier": true|false, "final_tier": "B"|"C"|"D"|"E"|"F", '
+            '{"approved_consultant_tier": true|false, "final_tier": "B"|"C"|"D"|"E"|"F"|"G", '
             '"decision_summary": "one line"}\n'
+            "Tier G (Claude Opus 4.6) is single-turn only and the most expensive option — "
+            "approve only for extraordinary multi-domain problems where Opus specifically "
+            "adds value over GPT-5.4/Codex. "
             "If approved_consultant_tier is false, set final_tier to at most the challenger "
             "max_reasonable_tier (or lower)."
         )
@@ -570,6 +588,19 @@ def resolve_consultant_tier(
         if approved:
             if fin not in tier_models:
                 fin = merged if merged in tier_models else deterministic_tier
+            if fin == "G" and agent is not None:
+                setattr(agent, "_opus_single_turn_active", True)
+                opus_max = 2
+                try:
+                    opus_max = int(cr.get("opus_max_per_session") or 2)
+                except (TypeError, ValueError):
+                    pass
+                opus_cnt = int(getattr(agent, "_opus_escalation_count", 0) or 0)
+                if opus_cnt >= opus_max:
+                    fin = "F" if "F" in tier_models else deterministic_tier
+                    audit["opus_session_cap_hit"] = True
+                else:
+                    setattr(agent, "_opus_escalation_count", opus_cnt + 1)
         else:
             # Cap at challenger's max_reasonable_tier (chief denied premium consultant use).
             fin = _normalize_tier_letter(str(cf_p.get("final_tier") or max_rt), tier_models) or max_rt
