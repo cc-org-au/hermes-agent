@@ -7240,6 +7240,7 @@ class AIAgent:
 
         # Main conversation loop
         api_call_count = 0
+        self._api_call_count = 0  # exposed for external monitoring (delegation watchdog)
         final_response = None
         interrupted = False
         codex_ack_continuations = 0
@@ -7248,6 +7249,9 @@ class AIAgent:
         compression_attempts = 0
         _stall_nudge_count = 0
         _MAX_STALL_NUDGES = 2
+        _last_activity_monotonic = time.monotonic()
+        _HEARTBEAT_INTERVAL = 90.0  # emit a heartbeat every 90s of no user-visible output
+        _last_heartbeat_monotonic = time.monotonic()
 
         # Clear any stale interrupt state at start
         self.clear_interrupt()
@@ -7269,31 +7273,59 @@ class AIAgent:
             # Reset per-turn checkpoint dedup so each iteration can take one snapshot
             self._checkpoint_mgr.new_turn()
 
-            # Stall detection: if the tool-call loop has been running for a
-            # long time without producing a final response, inject a nudge.
-            _stall_limit = 120.0  # seconds; cheap tiers can use 60
+            # ── Stall detection + heartbeat ──────────────────────────────
+            _now_mono = time.monotonic()
+            _idle_seconds = _now_mono - _last_activity_monotonic
+            _total_elapsed = _now_mono - _turn_start_monotonic
             _tier_attr = getattr(self, "_current_tier_letter", "")
-            if _tier_attr in ("A", "B", "C"):
-                _stall_limit = 60.0
-            _elapsed_since_start = time.monotonic() - _turn_start_monotonic
+            _stall_limit = 60.0 if _tier_attr in ("A", "B", "C") else 120.0
+
+            if _idle_seconds > _stall_limit and api_call_count > 1:
+                if _stall_nudge_count < _MAX_STALL_NUDGES:
+                    _stall_nudge_count += 1
+                    self._emit_status(
+                        f"[Router] Agent idle for {int(_idle_seconds)}s "
+                        f"(total {int(_total_elapsed)}s) "
+                        f"— nudging ({_stall_nudge_count}/{_MAX_STALL_NUDGES})",
+                    )
+                    messages.append({
+                        "role": "user",
+                        "content": (
+                            "Continue with the task. Provide your response now "
+                            "or summarize current progress in 2-3 sentences."
+                        ),
+                    })
+                    _last_activity_monotonic = time.monotonic()
+                elif _stall_nudge_count == _MAX_STALL_NUDGES:
+                    _stall_nudge_count += 1
+                    self._emit_status(
+                        f"[Router] Agent still idle after {_MAX_STALL_NUDGES} nudges "
+                        f"({int(_total_elapsed)}s total) — forcing wrap-up",
+                    )
+                    messages.append({
+                        "role": "user",
+                        "content": (
+                            "IMPORTANT: You must finish NOW. Provide your final "
+                            "response with whatever results you have. Do not make "
+                            "any more tool calls. Summarize what you accomplished "
+                            "and what remains."
+                        ),
+                    })
+                    _last_activity_monotonic = time.monotonic()
+
+            # Periodic heartbeat: if the agent is actively working (tools
+            # producing output) but the user hasn't seen anything for a while,
+            # emit a brief status so they know the system isn't frozen.
             if (
-                _elapsed_since_start > _stall_limit
-                and _stall_nudge_count < _MAX_STALL_NUDGES
+                _now_mono - _last_heartbeat_monotonic > _HEARTBEAT_INTERVAL
                 and api_call_count > 1
             ):
-                _stall_nudge_count += 1
+                _last_heartbeat_monotonic = _now_mono
+                _model_short = (self.model or "").rsplit("/", 1)[-1][:20]
                 self._emit_status(
-                    f"[Router] Agent running for {int(_elapsed_since_start)}s "
-                    f"— nudging to continue ({_stall_nudge_count}/{_MAX_STALL_NUDGES})",
+                    f"[Router] Still processing — iteration {api_call_count}, "
+                    f"{int(_total_elapsed)}s elapsed ({_model_short})",
                 )
-                messages.append({
-                    "role": "user",
-                    "content": (
-                        "You have been working for a while. Please provide your "
-                        "response now or summarize your progress concisely."
-                    ),
-                })
-                _turn_start_monotonic = time.monotonic()
 
             # Check for interrupt request (e.g., user sent new message)
             if self._interrupt_requested:
@@ -7303,6 +7335,7 @@ class AIAgent:
                 break
             
             api_call_count += 1
+            self._api_call_count = api_call_count
             if not self.iteration_budget.consume():
                 if not self.quiet_mode:
                     self._safe_print(f"\n⚠️  Iteration budget exhausted ({self.iteration_budget.used}/{self.iteration_budget.max_total} iterations used)")
@@ -7907,6 +7940,7 @@ class AIAgent:
                                 self._vprint(f"{self.log_prefix}   💾 Cache: {cached:,}/{prompt:,} tokens ({hit_pct:.0f}% hit, {written:,} written)")
                     
                     has_retried_429 = False  # Reset on success
+                    _last_activity_monotonic = time.monotonic()
                     ph = getattr(self, "_provider_health", None)
                     if ph:
                         ph.record_success(self.provider)
@@ -8786,6 +8820,9 @@ class AIAgent:
                             pass
 
                     self._execute_tool_calls(assistant_message, messages, effective_task_id, api_call_count)
+
+                    # Reset activity timer — tools just produced output
+                    _last_activity_monotonic = time.monotonic()
 
                     # Signal that a paragraph break is needed before the next
                     # streamed text.  We don't emit it immediately because

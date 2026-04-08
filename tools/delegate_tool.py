@@ -521,7 +521,51 @@ def _run_single_child(
         )
 
     try:
+        # ── Delegation watchdog: periodic heartbeat + forced wrap-up ───────
+        _watchdog_stop = threading.Event()
+        _HEARTBEAT_SEC = 60.0
+        _FORCE_WRAPUP_SEC = float(_gov_max_s) - 30.0  # 30s before hard timeout
+        _watchdog_emit = getattr(parent_agent, "_emit_status", None) if parent_agent else None
+        _child_model_short = (child_model or "").rsplit("/", 1)[-1][:20]
+
+        def _delegation_watchdog():
+            _start = time.monotonic()
+            _wrapup_sent = False
+            while not _watchdog_stop.wait(timeout=_HEARTBEAT_SEC):
+                elapsed = time.monotonic() - _start
+                if callable(_watchdog_emit):
+                    _iter_count = getattr(child, "_api_call_count", "?")
+                    _watchdog_emit(
+                        f"[Delegate] Subagent active — {int(elapsed)}s, "
+                        f"iteration {_iter_count} ({_child_model_short})",
+                        "delegation_heartbeat",
+                    )
+                if (
+                    not _wrapup_sent
+                    and _FORCE_WRAPUP_SEC > 0
+                    and (time.monotonic() - _start) > _FORCE_WRAPUP_SEC
+                ):
+                    _wrapup_sent = True
+                    if callable(_watchdog_emit):
+                        _watchdog_emit(
+                            f"[Delegate] Subagent approaching time limit "
+                            f"({int(elapsed)}s/{_gov_max_s}s) — requesting wrap-up",
+                            "delegation_heartbeat",
+                        )
+                    try:
+                        child.request_interrupt()
+                    except Exception:
+                        pass
+
+        _watchdog_thread = threading.Thread(
+            target=_delegation_watchdog, daemon=True, name=f"delegate-watchdog-{task_id}"
+        )
+        _watchdog_thread.start()
+
         result = child.run_conversation(user_message=goal)
+
+        _watchdog_stop.set()
+        _watchdog_thread.join(timeout=2.0)
 
         # Flush any remaining batched progress to gateway
         if child_progress_cb and hasattr(child_progress_cb, '_flush'):
@@ -669,6 +713,12 @@ def _run_single_child(
         }
 
     finally:
+        # Stop the delegation watchdog thread
+        try:
+            _watchdog_stop.set()
+        except Exception:
+            pass
+
         # Restore the parent's tool names so the process-global is correct
         # for any subsequent execute_code calls or other consumers.
         import model_tools
