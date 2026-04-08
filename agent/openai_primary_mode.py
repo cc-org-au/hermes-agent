@@ -155,6 +155,31 @@ def resolve_openai_primary_mode(
     return _resolve_openai_primary_mode_impl(parent_agent)
 
 
+def resolve_openai_primary_mode_for_session_agent(
+    parent_agent: Any = None,
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Resolve OPM using the session chief's Hermes home when ``_delegate_launch_hermes_home`` is set.
+
+    ``delegate_task(..., hermes_profile=…)`` temporarily sets process ``HERMES_HOME`` to the
+    child profile; delegation and subprocess policy must still read chief ``config.yaml`` /
+    runtime YAML for ``openai_primary_mode``.
+    """
+    if parent_agent is None:
+        return resolve_openai_primary_mode(None)
+    pin = getattr(parent_agent, "_delegate_launch_hermes_home", None)
+    ps = str(pin).strip() if pin else ""
+    return resolve_openai_primary_mode(parent_agent, config_hermes_home=ps or None)
+
+
+def opm_enabled_for_session_agent(agent: Any = None) -> bool:
+    """Like :func:`opm_enabled` but pins config/runtime reads to ``_delegate_launch_hermes_home``."""
+    try:
+        opm, _ = resolve_openai_primary_mode_for_session_agent(agent)
+        return is_truthy_value(opm.get("enabled"), default=False)
+    except Exception:
+        return False
+
+
 def opm_enabled(agent: Any = None) -> bool:
     """True when merged ``openai_primary_mode.enabled`` is on (OPM feature flag)."""
     try:
@@ -285,11 +310,15 @@ def filter_fallback_chain_disallowed(chain: Any) -> list:
 def opm_suppresses_free_model_fallback(agent: Any = None) -> bool:
     """True when OPM is on and native OpenAI API credentials exist."""
     try:
-        opm, _ = resolve_openai_primary_mode(agent)
+        opm, _ = resolve_openai_primary_mode_for_session_agent(agent)
         if not is_truthy_value(opm.get("enabled"), default=False):
             return False
-        from agent.openai_native_runtime import native_openai_runtime_tuple
+        from agent.openai_native_runtime import (
+            native_openai_runtime_tuple,
+            refresh_openai_dotenv_for_agent_context,
+        )
 
+        refresh_openai_dotenv_for_agent_context(agent)
         return bool(native_openai_runtime_tuple())
     except Exception:
         return False

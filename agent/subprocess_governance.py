@@ -74,19 +74,47 @@ def _opm_effective_subprocess_allowlist_cores(opm: Dict[str, Any]) -> Set[str]:
     return {c for c in cores if c}
 
 
-def _refresh_openai_credentials_from_hermes_home() -> None:
-    """Load profile/root ``.env`` so ``native_openai_runtime_tuple()`` sees keys.
-
-    Gateway and some workers may not have run ``run_agent``'s early dotenv load; keys
-    often live only under ``HERMES_HOME`` / default ``~/.hermes``.
-    """
+def _refresh_openai_credentials_for_subprocess(parent_agent: Any = None) -> None:
+    """Load chief + current Hermes ``.env`` so ``native_openai_runtime_tuple()`` sees keys."""
     try:
-        from hermes_cli.env_loader import load_hermes_dotenv
-        from hermes_constants import get_hermes_home
+        from agent.openai_native_runtime import refresh_openai_dotenv_for_agent_context
 
-        load_hermes_dotenv(hermes_home=get_hermes_home())
+        refresh_openai_dotenv_for_agent_context(parent_agent)
     except Exception:
         pass
+
+
+def _model_is_native_openai_api_slug(model_id: str) -> bool:
+    """True for bare/OpenAI-style ids that map to api.openai.com (not other providers)."""
+    if model_id_contains_disallowed_family(model_id):
+        return False
+    core = _opm_subprocess_core_model(model_id)
+    if not core or "/" in core:
+        return False
+    low = core
+    if any(
+        x in low
+        for x in (
+            "claude",
+            "gemini",
+            "mistral",
+            "grok",
+            "llama",
+            "qwen",
+            "kimi",
+            "openrouter",
+            "moonshot",
+            "minimax",
+            "deepseek",
+            "anthropic",
+        )
+    ):
+        return False
+    if low.startswith("gpt-"):
+        return True
+    if len(low) >= 2 and low[0] == "o" and low[1].isdigit():
+        return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -350,8 +378,11 @@ def request_operator_approval(
 def _is_openai_primary_mode_allowed(model_id: str, parent_agent: Any = None) -> bool:
     """Check if model is allowed by the openai_primary_mode feature flag.
 
-    When enabled, OpenAI models listed in allowed_subprocess_models are
-    permitted in subprocesses IF routed directly from OpenAI (not OpenRouter).
+    When OPM is enabled and native OpenAI credentials exist (after loading chief + profile
+    ``.env``), allow subprocesses for:
+
+    - Any plausible OpenAI API chat slug (``gpt-*``, ``o3``, …), or
+    - An explicit entry in ``allowed_subprocess_models`` when that list is non-empty.
     """
     try:
         _launch_home = (
@@ -365,15 +396,24 @@ def _is_openai_primary_mode_allowed(model_id: str, parent_agent: Any = None) -> 
             return False
 
         mid = _opm_subprocess_core_model(model_id)
-        allowed_core = _opm_effective_subprocess_allowlist_cores(opm)
-        if mid not in allowed_core:
-            return False
+        pattern_ok = _model_is_native_openai_api_slug(model_id)
+        raw_allowed = opm.get("allowed_subprocess_models")
+        if isinstance(raw_allowed, list) and len(raw_allowed) > 0:
+            allowed_explicit = {
+                _opm_subprocess_core_model(str(a)) for a in raw_allowed if str(a).strip()
+            }
+            in_explicit = mid in allowed_explicit
+            if not (pattern_ok or in_explicit):
+                return False
+        else:
+            if not pattern_ok:
+                return False
 
         if opm.get("require_direct_openai", True) and parent_agent is not None:
             # Direct-OpenAI requirement applies to the subprocess runtime, not
             # necessarily the current parent runtime. Parent can be on Gemini
             # while child delegates to native api.openai.com.
-            _refresh_openai_credentials_from_hermes_home()
+            _refresh_openai_credentials_for_subprocess(parent_agent)
             from agent.openai_native_runtime import native_openai_runtime_tuple
 
             if not native_openai_runtime_tuple():

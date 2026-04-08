@@ -10,7 +10,7 @@ credentials when both are set.
 from __future__ import annotations
 
 import os
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 DEFAULT_OPENAI_CHAT_BASE = "https://api.openai.com/v1"
 
@@ -43,6 +43,27 @@ def native_openai_runtime_tuple() -> Optional[Tuple[str, str]]:
     if not ak:
         return None
     return resolve_native_openai_chat_base_url(), ak
+
+
+def refresh_openai_dotenv_for_agent_context(parent_agent: Any = None) -> None:
+    """Load ``.env`` from the session chief home (if known) then current ``HERMES_HOME``.
+
+    Delegation temporarily switches ``HERMES_HOME`` to a child profile; OpenAI keys often
+    live only under the chief profile or default ``~/.hermes``. Call this before
+    :func:`native_openai_runtime_tuple` when enforcing OPM / delegation credentials.
+    """
+    try:
+        from hermes_cli.env_loader import load_hermes_dotenv
+        from hermes_constants import get_hermes_home
+
+        if parent_agent is not None:
+            lh = getattr(parent_agent, "_delegate_launch_hermes_home", None)
+            s = str(lh).strip() if lh else ""
+            if s:
+                load_hermes_dotenv(hermes_home=s)
+        load_hermes_dotenv(hermes_home=get_hermes_home())
+    except Exception:
+        pass
 
 
 def _core_model_id(model_id: str) -> str:

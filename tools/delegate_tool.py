@@ -28,17 +28,17 @@ from typing import Any, Dict, List, Optional
 
 from agent.disallowed_model_family import model_id_contains_disallowed_family
 from agent.openai_primary_mode import (
-    opm_enabled,
     opm_auxiliary_model,
+    opm_enabled_for_session_agent,
     opm_suppresses_free_model_fallback,
-    resolve_openai_primary_mode,
+    resolve_openai_primary_mode_for_session_agent,
 )
 from agent.routing_trace import emit_routing_decision_trace
 
 
 def _opm_delegation_target_model(parent_agent, goal_or_prompt_text: str) -> str:
     """Default or codex GPT slug from merged OPM (same heuristic as delegation baseline)."""
-    opm, _ = resolve_openai_primary_mode(parent_agent)
+    opm, _ = resolve_openai_primary_mode_for_session_agent(parent_agent)
     txt = (goal_or_prompt_text or "").lower()
     coding = any(
         k in txt
@@ -516,7 +516,7 @@ def _run_single_child(
         if not _gov_approved:
             # When OpenAI-primary mode is on, never auto-fallback to a free-tier model for
             # denied paid delegates. Keep GPT baseline semantics by blocking.
-            _, _opm_meta = resolve_openai_primary_mode(parent_agent)
+            _, _opm_meta = resolve_openai_primary_mode_for_session_agent(parent_agent)
             _opm_on = bool(_opm_meta.get("enabled", False))
             emit_routing_decision_trace(
                 stage="delegation_governance_decision",
@@ -943,16 +943,23 @@ def delegate_task(
     if parent_agent is None:
         return json.dumps({"error": "delegate_task requires a parent agent context."})
 
+    try:
+        from agent.openai_native_runtime import refresh_openai_dotenv_for_agent_context
+
+        refresh_openai_dotenv_for_agent_context(parent_agent)
+    except Exception:
+        pass
+
     def _enforce_opm_baseline(creds: dict, goal_text: str) -> dict:
         """Under OPM: never delegate on disallowed-family ids; prefer native GPT when available."""
         try:
-            if not opm_enabled(parent_agent):
+            if not opm_enabled_for_session_agent(parent_agent):
                 return creds
             c = dict(creds or {})
             m = str(c.get("model") or "")
             bu = str(c.get("base_url") or "").lower()
 
-            _opm, _opm_meta = resolve_openai_primary_mode(parent_agent)
+            _opm, _opm_meta = resolve_openai_primary_mode_for_session_agent(parent_agent)
             _coding = any(
                 k in (goal_text or "").lower()
                 for k in (
@@ -1374,6 +1381,13 @@ def _resolve_delegation_credentials(
 
     Raises ValueError with a user-friendly message on credential failure.
     """
+    try:
+        from agent.openai_native_runtime import refresh_openai_dotenv_for_agent_context
+
+        refresh_openai_dotenv_for_agent_context(parent_agent)
+    except Exception:
+        pass
+
     configured_model = str(cfg.get("model") or "").strip() or None
     _tier_opm_uplifted_to_gpt = False
     if configured_model:
@@ -1384,7 +1398,9 @@ def _resolve_delegation_credentials(
             rm = resolve_tier_dynamic_model(prompt_for_tier, gov)
             if rm:
                 configured_model = rm
-            if opm_enabled(parent_agent) and model_id_contains_disallowed_family(str(configured_model or "")):
+            if opm_enabled_for_session_agent(parent_agent) and model_id_contains_disallowed_family(
+                str(configured_model or "")
+            ):
                 configured_model = _opm_delegation_target_model(parent_agent, prompt_for_tier)
                 _tier_opm_uplifted_to_gpt = True
     configured_provider = str(cfg.get("provider") or "").strip() or None
@@ -1392,7 +1408,7 @@ def _resolve_delegation_credentials(
     configured_api_key = str(cfg.get("api_key") or "").strip() or None
     if configured_model and model_id_contains_disallowed_family(str(configured_model)):
         # OPM must still see the disallowed id so it can uplift to native GPT; rewrite only when OPM is off.
-        if not opm_enabled(parent_agent):
+        if not opm_enabled_for_session_agent(parent_agent):
             configured_model = "gemini-2.5-flash"
     # region agent log
     _dbg98(
@@ -1424,7 +1440,7 @@ def _resolve_delegation_credentials(
         try:
             from agent.openai_native_runtime import native_openai_runtime_tuple
 
-            opm, opm_meta = resolve_openai_primary_mode(parent_agent)
+            opm, opm_meta = resolve_openai_primary_mode_for_session_agent(parent_agent)
             # region agent log
             _dbg98(
                 "H1",
