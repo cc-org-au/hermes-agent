@@ -2,6 +2,7 @@ from unittest.mock import MagicMock
 
 from agent.openai_primary_mode import (
     _opm_merge_parent_anchor,
+    coerce_model_off_gemma_under_opm,
     filter_fallback_chain_strip_gemma,
     is_gemma_model_id,
     opm_blocks_gemma,
@@ -112,6 +113,25 @@ def test_is_gemma_model_id():
     assert is_gemma_model_id("google/gemma-4-31b-it")
     assert not is_gemma_model_id("google/gemini-2.5-flash")
     assert not is_gemma_model_id("")
+
+
+def test_coerce_model_off_gemma_when_opm_enabled(monkeypatch):
+    monkeypatch.setattr(
+        "hermes_cli.config.load_config",
+        lambda: {"openai_primary_mode": {"enabled": True, "default_model": "gpt-5.4"}},
+    )
+    monkeypatch.setattr("agent.token_governance_runtime.load_runtime_config", lambda: {})
+    assert coerce_model_off_gemma_under_opm("gemma-4-31b-it", None) == "gpt-5.4"
+    assert coerce_model_off_gemma_under_opm("gpt-5.4", None) == "gpt-5.4"
+
+
+def test_coerce_model_passthrough_when_opm_disabled(monkeypatch):
+    monkeypatch.setattr(
+        "hermes_cli.config.load_config",
+        lambda: {"openai_primary_mode": {"enabled": False}},
+    )
+    monkeypatch.setattr("agent.token_governance_runtime.load_runtime_config", lambda: {})
+    assert coerce_model_off_gemma_under_opm("gemma-4-31b-it", None) == "gemma-4-31b-it"
 
 
 def test_opm_blocks_gemma_follows_enabled_flag(monkeypatch):

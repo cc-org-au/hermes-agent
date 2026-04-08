@@ -1758,14 +1758,11 @@ def call_llm(
         task, provider, model, base_url, api_key)
     resolved_model = _resolve_tier_dynamic_for_auxiliary(resolved_model, messages)
     try:
-        from agent.openai_primary_mode import (
-            is_gemma_model_id,
-            opm_blocks_gemma,
-            opm_non_gemma_replacement_model,
-        )
+        from agent.openai_primary_mode import coerce_model_off_gemma_under_opm
 
-        if opm_blocks_gemma(None) and is_gemma_model_id(resolved_model):
-            resolved_model = opm_non_gemma_replacement_model(None)
+        _prev = resolved_model
+        resolved_model = coerce_model_off_gemma_under_opm(resolved_model, None)
+        if resolved_model != _prev:
             _rp = (resolved_provider or "").strip().lower()
             if _rp in ("", "auto", "huggingface", "openrouter"):
                 resolved_provider = "gemini"
@@ -1932,14 +1929,11 @@ async def async_call_llm(
         task, provider, model, base_url, api_key)
     resolved_model = _resolve_tier_dynamic_for_auxiliary(resolved_model, messages)
     try:
-        from agent.openai_primary_mode import (
-            is_gemma_model_id,
-            opm_blocks_gemma,
-            opm_non_gemma_replacement_model,
-        )
+        from agent.openai_primary_mode import coerce_model_off_gemma_under_opm
 
-        if opm_blocks_gemma(None) and is_gemma_model_id(resolved_model):
-            resolved_model = opm_non_gemma_replacement_model(None)
+        _prev = resolved_model
+        resolved_model = coerce_model_off_gemma_under_opm(resolved_model, None)
+        if resolved_model != _prev:
             _rp = (resolved_provider or "").strip().lower()
             if _rp in ("", "auto", "huggingface", "openrouter"):
                 resolved_provider = "gemini"

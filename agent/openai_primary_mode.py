@@ -131,6 +131,32 @@ def opm_blocks_gemma(agent: Any = None) -> bool:
         return False
 
 
+def coerce_model_off_gemma_under_opm(model: Any, agent: Any = None) -> Any:
+    """Return a non-Gemma model id when OPM is on and *model* is Gemma-family; else *model*.
+
+    Single choke-point for hard-blocking Gemma at API boundaries. Prefer OPM
+    ``default_model``; if missing or still Gemma, use :func:`opm_non_gemma_replacement_model`.
+    """
+    if model is None:
+        return None
+    s = str(model).strip()
+    if not s:
+        return s
+    if not opm_blocks_gemma(agent) or not is_gemma_model_id(s):
+        return s
+    try:
+        opm, _ = resolve_openai_primary_mode(agent)
+        repl = str(opm.get("default_model") or "").strip()
+        if not repl or is_gemma_model_id(repl):
+            repl = opm_non_gemma_replacement_model(agent)
+        return repl
+    except Exception:
+        try:
+            return opm_non_gemma_replacement_model(agent)
+        except Exception:
+            return "gemini-2.5-flash"
+
+
 def opm_non_gemma_replacement_model(agent: Any = None) -> str:
     """Cheap non-Gemma id for auxiliary calls and last-resort fallbacks under OPM.
 

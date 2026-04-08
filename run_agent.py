@@ -3243,6 +3243,12 @@ class AIAgent:
         if not isinstance(model, str) or not model.strip():
             raise ValueError("Codex Responses request 'model' must be a non-empty string.")
         model = model.strip()
+        try:
+            from agent.openai_primary_mode import coerce_model_off_gemma_under_opm
+
+            model = str(coerce_model_off_gemma_under_opm(model, self) or "").strip() or model
+        except Exception:
+            pass
 
         instructions = api_kwargs.get("instructions")
         if instructions is None:
@@ -4967,26 +4973,51 @@ class AIAgent:
         return False
 
     def _opm_reconcile_primary_if_gemma(self) -> None:
-        """Hard block: with OPM enabled, primary ``self.model`` must never stay on Gemma."""
-        try:
-            from agent.openai_primary_mode import (
-                is_gemma_model_id,
-                opm_blocks_gemma,
-                opm_non_gemma_replacement_model,
-                resolve_openai_primary_mode,
-            )
+        """Hard block: with OPM enabled, primary ``self.model`` must never stay on Gemma.
 
-            if not opm_blocks_gemma(self) or not self.model:
+        Called every main-loop iteration and at API chokepoints (:meth:`_build_api_kwargs`,
+        :meth:`_openai_compatible_model_param`, memory flush, iteration-limit summary).
+        """
+        try:
+            from agent.openai_primary_mode import coerce_model_off_gemma_under_opm, is_gemma_model_id
+
+            if not self.model:
                 return
-            if not is_gemma_model_id(self.model):
+            prev = str(self.model).strip()
+            new = coerce_model_off_gemma_under_opm(prev, self)
+            if new == prev or not new:
                 return
-            opm_cfg, _ = resolve_openai_primary_mode(self)
-            repl = str(opm_cfg.get("default_model") or "").strip()
-            if not repl or is_gemma_model_id(repl):
-                repl = opm_non_gemma_replacement_model(self)
-            self.model = repl
+            self.model = new
             if hasattr(self, "_reconcile_runtime_after_tier_model_change"):
                 self._reconcile_runtime_after_tier_model_change()
+            try:
+                from agent.routing_trace import emit_routing_decision_trace
+
+                emit_routing_decision_trace(
+                    stage="opm_hard_gate",
+                    chosen_model=str(self.model or ""),
+                    chosen_provider=str(getattr(self, "provider", "") or ""),
+                    reason_code="coerce_gemma_off_primary",
+                    opm_enabled=True,
+                    opm_source="",
+                    tier_source="api_boundary",
+                    fallback_activated=False,
+                    explicit_user_model=False,
+                    profile=str(getattr(self, "profile", "") or ""),
+                    session_id=str(getattr(self, "session_id", "") or ""),
+                )
+            except Exception:
+                pass
+            if is_gemma_model_id(str(self.model or "")):
+                logger.warning(
+                    "openai_primary_mode: coerce left Gemma on model=%r — forcing replacement slug",
+                    self.model,
+                )
+                from agent.openai_primary_mode import opm_non_gemma_replacement_model
+
+                self.model = opm_non_gemma_replacement_model(self)
+                if hasattr(self, "_reconcile_runtime_after_tier_model_change"):
+                    self._reconcile_runtime_after_tier_model_change()
         except Exception:
             logger.debug("_opm_reconcile_primary_if_gemma failed", exc_info=True)
 
@@ -5575,6 +5606,7 @@ class AIAgent:
 
     def _openai_compatible_model_param(self) -> str:
         """Model id for OpenAI-compatible ``chat.completions`` (native Gemini API rejects ``google/…`` slugs)."""
+        self._opm_reconcile_primary_if_gemma()
         m = self.model
         if not m:
             return m
@@ -5588,6 +5620,7 @@ class AIAgent:
 
     def _build_api_kwargs(self, api_messages: list) -> dict:
         """Build the keyword arguments dict for the active API mode."""
+        self._opm_reconcile_primary_if_gemma()
         if self.api_mode == "anthropic_messages":
             from agent.anthropic_adapter import build_anthropic_kwargs
             anthropic_messages = self._prepare_anthropic_messages_for_api(api_messages)
@@ -6059,6 +6092,7 @@ class AIAgent:
         messages.append(flush_msg)
 
         try:
+            self._opm_reconcile_primary_if_gemma()
             # Build API messages for the flush call
             _is_strict_api = "api.mistral.ai" in self._base_url_lower
             api_messages = []
@@ -6930,6 +6964,7 @@ class AIAgent:
         messages.append({"role": "user", "content": summary_request})
 
         try:
+            self._opm_reconcile_primary_if_gemma()
             # Build API messages, stripping internal-only fields
             # (finish_reason, reasoning) that strict APIs like Mistral reject with 422
             _is_strict_api = "api.mistral.ai" in self._base_url_lower
