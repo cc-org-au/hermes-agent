@@ -27,7 +27,9 @@
 #   ./scripts/core/droplet_push_hermes_home.sh
 # Append secrets on the VPS as hermesuser (after git pull so the script exists in ~/hermes-agent):
 #   ./scripts/core/droplet_run.sh --droplet-require-sudo --sudo-user hermesuser \
-#     'bash ~/hermes-agent/scripts/core/hermes_append_env.sh SLACK_BOT_TOKEN=xoxb-...'
+#     'bash ~/hermes-agent/scripts/core/hermes_append_env.sh KEY=value'
+# Replace one key in ~/.hermes/.env (removes old KEY= lines, writes one new line):
+#   bash ~/hermes-agent/scripts/core/hermes_set_env_key.sh KEY 'value'
 #
 # Same credentials as scripts/core/ssh_droplet.sh (~/.env/.env). HERMES_DROPLET_INTERACTIVE=1
 # keeps the IDE TTY gate satisfied; SSH key rules follow ssh_droplet.sh.
