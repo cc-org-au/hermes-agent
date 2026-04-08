@@ -251,6 +251,44 @@ def test_cli_turn_routing_uses_cheap_model_when_simple(monkeypatch):
     assert result["label"] is not None
 
 
+def test_models_primary_gpt_forces_native_openai_runtime(monkeypatch):
+    cli = _import_cli()
+    shell = cli.HermesCLI(model="gemma-4-31b-it", compact=True, max_turns=1)
+    shell.provider = "gemini"
+    shell.api_mode = "chat_completions"
+    shell.base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+    shell.api_key = "gemini-key"
+    shell._pipeline_model_once = {"model": "gpt-5.4", "provider_kind": "primary"}
+
+    monkeypatch.setattr(
+        "agent.openai_native_runtime.native_openai_runtime_tuple",
+        lambda: ("https://api.openai.com/v1", "openai-key"),
+    )
+
+    base = {
+        "model": shell.model,
+        "runtime": {
+            "api_key": shell.api_key,
+            "base_url": shell.base_url,
+            "provider": shell.provider,
+            "api_mode": shell.api_mode,
+            "command": None,
+            "args": [],
+            "credential_pool": None,
+        },
+        "label": None,
+        "skip_per_turn_tier_routing": False,
+        "signature": (),
+    }
+
+    out = shell._route_for_pipeline_model_once(base, shell._pipeline_model_once)
+    assert out["model"] == "gpt-5.4"
+    assert out["runtime"]["provider"] == "custom"
+    assert out["runtime"]["base_url"] == "https://api.openai.com/v1"
+    assert out["runtime"]["api_key"] == "openai-key"
+    assert out["skip_per_turn_tier_routing"] is True
+
+
 def test_cli_prefers_config_provider_over_stale_env_override(monkeypatch):
     cli = _import_cli()
 

@@ -325,3 +325,54 @@ def test_per_turn_skipped_when_pipeline_model_once(gov_env):
     a._token_governance_cfg = load_runtime_config()
     apply_per_turn_tier_model(a, "summarize the following paragraph in three bullets")
     assert a.model == "user-picked-model"
+
+
+def test_openai_primary_mode_enforced_after_consultant_routing(gov_env, monkeypatch):
+    p = gov_env / RUNTIME_FILENAME
+    p.write_text(
+        yaml.safe_dump(
+            {
+                "enabled": True,
+                "dynamic_tier_routing": True,
+                "default_routing_tier": "D",
+                "openai_primary_mode": {
+                    "enabled": True,
+                    "default_model": "gpt-5.4",
+                    "codex_model": "gpt-5.3-codex",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        "agent.consultant_routing.consultant_routing_enabled",
+        lambda _cfg: True,
+    )
+    monkeypatch.setattr(
+        "agent.consultant_routing.resolve_consultant_tier",
+        lambda *args, **kwargs: ("A", {"router": {"coding_task": False}}),
+    )
+    monkeypatch.setattr(
+        "agent.consultant_routing.is_pushback_message",
+        lambda _msg: False,
+    )
+    monkeypatch.setattr(
+        "agent.consultant_routing.format_status_line",
+        lambda *_args, **_kwargs: "",
+    )
+
+    class _A:
+        def __init__(self):
+            self.model = "tier:dynamic"
+            self.api_mode = "chat_completions"
+            self._base_url_lower = "https://generativelanguage.googleapis.com"
+
+        def _is_openrouter_url(self):
+            return False
+
+    a = _A()
+    a._token_governance_cfg = load_runtime_config()
+    a._model_is_tier_routed = True
+    apply_per_turn_tier_model(a, "summarize this quickly")
+    assert a.model == "gpt-5.4"

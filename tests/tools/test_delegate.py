@@ -590,6 +590,45 @@ class TestDelegationCredentialResolution(unittest.TestCase):
         self.assertIsNone(creds["api_key"])
 
     @patch("hermes_cli.runtime_provider.resolve_runtime_provider")
+    def test_gemma_prefers_direct_gemini_before_openrouter(self, mock_resolve):
+        """Gemma delegation must use direct Gemini first when provider is unspecified."""
+        mock_resolve.side_effect = [
+            {
+                "provider": "gemini",
+                "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+                "api_key": "gemini-key",
+                "api_mode": "chat_completions",
+            }
+        ]
+        parent = _make_mock_parent(depth=0)
+        cfg = {"model": "gemma-4-31b-it", "provider": ""}
+        creds = _resolve_delegation_credentials(cfg, parent)
+        self.assertEqual(creds["provider"], "gemini")
+        self.assertEqual(creds["model"], "gemma-4-31b-it")
+        self.assertIn("generativelanguage.googleapis.com", creds["base_url"])
+        self.assertEqual(mock_resolve.call_args_list[0].kwargs, {"requested": "gemini"})
+
+    @patch("hermes_cli.runtime_provider.resolve_runtime_provider")
+    def test_gemma_falls_back_to_openrouter_only_when_gemini_unavailable(self, mock_resolve):
+        """If Gemini cannot be resolved, Gemma delegation can use OpenRouter last."""
+        mock_resolve.side_effect = [
+            RuntimeError("gemini unavailable"),
+            {
+                "provider": "openrouter",
+                "base_url": "https://openrouter.ai/api/v1",
+                "api_key": "or-key",
+                "api_mode": "chat_completions",
+            },
+        ]
+        parent = _make_mock_parent(depth=0)
+        cfg = {"model": "gemma-4-31b-it", "provider": ""}
+        creds = _resolve_delegation_credentials(cfg, parent)
+        self.assertEqual(creds["provider"], "openrouter")
+        self.assertEqual(creds["model"], "google/gemma-4-31b-it")
+        self.assertEqual(mock_resolve.call_args_list[0].kwargs, {"requested": "gemini"})
+        self.assertEqual(mock_resolve.call_args_list[1].kwargs, {"requested": "openrouter"})
+
+    @patch("hermes_cli.runtime_provider.resolve_runtime_provider")
     def test_provider_resolves_full_credentials(self, mock_resolve):
         """When delegation.provider is set, full credentials are resolved."""
         mock_resolve.return_value = {

@@ -1656,6 +1656,22 @@ class HermesCLI:
         current_model = (self.model or "").strip()
         changed = False
 
+        try:
+            from agent.tier_model_routing import canonical_gemma_model_id
+
+            canon = canonical_gemma_model_id(current_model)
+            if canon != current_model:
+                if not self._model_is_default:
+                    self.console.print(
+                        f"[yellow]⚠️  Normalized model id '{current_model}' → '{canon}' "
+                        f"(legacy short Gemma ID is invalid; using gemma-4-31b-it on Gemini API).[/]"
+                    )
+                self.model = canon
+                current_model = canon
+                changed = True
+        except Exception:
+            pass
+
         if resolved_provider == "copilot":
             try:
                 from hermes_cli.models import copilot_model_api_mode, normalize_copilot_model_id
@@ -2224,6 +2240,39 @@ class HermesCLI:
 
         try:
             if pk == "primary":
+                # If user chose a GPT model from /models, force native OpenAI
+                # for this pass rather than reusing the current (possibly Gemini)
+                # runtime. This guarantees /models picks are respected.
+                _m = model.lower()
+                if _m.startswith("gpt-"):
+                    from agent.openai_native_runtime import native_openai_runtime_tuple
+
+                    tup = native_openai_runtime_tuple()
+                    if tup:
+                        bu, ak = tup
+                        self._pipeline_model_once = None
+                        return {
+                            "model": model,
+                            "runtime": {
+                                "api_key": ak,
+                                "base_url": bu,
+                                "provider": "custom",
+                                "api_mode": "codex_responses",
+                                "command": None,
+                                "args": [],
+                                "credential_pool": None,
+                            },
+                            "label": f"/models → {model} (native OpenAI)",
+                            "skip_per_turn_tier_routing": True,
+                            "signature": (
+                                model,
+                                "custom",
+                                bu,
+                                "codex_responses",
+                                None,
+                                (),
+                            ),
+                        }
                 self._pipeline_model_once = None
                 return {
                     "model": model,

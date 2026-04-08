@@ -1056,6 +1056,50 @@ def _resolve_delegation_credentials(
     configured_base_url = str(cfg.get("base_url") or "").strip() or None
     configured_api_key = str(cfg.get("api_key") or "").strip() or None
 
+    # Gemma routing hard rule:
+    # If Gemma is selected for delegation and no explicit provider/base_url was
+    # requested, prefer direct Gemini API first. OpenRouter is a paid last resort.
+    _cmid = (configured_model or "").strip().lower()
+    _is_gemma = _cmid in ("gemma-4-31b-it", "gemma-4") or _cmid.endswith("/gemma-4-31b-it")
+    if _is_gemma and not configured_provider and not configured_base_url:
+        from agent.tier_model_routing import canonical_gemma_model_id
+        from hermes_cli.runtime_provider import resolve_runtime_provider
+
+        configured_model = canonical_gemma_model_id(configured_model)
+        # First try direct Google Gemini API.
+        try:
+            rt = resolve_runtime_provider(requested="gemini")
+            if (rt.get("api_key") or "").strip():
+                return {
+                    "model": configured_model,
+                    "provider": rt.get("provider"),
+                    "base_url": rt.get("base_url"),
+                    "api_key": rt.get("api_key"),
+                    "api_mode": rt.get("api_mode"),
+                    "command": rt.get("command"),
+                    "args": list(rt.get("args") or []),
+                }
+        except Exception:
+            pass
+        # Only if Gemini is unavailable, fall back to OpenRouter.
+        try:
+            rt = resolve_runtime_provider(requested="openrouter")
+            if (rt.get("api_key") or "").strip():
+                _or_model = configured_model
+                if "/" not in _or_model:
+                    _or_model = f"google/{_or_model}"
+                return {
+                    "model": _or_model,
+                    "provider": rt.get("provider"),
+                    "base_url": rt.get("base_url"),
+                    "api_key": rt.get("api_key"),
+                    "api_mode": rt.get("api_mode"),
+                    "command": rt.get("command"),
+                    "args": list(rt.get("args") or []),
+                }
+        except Exception:
+            pass
+
     if configured_base_url:
         api_key = (
             configured_api_key

@@ -342,6 +342,34 @@ def apply_per_turn_tier_model(agent: Any, user_message: str) -> None:
             tier = deterministic_tier
             audit = {}
 
+    # Enforce OpenAI-primary mode after consultant routing too, so no later
+    # router step can drop back to low-cost Gemma tiers when the flag is on.
+    if _opm.get("enabled", False) and tier in ("A", "B", "C", "D"):
+        _router_rec2 = audit.get("router") if isinstance(audit, dict) else {}
+        _coding_hint = bool(
+            isinstance(_router_rec2, dict) and _router_rec2.get("coding_task", False)
+        )
+        _is_coding = _coding_hint or any(
+            kw in (user_message or "").lower()
+            for kw in (
+                "code",
+                "implement",
+                "debug",
+                "refactor",
+                "function",
+                "class",
+                "script",
+                "test",
+                "fix",
+                "bug",
+                "error",
+                "compile",
+                "build",
+                "deploy",
+            )
+        )
+        tier = "F" if _is_coding else "E"
+
     # Store free_model_brief for injection into user message (low-cost tiers A/B/C only).
     _router_rec = audit.get("router") or {}
     _free_brief = _router_rec.get("free_model_brief") if isinstance(_router_rec, dict) else None
