@@ -71,7 +71,13 @@ def _build_child_system_prompt(goal: str, context: Optional[str] = None) -> str:
         "- Any files you created or modified\n"
         "- Any issues encountered\n\n"
         "Be thorough but concise -- your response is returned to the "
-        "parent agent as a summary."
+        "parent agent as a summary.\n\n"
+        "CRITICAL: You must NEVER simulate, stub, fake, or mock any action. "
+        "Do NOT write scripts that pretend to perform tasks (e.g. writing fake "
+        "check-in messages, simulating API calls, creating dummy status files). "
+        "Use real tools (delegate_task, terminal, etc.) to perform actual operations. "
+        "If you cannot do something for real, state what is blocked and why — "
+        "never produce a fake result."
     )
     return "\n".join(parts)
 

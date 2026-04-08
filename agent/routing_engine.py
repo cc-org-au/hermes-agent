@@ -376,7 +376,12 @@ _REVIEW_SYSTEM = (
     "agent's final response summary. Respond ONLY with JSON:\n"
     '{"aligned": true} if the response addresses the request, OR\n'
     '{"aligned": false, "reason": "one sentence", '
-    '"action": "reroute"} if fundamentally misaligned, failed, or blocked.'
+    '"action": "reroute"} if fundamentally misaligned, failed, or blocked.\n\n'
+    "IMPORTANT: If the response contains any indication that the agent SIMULATED, "
+    "STUBBED, FAKED, or MOCKED actions instead of performing them for real — such as "
+    "writing scripts that print fake status messages, creating dummy files to pretend "
+    "work was done, or commenting 'In a real scenario...' — mark it as MISALIGNED "
+    "with reason 'agent simulated instead of performing real actions'."
 )
 
 
