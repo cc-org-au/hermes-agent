@@ -997,13 +997,47 @@ class AIAgent:
                     try:
                         _aux = opm_auxiliary_model(self)
                         if _aux:
-                            self._fallback_chain = [
+                            from agent.free_model_routing import build_free_fallback_chain
+                            from hermes_cli.config import load_config as _load_cfg_opm_fb
+
+                            chain = [
                                 {
                                     "provider": "gemini",
                                     "model": _aux,
                                     "only_rate_limit": True,
                                 }
                             ]
+                            try:
+                                from agent.openai_primary_mode import (
+                                    filter_fallback_chain_disallowed as _ffd_opm,
+                                )
+
+                                synth = build_free_fallback_chain(_load_cfg_opm_fb() or {})
+                                synth = _ffd_opm(synth if isinstance(synth, list) else [])
+                                _seen = {("gemini", str(_aux).strip().lower())}
+                                for e in synth:
+                                    if not isinstance(e, dict):
+                                        continue
+                                    prov = str(e.get("provider") or "").strip().lower()
+                                    mod = str(e.get("model") or "").strip().lower()
+                                    if not prov or not mod:
+                                        continue
+                                    if (
+                                        prov == "gemini"
+                                        and mod == str(_aux).strip().lower()
+                                        and not e.get("gemini_tier_router")
+                                    ):
+                                        continue
+                                    key = (prov, mod)
+                                    if key in _seen:
+                                        continue
+                                    _seen.add(key)
+                                    chain.append(e)
+                                    if len(chain) >= 16:
+                                        break
+                            except Exception:
+                                logger.debug("opm expanded fallback chain merge failed", exc_info=True)
+                            self._fallback_chain = chain
                     except Exception:
                         self._fallback_chain = []
         except Exception:
@@ -5684,6 +5718,235 @@ class AIAgent:
             logger.debug("_try_opm_native_quota_downgrade failed", exc_info=True)
             return False
 
+    def _apply_opm_openrouter_quota_runtime(self, model_id: str, *, reason: str) -> bool:
+        """Swap runtime to OpenRouter for OPM quota cascade (does not set ``_fallback_activated``)."""
+        try:
+            from agent.auxiliary_client import resolve_provider_client
+            from agent.routing_trace import emit_routing_decision_trace
+
+            mid = str(model_id or "").strip()
+            if not mid:
+                return False
+            self._opm_suppressed_for_turn = True
+            old_model = self.model
+            or_client, _ = resolve_provider_client(
+                "openrouter",
+                model=mid,
+                raw_codex=True,
+                explicit_api_key=None,
+                explicit_base_url=None,
+            )
+            if or_client is None:
+                logging.warning("OPM OpenRouter hop: resolve_provider_client returned None for %s", mid)
+                return False
+            fb_base_url = str(or_client.base_url)
+            self.model = mid
+            self.provider = "openrouter"
+            self.base_url = fb_base_url
+            self.api_mode = "chat_completions"
+            self.api_key = or_client.api_key
+            self.client = or_client
+            self._client_kwargs = {
+                "api_key": or_client.api_key,
+                "base_url": fb_base_url,
+            }
+            self._use_prompt_caching = "openrouter" in fb_base_url.lower() and "claude" in mid.lower()
+            if hasattr(self, "context_compressor") and self.context_compressor:
+                try:
+                    from agent.model_metadata import get_model_context_length
+
+                    fb_context_length = get_model_context_length(
+                        self.model,
+                        base_url=self.base_url,
+                        api_key=self.api_key,
+                        provider=self.provider,
+                    )
+                    self.context_compressor.model = self.model
+                    self.context_compressor.base_url = self.base_url
+                    self.context_compressor.api_key = self.api_key
+                    self.context_compressor.provider = self.provider
+                    self.context_compressor.context_length = fb_context_length
+                    self.context_compressor.threshold_tokens = int(
+                        fb_context_length * self.context_compressor.threshold_percent
+                    )
+                except Exception:
+                    logger.debug("opm openrouter hop: compressor update failed", exc_info=True)
+            self._emit_status(
+                f"⚠️ Quota / rate limit — trying OpenRouter model: {mid} …",
+            )
+            _om = getattr(self, "_last_opm_meta", None) or {}
+            try:
+                emit_routing_decision_trace(
+                    stage="opm_cross_provider_failover",
+                    chosen_model=str(self.model or ""),
+                    chosen_provider="openrouter",
+                    reason_code=str(reason or "opm_or_hop"),
+                    opm_enabled=bool(_om.get("enabled", False)),
+                    opm_source=str(_om.get("source", "")),
+                    tier_source="quota_retry",
+                    skip_flags={"from_model": str(old_model or ""), "to_model": mid},
+                    fallback_activated=bool(getattr(self, "_fallback_activated", False)),
+                    explicit_user_model=not bool(getattr(self, "_model_is_tier_routed", True)),
+                    profile=str(getattr(self, "profile", "") or ""),
+                    session_id=str(getattr(self, "session_id", "") or ""),
+                )
+            except Exception:
+                logger.debug("opm_cross_provider_failover trace failed", exc_info=True)
+            logging.info(
+                "OPM cross-provider OpenRouter hop: %s -> %s (%s)",
+                old_model,
+                mid,
+                reason,
+            )
+            return True
+        except Exception:
+            logger.debug("_apply_opm_openrouter_quota_runtime failed", exc_info=True)
+            return False
+
+    def _maybe_try_opm_openrouter_auto(self, xcfg: Dict[str, Any]) -> bool:
+        from agent.opm_cross_provider_failover import openrouter_api_key_available
+
+        if not xcfg.get("openrouter_auto_enabled"):
+            self._opm_qf_phase = "or_done"
+            return False
+        if not openrouter_api_key_available():
+            self._opm_qf_phase = "or_done"
+            return False
+        self._opm_qf_phase = "or_auto"
+        return self._apply_opm_openrouter_quota_runtime(
+            str(xcfg.get("openrouter_auto_model") or "openrouter/auto"),
+            reason="opm_openrouter_auto",
+        )
+
+    def _try_opm_openrouter_from_non_native_openrouter(self, xcfg: Dict[str, Any]) -> bool:
+        """Advance explicit OpenRouter list when primary was already OpenRouter."""
+        from agent.opm_cross_provider_failover import (
+            norm_model_slug,
+            openrouter_api_key_available,
+            openrouter_explicit_models_for_agent,
+        )
+
+        low = (self.base_url or "").lower()
+        if "openrouter" not in low or not openrouter_api_key_available():
+            self._opm_qf_phase = "or_done"
+            return False
+        models = openrouter_explicit_models_for_agent(self, xcfg)
+        if not models:
+            return self._maybe_try_opm_openrouter_auto(xcfg)
+        cur = norm_model_slug(self.model or "")
+        idx = -1
+        for i, m in enumerate(models):
+            if norm_model_slug(m) == cur:
+                idx = i
+                break
+        if idx < 0:
+            self._opm_qf_phase = "or_explicit"
+            self._opm_qf_or_idx = 0
+            return self._apply_opm_openrouter_quota_runtime(
+                models[0], reason="opm_or_realign_top"
+            )
+        if idx + 1 < len(models):
+            self._opm_qf_phase = "or_explicit"
+            self._opm_qf_or_idx = idx + 1
+            return self._apply_opm_openrouter_quota_runtime(
+                models[idx + 1], reason="opm_or_next_explicit"
+            )
+        return self._maybe_try_opm_openrouter_auto(xcfg)
+
+    def _try_opm_begin_openrouter_explicit_from_native_exhausted(self, xcfg: Dict[str, Any]) -> bool:
+        """After native api.openai.com ladder has no next rung, hop to OpenRouter explicit list."""
+        from agent.opm_cross_provider_failover import (
+            openrouter_api_key_available,
+            openrouter_explicit_models_for_agent,
+        )
+        from agent.opm_quota_ladder import load_opm_native_quota_downgrade_config, next_quota_downgrade_model
+
+        if not self._is_direct_openai_url():
+            return self._try_opm_openrouter_from_non_native_openrouter(xcfg)
+        ncfg = load_opm_native_quota_downgrade_config()
+        if ncfg.get("enabled"):
+            nxt = next_quota_downgrade_model(
+                current_model=self.model or "",
+                api_mode=str(getattr(self, "api_mode", "") or ""),
+                cfg=ncfg,
+            )
+            if nxt is not None:
+                return False
+        if not openrouter_api_key_available():
+            self._opm_qf_phase = "or_done"
+            return False
+        models = openrouter_explicit_models_for_agent(self, xcfg)
+        if not models:
+            return self._maybe_try_opm_openrouter_auto(xcfg)
+        self._opm_qf_phase = "or_explicit"
+        self._opm_qf_or_idx = 0
+        return self._apply_opm_openrouter_quota_runtime(
+            models[0], reason="opm_or_after_native_exhausted",
+        )
+
+    def _try_opm_advance_openrouter_explicit(self, xcfg: Dict[str, Any]) -> bool:
+        from agent.opm_cross_provider_failover import (
+            openrouter_api_key_available,
+            openrouter_explicit_models_for_agent,
+        )
+
+        if not openrouter_api_key_available():
+            self._opm_qf_phase = "or_done"
+            return False
+        models = openrouter_explicit_models_for_agent(self, xcfg)
+        idx = int(getattr(self, "_opm_qf_or_idx", 0) or 0)
+        if idx + 1 < len(models):
+            self._opm_qf_or_idx = idx + 1
+            return self._apply_opm_openrouter_quota_runtime(
+                models[idx + 1], reason="opm_or_explicit_next",
+            )
+        return self._maybe_try_opm_openrouter_auto(xcfg)
+
+    def _try_opm_quota_cascade_step(
+        self,
+        api_error: BaseException,
+        *,
+        pool_may_recover: bool,
+    ) -> bool:
+        """Native OpenAI ladder, then OpenRouter explicit + auto, before ``_fallback_chain``."""
+        if not self._quota_style_api_failure(api_error) or pool_may_recover:
+            return False
+        try:
+            from agent.opm_cross_provider_failover import (
+                load_opm_cross_provider_quota_failover_config,
+                should_run_opm_quota_cascade,
+            )
+
+            xcfg = load_opm_cross_provider_quota_failover_config()
+            if not xcfg.get("enabled"):
+                return self._try_opm_native_quota_downgrade(
+                    api_error, pool_may_recover=pool_may_recover,
+                )
+            if not should_run_opm_quota_cascade(
+                self, quota_style=True, pool_may_recover=pool_may_recover,
+            ):
+                return self._try_opm_native_quota_downgrade(
+                    api_error, pool_may_recover=pool_may_recover,
+                )
+            phase = getattr(self, "_opm_qf_phase", None) or "native"
+            if phase == "native":
+                if self._try_opm_native_quota_downgrade(
+                    api_error, pool_may_recover=pool_may_recover,
+                ):
+                    return True
+                return self._try_opm_begin_openrouter_explicit_from_native_exhausted(xcfg)
+            if phase == "or_explicit":
+                return self._try_opm_advance_openrouter_explicit(xcfg)
+            if phase == "or_auto":
+                self._opm_qf_phase = "or_done"
+                return False
+            return False
+        except Exception:
+            logger.debug("_try_opm_quota_cascade_step failed", exc_info=True)
+            return self._try_opm_native_quota_downgrade(
+                api_error, pool_may_recover=pool_may_recover,
+            )
+
     # ── Per-turn primary restoration ─────────────────────────────────────
 
     def _restore_primary_runtime(self) -> bool:
@@ -7542,6 +7805,8 @@ class AIAgent:
         attach_opm_session_agent_for_turn(self)
         try:
             self._opm_suppressed_for_turn = False
+            self._opm_qf_phase = None
+            self._opm_qf_or_idx = 0
             self._turn_bar_start_usd = float(self.session_estimated_cost_usd or 0.0)
             # If the previous turn activated fallback, restore the primary
             # runtime so this turn gets a fresh attempt with the preferred model.
@@ -8791,7 +9056,7 @@ class AIAgent:
                         # until the ladder cannot advance (then fall back as before).
                         ladder_stepped = False
                         if is_rate_limited and not pool_may_recover:
-                            ladder_stepped = self._try_opm_native_quota_downgrade(
+                            ladder_stepped = self._try_opm_quota_cascade_step(
                                 api_error,
                                 pool_may_recover=pool_may_recover,
                             )
@@ -9001,7 +9266,7 @@ class AIAgent:
                         if is_client_error:
                             # Quota-class client errors on native OpenAI: try OPM ladder before cross-provider fallback.
                             if is_rate_limited and not pool_may_recover:
-                                if self._try_opm_native_quota_downgrade(
+                                if self._try_opm_quota_cascade_step(
                                     api_error,
                                     pool_may_recover=pool_may_recover,
                                 ):
@@ -9066,7 +9331,7 @@ class AIAgent:
                                 retry_count = 0
                                 continue
                             if is_rate_limited and not pool_may_recover:
-                                if self._try_opm_native_quota_downgrade(
+                                if self._try_opm_quota_cascade_step(
                                     api_error,
                                     pool_may_recover=pool_may_recover,
                                 ):

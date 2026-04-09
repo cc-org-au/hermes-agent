@@ -1,10 +1,18 @@
 # Default routing / delegation canon (repo). Overlay: ${HERMES_HOME}/routing_canon.yaml
 # Merged with deep-merge; overlay keys override defaults.
 
-version: 1
+version: 2
 
 # Philosophy order (documentation; enforcement is in routing code paths):
 # 1) cost + compatibility  2) speed + efficiency  3) memory + usefulness
+#
+# Quota / rate-limit failover order (OPM on, single run_conversation turn):
+#   1) Native api.openai.com model ladder (opm_native_quota_downgrade)
+#   2) OpenRouter explicit hub ids in order (same logical models; openai/… slugs)
+#   3) OpenRouter auto router (openrouter/auto — provider picks downstream model)
+#   4) Config fallback chain (direct Gemini tier router, optional_gemini,
+#      openrouter_last_resort, etc. — see free_model_routing + fallback_providers)
+# Each new user turn resets to step 1 via tier/OPM primary selection.
 
 openai_primary_mode:
   # When true in config, native OpenAI slugs are treated as "free tier" for policy.
@@ -51,6 +59,23 @@ opm_native_quota_downgrade:
   codex_models:
     - gpt-5.3-codex
     - gpt-5.2-codex
+
+# After the native OpenAI ladder is exhausted (and when OPENROUTER_API_KEY is set),
+# try OpenRouter with the same models top-first, then openrouter/auto, then the
+# synthesized/config fallback chain. Omit lists to derive openai/<slug> from
+# opm_native_quota_downgrade chat_models / codex_models.
+opm_cross_provider_quota_failover:
+  enabled: true
+  openrouter_chat_models:
+    - openai/gpt-5.4
+    - openai/gpt-5.3
+    - openai/gpt-5.2
+  openrouter_codex_models:
+    - openai/gpt-5.3-codex
+    - openai/gpt-5.2-codex
+  openrouter_auto:
+    enabled: true
+    model: openrouter/auto
 
 # Hard budget (USD estimates from providers vs AUD display cap)
 # API costs are accumulated in USD; daily_budget_aud is converted with aud_to_usd (USD per 1 AUD).

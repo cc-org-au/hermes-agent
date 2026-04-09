@@ -389,7 +389,7 @@ class TestOpmEmergencyQuotaFallback:
                 skip_memory=True,
                 fallback_model=None,
             )
-        assert len(agent._fallback_chain) == 1
+        assert len(agent._fallback_chain) >= 1
         fb0 = agent._fallback_chain[0]
         assert fb0["provider"] == "gemini"
         assert fb0["model"] == "gemini-2.5-flash"

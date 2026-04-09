@@ -155,6 +155,10 @@ def should_attempt_opm_native_downgrade(
         return False, cfg
     if getattr(agent, "_fallback_activated", False):
         return False, cfg
+    # OpenRouter / cross-provider quota phase — native api.openai.com ladder does not apply.
+    _qf = getattr(agent, "_opm_qf_phase", None) or "native"
+    if _qf != "native":
+        return False, cfg
     try:
         if not agent._is_direct_openai_url():
             return False, cfg
