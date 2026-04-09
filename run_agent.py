@@ -1165,7 +1165,10 @@ class AIAgent:
         # repeated quota/rate-limit user notices until ``session_id`` changes (e.g. /new).
         self._quota_notice_session_id: Optional[str] = None
         self._session_suppress_quota_user_notices = False
-        
+        # Provider-reported model from the last successful completion (OpenRouter etc.
+        # often resolve openrouter/auto or hub slugs to a concrete upstream id).
+        self._last_api_completion_model: Optional[str] = None
+
         # Session logs go into ~/.hermes/sessions/ alongside gateway sessions
         hermes_home = get_hermes_home()
         self.logs_dir = hermes_home / "sessions"
@@ -1559,6 +1562,7 @@ class AIAgent:
         self._last_completed_turn_cost_usd = 0.0
         self._hard_budget_operator_decision = None
         self._session_suppress_quota_user_notices = False
+        self._last_api_completion_model = None
 
         # Context compressor internal counters (if present)
         if hasattr(self, "context_compressor") and self.context_compressor:
@@ -1668,6 +1672,18 @@ class AIAgent:
         UX repeated on every retry.
         """
         self._session_suppress_quota_user_notices = True
+
+    def _record_completion_model_for_status(self, response: Any) -> None:
+        """Remember provider-reported model from a successful completion for status UIs.
+
+        OpenRouter and similar return the resolved upstream id in ``response.model``,
+        which may differ from the request slug (e.g. ``openrouter/auto``).
+        """
+        if response is None:
+            return
+        mid = getattr(response, "model", None)
+        if isinstance(mid, str) and mid.strip():
+            self._last_api_completion_model = mid.strip()
 
     def _hard_budget_check_before_llm_call(self) -> None:
         """Block paid LLM traffic when daily cap is exceeded unless operator approved this session.
@@ -7921,7 +7937,10 @@ class AIAgent:
             # runtime so this turn gets a fresh attempt with the preferred model.
             # No-op when _fallback_activated is False (gateway, first turn, etc.).
             self._restore_primary_runtime()
-        
+            # Until this turn produces a completion, status UIs should show routing
+            # target (self.model), not a stale completion id from the prior turn.
+            self._last_api_completion_model = None
+
             # Sanitize surrogate characters from user input.  Clipboard paste from
             # rich-text editors (Google Docs, Word, etc.) can inject lone surrogates
             # that are invalid UTF-8 and crash JSON serialization in the OpenAI SDK.
@@ -8718,7 +8737,9 @@ class AIAgent:
                                     }
                                 time.sleep(0.2)
                             continue  # Retry the API call
-        
+
+                        self._record_completion_model_for_status(response)
+
                         # Check finish_reason before proceeding
                         if self.api_mode == "codex_responses":
                             status = getattr(response, "status", None)

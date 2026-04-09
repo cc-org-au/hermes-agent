@@ -30,6 +30,7 @@ def _attach_agent(
 ):
     cli_obj.agent = SimpleNamespace(
         model=cli_obj.model,
+        _last_api_completion_model=None,
         provider="anthropic" if cli_obj.model.startswith("anthropic/") else None,
         base_url="",
         session_input_tokens=input_tokens if input_tokens is not None else prompt_tokens,
@@ -117,6 +118,25 @@ class TestCLIStatusBar:
 
         assert "⚕" in text
         assert "claude-sonnet-4-20250514" in text
+
+    def test_status_bar_prefers_last_api_completion_model(self):
+        """OpenRouter-style: request slug may differ from provider-reported completion model."""
+        cli_obj = _make_cli(model="openrouter/auto")
+        _attach_agent(
+            cli_obj,
+            prompt_tokens=1000,
+            completion_tokens=500,
+            total_tokens=1500,
+            api_calls=1,
+            context_tokens=1500,
+            context_length=200_000,
+        )
+        cli_obj.agent.model = "openrouter/auto"
+        cli_obj.agent._last_api_completion_model = "anthropic/claude-sonnet-4-20250514"
+
+        snap = cli_obj._get_status_bar_snapshot()
+        assert snap["model_name"] == "anthropic/claude-sonnet-4-20250514"
+        assert "claude-sonnet-4" in snap["model_short"]
 
 
 class TestCLIUsageReport:

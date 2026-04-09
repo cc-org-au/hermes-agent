@@ -1453,8 +1453,14 @@ class HermesCLI:
         _ov = getattr(self, "_status_bar_model_override", None)
         if isinstance(_ov, str) and _ov.strip():
             model_name = _ov.strip()
-        elif agent and getattr(agent, "model", None):
-            model_name = agent.model
+        elif agent:
+            _lcm = getattr(agent, "_last_api_completion_model", None)
+            if isinstance(_lcm, str) and _lcm.strip():
+                model_name = _lcm.strip()
+            elif getattr(agent, "model", None):
+                model_name = agent.model
+            else:
+                model_name = self.model or "unknown"
         else:
             model_name = self.model or "unknown"
         model_short = model_name.split("/")[-1] if "/" in model_name else model_name
