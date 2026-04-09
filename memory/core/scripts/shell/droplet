@@ -3,8 +3,28 @@
 # With arguments: run that command remotely as hermesuser (one bash -lc on server).
 # For Hermes CLI remote runs use: hermes <subcommand> … droplet  (trailing droplet).
 set -euo pipefail
-_REPO="$(cd "$(dirname "$0")/../.." && pwd)"
-export HERMES_AGENT_REPO="${HERMES_AGENT_REPO:-${_REPO}}"
-_SH="${HERMES_AGENT_REPO}/scripts/core/ssh_droplet_user.sh"
+
+# Resolve the git checkout root by walking up from this script — do not assume a fixed
+# depth (scripts/shell vs memory/core/scripts/shell) and do not trust a stale
+# HERMES_AGENT_REPO for locating ssh_droplet_user.sh.
+_droplet_resolve_repo_root() {
+  local d
+  d="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+  while [[ "$d" != "/" ]]; do
+    if [[ -f "$d/scripts/core/ssh_droplet_user.sh" ]]; then
+      echo "$d"
+      return 0
+    fi
+    d="$(dirname "$d")"
+  done
+  return 1
+}
+
+_REPO="$(_droplet_resolve_repo_root)" || {
+  echo "droplet: could not find repo root (scripts/core/ssh_droplet_user.sh missing)" >&2
+  exit 1
+}
+export HERMES_AGENT_REPO="${_REPO}"
+_SH="${_REPO}/scripts/core/ssh_droplet_user.sh"
 export HERMES_DROPLET_INTERACTIVE="${HERMES_DROPLET_INTERACTIVE:-1}"
 exec bash "$_SH" "$@"

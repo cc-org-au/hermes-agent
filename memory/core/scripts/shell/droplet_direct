@@ -1,8 +1,25 @@
 #!/usr/bin/env bash
 # SSH as hermesuser@host directly (no admin hop). Requires pubkey in hermesuser authorized_keys.
 set -euo pipefail
-_REPO="$(cd "$(dirname "$0")/../.." && pwd)"
-export HERMES_AGENT_REPO="${HERMES_AGENT_REPO:-${_REPO}}"
-_SH="${HERMES_AGENT_REPO}/scripts/core/ssh_droplet_hermesuser_direct.sh"
+
+_droplet_resolve_repo_root() {
+  local d
+  d="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+  while [[ "$d" != "/" ]]; do
+    if [[ -f "$d/scripts/core/ssh_droplet_hermesuser_direct.sh" ]]; then
+      echo "$d"
+      return 0
+    fi
+    d="$(dirname "$d")"
+  done
+  return 1
+}
+
+_REPO="$(_droplet_resolve_repo_root)" || {
+  echo "droplet_direct: could not find repo root (scripts/core/ssh_droplet_hermesuser_direct.sh missing)" >&2
+  exit 1
+}
+export HERMES_AGENT_REPO="${_REPO}"
+_SH="${_REPO}/scripts/core/ssh_droplet_hermesuser_direct.sh"
 export HERMES_DROPLET_INTERACTIVE="${HERMES_DROPLET_INTERACTIVE:-1}"
 exec bash "$_SH" "$@"

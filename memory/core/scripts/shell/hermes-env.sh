@@ -22,7 +22,23 @@ if [[ -n "${ZSH_VERSION:-}" ]]; then
 else
   _HERMES_ENV_HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 fi
-export HERMES_AGENT_REPO="${HERMES_AGENT_REPO:-$(cd "${_HERMES_ENV_HERE}/../.." && pwd)}"
+# Walk up from this file until we find scripts/core/hermes (works for scripts/shell/ and
+# memory/core/scripts/shell/ layouts; avoids ../.. guessing a wrong checkout root).
+if [[ -z "${HERMES_AGENT_REPO:-}" ]]; then
+  _hr="$_HERMES_ENV_HERE"
+  while [[ "$_hr" != "/" ]]; do
+    if [[ -f "$_hr/scripts/core/hermes" ]] || [[ -f "$_hr/scripts/core/ssh_droplet_user.sh" ]]; then
+      export HERMES_AGENT_REPO="$_hr"
+      break
+    fi
+    _hr="$(dirname "$_hr")"
+  done
+  if [[ -z "${HERMES_AGENT_REPO:-}" ]]; then
+    echo "hermes-env.sh: could not locate Hermes repo (scripts/core/hermes missing); falling back to ../.." >&2
+    export HERMES_AGENT_REPO="$(cd "${_HERMES_ENV_HERE}/../.." && pwd)"
+  fi
+  unset _hr
+fi
 _HERMES_CORE="${HERMES_AGENT_REPO}/scripts/core"
 unset _HERMES_ENV_HERE
 
