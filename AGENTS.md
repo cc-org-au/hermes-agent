@@ -403,7 +403,7 @@ in config.yaml (or `HERMES_BACKGROUND_NOTIFICATIONS` env var):
 
 ### Turn-done notify (Mac sound over Tailscale)
 
-Optional: when **`HERMES_TURN_DONE_NOTIFY_URL`** is set on the **runtime that finishes the turn** (e.g. droplet `~/.hermes/.env`), Hermes issues a fire-and-forget HTTP GET at the end of each **root** `run_conversation` (not delegate subagents). Point it at a tiny listener on your Mac — **outbound-only from the VPS**, no open ports on the server.
+Optional: when **`HERMES_TURN_DONE_NOTIFY_URL`** is set on the **runtime that finishes the turn** (e.g. droplet `~/.hermes/.env`), Hermes issues a fire-and-forget HTTP GET when each **root** `run_conversation` returns (including early exits from the API loop, not only the main success path). Does **not** run for delegate subagents. Point it at a tiny listener on your Mac — **outbound-only from the VPS**, no open ports on the server.
 
 **Direct Tailscale (Mac must accept inbound on the tailnet):** **`tailscale ip -4`** on the Mac, run **`scripts/macos/hermes_turn_chime_server.py --bind 0.0.0.0 --port 8765`** in **Terminal.app** or **launchd** (IDE-only listeners often block non-localhost inbound). On the VPS: **`HERMES_TURN_DONE_NOTIFY_URL=http://<mac-tailscale-ip>:8765/`**. Verify from the VPS: **`curl -sS -o /dev/null -w '%{http_code}\n' http://<mac-tailscale-ip>:8765/`** → **`204`**. If that **times out**, the Mac is not listening or the path is blocked — use the tunnel below.
 
