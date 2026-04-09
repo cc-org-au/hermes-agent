@@ -163,6 +163,11 @@ def load_hard_budget_config() -> Dict[str, Any]:
     show_tui = is_truthy_value(hb.get("show_tui_bar"), default=True)
     daily_aud = max(0.01, daily_aud)
     aud_to_usd = max(1e-9, aud_to_usd)
+    reset_tz = str(
+        hb.get("reset_timezone")
+        or hb.get("daily_reset_timezone")
+        or "Australia/Sydney"
+    ).strip() or "Australia/Sydney"
     return {
         "enabled": enabled,
         "daily_budget_aud": daily_aud,
@@ -171,4 +176,5 @@ def load_hard_budget_config() -> Dict[str, Any]:
         "session_budget_usd": max(0.01, session_usd),
         "spike_threshold_usd_per_min": max(0.01, spike),
         "show_tui_bar": show_tui,
+        "reset_timezone": reset_tz,
     }

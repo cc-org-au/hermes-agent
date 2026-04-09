@@ -2,6 +2,9 @@
 
 Driven by ``routing_canon`` ``hard_budget`` (see ``agent/dynamic_routing_canon.yaml``).
 State file: ``${HERMES_HOME}/workspace/operations/daily_budget_state.json``.
+
+Daily rollover and the TUI “reset in …” countdown use ``hard_budget.reset_timezone``
+(IANA name, default ``Australia/Sydney``) so VPS UTC clocks still match operator locale.
 """
 
 from __future__ import annotations
@@ -20,15 +23,41 @@ logger = logging.getLogger(__name__)
 STATE_NAME = "daily_budget_state.json"
 
 
-def _local_today() -> str:
-    return date.today().isoformat()
-
-
 def hours_until_local_midnight() -> float:
-    """Hours from now until next local midnight (0–24)."""
+    """Hours from now until next midnight in the process local timezone (0–24)."""
     now = datetime.now().astimezone()
     nxt = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
     return max(0.0, (nxt - now).total_seconds() / 3600.0)
+
+
+def hours_until_timezone_midnight(zone_name: str) -> float:
+    """Hours until next midnight in *zone_name* (IANA). Falls back to local on bad tz."""
+    zn = (zone_name or "").strip()
+    if not zn:
+        return hours_until_local_midnight()
+    try:
+        from zoneinfo import ZoneInfo
+
+        z = ZoneInfo(zn)
+        now = datetime.now(z)
+        nxt = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        return max(0.0, (nxt - now).total_seconds() / 3600.0)
+    except Exception:
+        logger.debug("hours_until_timezone_midnight: bad zone %r", zn, exc_info=True)
+        return hours_until_local_midnight()
+
+
+def calendar_date_in_timezone(zone_name: Optional[str]) -> str:
+    """``YYYY-MM-DD`` for “today” in *zone_name*, or host local date if unset/invalid."""
+    zn = (zone_name or "").strip()
+    if not zn:
+        return date.today().isoformat()
+    try:
+        from zoneinfo import ZoneInfo
+
+        return datetime.now(ZoneInfo(zn)).date().isoformat()
+    except Exception:
+        return date.today().isoformat()
 
 
 def _state_path() -> Path:
@@ -51,7 +80,7 @@ class BudgetSnapshot:
 
 
 class BudgetLedger:
-    """Tracks cumulative USD spend for the local calendar day."""
+    """Tracks cumulative USD spend for the configured calendar day (timezone-aware)."""
 
     def __init__(
         self,
@@ -59,17 +88,22 @@ class BudgetLedger:
         daily_budget_aud: float,
         aud_to_usd: float,
         path: Optional[Path] = None,
+        budget_timezone: Optional[str] = None,
     ):
         self.daily_budget_aud = max(0.01, float(daily_budget_aud))
         self.aud_to_usd = max(1e-9, float(aud_to_usd))
         self.daily_cap_usd = self.daily_budget_aud * self.aud_to_usd
         self._path = path or _state_path()
+        self._budget_tz = (budget_timezone or "").strip() or None
         self._spent_today = 0.0
         self._loaded_date = ""
         self._load_or_roll()
 
+    def _today_key(self) -> str:
+        return calendar_date_in_timezone(self._budget_tz)
+
     def _load_or_roll(self) -> None:
-        today = _local_today()
+        today = self._today_key()
         if not self._path.is_file():
             self._spent_today = 0.0
             self._loaded_date = today
@@ -100,11 +134,13 @@ class BudgetLedger:
 
     def _persist_unlocked(self) -> None:
         payload = {
-            "date": self._loaded_date or _local_today(),
+            "date": self._loaded_date or self._today_key(),
             "spent_usd": round(self._spent_today, 6),
             "daily_budget_aud": self.daily_budget_aud,
             "aud_to_usd": self.aud_to_usd,
         }
+        if self._budget_tz:
+            payload["budget_timezone"] = self._budget_tz
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
             fd, tmp = tempfile.mkstemp(
@@ -125,13 +161,13 @@ class BudgetLedger:
             logger.debug("budget_ledger: persist failed: %s", e)
 
     def refresh_if_new_day(self) -> None:
-        if _local_today() != self._loaded_date:
+        if self._today_key() != self._loaded_date:
             self._load_or_roll()
 
     def add_spend_usd(self, delta_usd: float) -> None:
         if delta_usd <= 0:
             return
-        today = _local_today()
+        today = self._today_key()
         try:
             import fcntl  # type: ignore
         except ImportError:
@@ -169,6 +205,8 @@ class BudgetLedger:
                         "daily_budget_aud": self.daily_budget_aud,
                         "aud_to_usd": self.aud_to_usd,
                     }
+                    if self._budget_tz:
+                        payload["budget_timezone"] = self._budget_tz
                     f.seek(0)
                     f.truncate()
                     json.dump(payload, f, indent=0)
@@ -205,12 +243,16 @@ class BudgetLedger:
     ) -> BudgetSnapshot:
         self.refresh_if_new_day()
         su = self.spent_usd_today
+        if self._budget_tz:
+            h_reset = hours_until_timezone_midnight(self._budget_tz)
+        else:
+            h_reset = hours_until_local_midnight()
         return BudgetSnapshot(
             daily_budget_aud=self.daily_budget_aud,
             spent_usd_today=su,
             spent_aud_today=su / self.aud_to_usd,
             daily_cap_usd=self.daily_cap_usd,
-            hours_to_reset=hours_until_local_midnight(),
+            hours_to_reset=h_reset,
             turn_cost_usd=max(0.0, float(turn_cost_usd)),
             enabled=enabled,
         )

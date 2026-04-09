@@ -57,6 +57,8 @@ opm_native_quota_downgrade:
 hard_budget:
   enabled: true
   daily_budget_aud: 10.0
+  # Calendar day + “reset in …” for the budget bar (IANA tz). Override in routing_canon.yaml.
+  reset_timezone: Australia/Sydney
   # Approximate FX: how many USD equals one AUD (adjust in HERMES_HOME/routing_canon.yaml).
   aud_to_usd: 0.65
   session_budget_usd: 2.5

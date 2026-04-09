@@ -7,7 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from agent.budget_ledger import BudgetLedger, hours_until_local_midnight
+from agent.budget_ledger import (
+    BudgetLedger,
+    hours_until_local_midnight,
+    hours_until_timezone_midnight,
+)
 from agent.routing_canon import load_hard_budget_config, invalidate_routing_canon_cache
 
 
@@ -40,6 +44,12 @@ def test_load_hard_budget_defaults(home):
     cfg = load_hard_budget_config()
     assert cfg["daily_budget_aud"] == 10.0
     assert cfg["enabled"] is True
+    assert "Australia" in str(cfg.get("reset_timezone") or "")
+
+
+def test_hours_until_timezone_midnight_reasonable():
+    h = hours_until_timezone_midnight("Australia/Sydney")
+    assert 0.0 <= h <= 24.0
 
 
 def test_is_daily_exhausted(home):

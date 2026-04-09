@@ -56,6 +56,19 @@ def test_next_quota_downgrade_model_chat():
     )
 
 
+def test_next_quota_downgrade_gpt54_on_codex_api_stack():
+    """Native OpenAI uses codex_responses while the slug is chat-tier (gpt-5.4)."""
+    cfg = load_opm_native_quota_downgrade_config()
+    assert (
+        next_quota_downgrade_model(
+            current_model="gpt-5.4",
+            api_mode="codex_responses",
+            cfg=cfg,
+        )
+        == "gpt-5.3"
+    )
+
+
 def test_next_quota_downgrade_model_codex():
     cfg = load_opm_native_quota_downgrade_config()
     assert next_quota_downgrade_model(

@@ -89,33 +89,47 @@ def ladder_model_set_non_empty(cfg: Dict[str, Any]) -> bool:
     return bool(cfg.get("ladder_model_set"))
 
 
-def ladder_for_api_mode(cfg: Dict[str, Any], api_mode: str) -> List[str]:
-    if (api_mode or "").strip() == "codex_responses":
-        return list(cfg.get("codex_models") or [])
-    return list(cfg.get("chat_models") or [])
-
-
 def next_quota_downgrade_model(
     *,
     current_model: str,
     api_mode: str,
     cfg: Dict[str, Any],
 ) -> Optional[str]:
-    """Return the next rung after *current_model* in the appropriate ladder, or None."""
-    ladder = ladder_for_api_mode(cfg, api_mode)
-    if not ladder:
-        return None
+    """Return the next rung after *current_model*, or None.
+
+    Native OpenAI often uses ``api_mode=codex_responses`` while the live slug is a
+    chat-tier id (e.g. ``gpt-5.4``). We therefore resolve the current id against
+    **both** ``chat_models`` and ``codex_models`` instead of choosing a single list
+    from *api_mode* only.
+    """
+    del api_mode  # kept for API stability / callers; resolution is model-driven
+    chat = list(cfg.get("chat_models") or [])
+    codex = list(cfg.get("codex_models") or [])
     cur = _bare_slug(current_model).lower()
-    idx = -1
-    for i, m in enumerate(ladder):
-        if m.lower() == cur:
-            idx = i
-            break
-    if idx < 0:
-        return None
-    if idx + 1 >= len(ladder):
-        return None
-    return ladder[idx + 1]
+
+    def _idx_in(seq: List[str]) -> int:
+        for i, m in enumerate(seq):
+            if _bare_slug(m).lower() == cur:
+                return i
+        return -1
+
+    ic = _idx_in(chat)
+    if ic >= 0 and ic + 1 < len(chat):
+        return chat[ic + 1]
+    ix = _idx_in(codex)
+    if ix >= 0 and ix + 1 < len(codex):
+        return codex[ix + 1]
+
+    # Top chat slug on a codex HTTP stack (gpt-5.4 not listed under codex_models).
+    if "codex" not in cur and chat:
+        top = _bare_slug(chat[0]).lower()
+        if top == cur and len(chat) > 1:
+            return chat[1]
+    if "codex" in cur and codex:
+        top = _bare_slug(codex[0]).lower()
+        if top == cur and len(codex) > 1:
+            return codex[1]
+    return None
 
 
 def should_attempt_opm_native_downgrade(

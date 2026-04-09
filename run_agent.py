@@ -1396,6 +1396,7 @@ class AIAgent:
                 self._budget_ledger = BudgetLedger(
                     daily_budget_aud=_hb["daily_budget_aud"],
                     aud_to_usd=_hb["aud_to_usd"],
+                    budget_timezone=str(_hb.get("reset_timezone") or "").strip() or None,
                 )
                 self._cost_monitor = CostMonitor(
                     session_budget_usd=_hb["session_budget_usd"],
@@ -5103,6 +5104,34 @@ class AIAgent:
         )
 
     @staticmethod
+    def _opm_account_quota_exhaust_message(api_error: BaseException, error_msg_lower: str) -> bool:
+        """True when failure is account/plan quota exhaustion (pool rotation won't help)."""
+        low = (error_msg_lower or "").strip().lower()
+        body = getattr(api_error, "body", None)
+        if isinstance(body, dict):
+            err = body.get("error") or {}
+            if isinstance(err, dict):
+                typ = str(err.get("type") or "").lower()
+                code = str(err.get("code") or "").lower()
+                if "insufficient_quota" in typ or "insufficient_quota" in code:
+                    return True
+                for chunk in (str(err.get("message") or ""), str(err.get("param") or "")):
+                    if chunk:
+                        low = f"{low} {chunk.lower()}"
+        for needle in (
+            "exceeded your current quota",
+            "insufficient_quota",
+            "billing_hard_limit",
+            "exceeded your quota",
+            "quota exceeded",
+            "check your plan and billing",
+            "you exceeded your",
+        ):
+            if needle in low:
+                return True
+        return False
+
+    @staticmethod
     def _exception_indicates_rate_limit(exc: BaseException) -> bool:
         """Alias for quota/billing-style failures (used by primary health probe)."""
         return AIAgent._quota_style_api_failure(exc)
@@ -7577,7 +7606,9 @@ class AIAgent:
             except Exception:
                 logger.debug("apply_per_turn_tier_model failed", exc_info=True)
             finally:
-                self._skip_per_turn_tier_routing = False
+                # Keep tier skip aligned with manual ``/models`` defer for the rest of the turn.
+                if not getattr(self, "_defer_opm_primary_coercion", False):
+                    self._skip_per_turn_tier_routing = False
             try:
                 from agent.routing_canon import build_turn_routing_intent
 
@@ -8723,10 +8754,14 @@ class AIAgent:
                         # Eager fallback for rate limits, quota, or billing/credits errors.
                         is_rate_limited = self._quota_style_api_failure(api_error)
                         pool = self._credential_pool
+                        _quota_exhaust = self._opm_account_quota_exhaust_message(
+                            api_error, error_msg
+                        )
                         pool_may_recover = (
                             pool is not None
                             and pool.has_available()
                             and getattr(api_error, "status_code", None) == 429
+                            and not _quota_exhaust
                         )
                         # OPM native ladder (routing_canon): step down api.openai.com models
                         # before cross-provider fallback. Skip OPM suppression for the turn
