@@ -481,6 +481,10 @@ class AIAgent:
         status_callback: callable = None,
         quota_error_detail_should_suppress: callable = None,
         quota_error_detail_mark_shown: callable = None,
+        quota_user_notice_should_suppress: callable = None,
+        quota_ux_episode_completed_callback: callable = None,
+        provider_blacklist_should_suppress: callable = None,
+        provider_blacklist_mark_announced: callable = None,
         max_tokens: int = None,
         reasoning_config: Dict[str, Any] = None,
         prefill_messages: List[Dict[str, Any]] = None,
@@ -685,6 +689,10 @@ class AIAgent:
         self.tool_gen_callback = tool_gen_callback
         self.quota_error_detail_should_suppress = quota_error_detail_should_suppress
         self.quota_error_detail_mark_shown = quota_error_detail_mark_shown
+        self.quota_user_notice_should_suppress = quota_user_notice_should_suppress
+        self.quota_ux_episode_completed_callback = quota_ux_episode_completed_callback
+        self.provider_blacklist_should_suppress = provider_blacklist_should_suppress
+        self.provider_blacklist_mark_announced = provider_blacklist_mark_announced
         self._last_reported_tool = None  # Track for "new tool" mode
         
         # Tool execution state — allows _vprint during tool execution
@@ -1665,7 +1673,23 @@ class AIAgent:
         if self._quota_user_notices_suppressed():
             logger.info("%s(quota user notice suppressed) %s", self.log_prefix, message)
             return
+        if (
+            not self.verbose_logging
+            and callable(getattr(self, "quota_user_notice_should_suppress", None))
+        ):
+            try:
+                if self.quota_user_notice_should_suppress():
+                    logger.info(
+                        "%s(quota user notice suppressed — CLI session repeat) %s",
+                        self.log_prefix,
+                        message,
+                    )
+                    return
+            except Exception:
+                pass
         self._emit_status(message, event_type=event_type)
+        if not self.verbose_logging:
+            self._turn_had_quota_ux_for_cli_latch = True
 
     def _session_note_quota_cascade_exhausted_if_applicable(self) -> None:
         """Mark session so further quota/rate-limit UX is muted (logging still runs).
@@ -7944,6 +7968,8 @@ class AIAgent:
             # Until this turn produces a completion, status UIs should show routing
             # target (self.model), not a stale completion id from the prior turn.
             self._last_api_completion_model = None
+            # CLI latches repeat quota UX after the first user turn that showed any.
+            self._turn_had_quota_ux_for_cli_latch = False
 
             # Sanitize surrogate characters from user input.  Clipboard paste from
             # rich-text editors (Google Docs, Word, etc.) can inject lone surrogates
@@ -9184,6 +9210,7 @@ class AIAgent:
                                         _mark()
                                     except Exception:
                                         logger.debug("quota_error_detail_mark_shown failed", exc_info=True)
+                                self._turn_had_quota_ux_for_cli_latch = True
                         elif is_rate_limited:
                             logger.info(
                                 "%s(quota-class API error detail suppressed) attempt %s/%s %s model=%s — %s",
@@ -9219,10 +9246,36 @@ class AIAgent:
                             _hint = f"HTTP {status_code}" if status_code else str(api_error)[:60]
                             _newly_blacklisted = ph.record_failure(self.provider, _hint)
                             if _newly_blacklisted:
-                                self._emit_status(
-                                    f"⚠️ Provider {self.provider} blacklisted for this session "
-                                    f"({ph.blacklist_reason(self.provider)})",
-                                )
+                                _prov_k = (self.provider or "").strip().lower()
+                                _suppress_bl = False
+                                if _prov_k and callable(
+                                    getattr(self, "provider_blacklist_should_suppress", None)
+                                ):
+                                    try:
+                                        _suppress_bl = bool(
+                                            self.provider_blacklist_should_suppress(_prov_k)
+                                        )
+                                    except Exception:
+                                        _suppress_bl = False
+                                if not _suppress_bl:
+                                    self._emit_status(
+                                        f"⚠️ Provider {self.provider} blacklisted for this session "
+                                        f"({ph.blacklist_reason(self.provider)})",
+                                    )
+                                else:
+                                    logger.info(
+                                        "%s(provider blacklist status suppressed — CLI session) %s",
+                                        self.log_prefix,
+                                        _prov_k,
+                                    )
+                                if callable(getattr(self, "provider_blacklist_mark_announced", None)):
+                                    try:
+                                        self.provider_blacklist_mark_announced(_prov_k)
+                                    except Exception:
+                                        logger.debug(
+                                            "provider_blacklist_mark_announced failed",
+                                            exc_info=True,
+                                        )
         
                         # Eager fallback for rate limits, quota, or billing/credits errors.
                         # (``is_rate_limited`` computed above for this exception)
@@ -10525,6 +10578,17 @@ class AIAgent:
                     )
             except Exception:
                 pass
+            if (
+                not getattr(self, "verbose_logging", False)
+                and getattr(self, "_turn_had_quota_ux_for_cli_latch", False)
+                and callable(getattr(self, "quota_ux_episode_completed_callback", None))
+            ):
+                try:
+                    self.quota_ux_episode_completed_callback()
+                except Exception:
+                    logger.debug(
+                        "quota_ux_episode_completed_callback failed", exc_info=True,
+                    )
             detach_opm_session_agent_for_turn()
 
     def chat(self, message: str, stream_callback: Optional[callable] = None) -> str:

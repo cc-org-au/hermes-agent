@@ -27,3 +27,11 @@ def test_cli_quota_error_detail_resets_when_session_id_changes():
     assert cli._cli_quota_error_detail_session_id == "sess-b"
     assert cli._cli_quota_error_detail_emitted is False
     assert cli._cli_quota_error_detail_should_suppress() is False
+    assert cli._cli_suppress_quota_repeat_notices is False
+    assert cli._cli_blacklist_announced_providers == set()
+
+    cli._cli_quota_ux_episode_completed()
+    assert cli._cli_suppress_quota_repeat_notices is True
+    assert cli._cli_quota_user_notice_should_suppress() is True
+    cli._cli_provider_blacklist_mark_announced("custom")
+    assert cli._cli_provider_blacklist_should_suppress("custom") is True

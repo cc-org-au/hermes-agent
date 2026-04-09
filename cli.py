@@ -1423,6 +1423,9 @@ class HermesCLI:
         # (AIAgent is re-created each message; this state lives on HermesCLI).
         self._cli_quota_error_detail_session_id: Optional[str] = None
         self._cli_quota_error_detail_emitted: bool = False
+        # After one user turn shows any quota UX (vprint +/or ladder notices), hide repeats.
+        self._cli_suppress_quota_repeat_notices: bool = False
+        self._cli_blacklist_announced_providers: set[str] = set()
 
         # Background task tracking: {task_id: threading.Thread}
         self._background_tasks: Dict[str, threading.Thread] = {}
@@ -1437,17 +1440,34 @@ class HermesCLI:
             self._app.invalidate()
 
     def _sync_cli_quota_error_detail_session(self) -> None:
-        """Reset quota error-detail suppression when ``session_id`` changes (/new, /resume)."""
+        """Reset quota/blacklist UX suppression when ``session_id`` changes (/new, /resume)."""
         sid = str(getattr(self, "session_id", "") or "")
         if getattr(self, "_cli_quota_error_detail_session_id", None) != sid:
             self._cli_quota_error_detail_session_id = sid
             self._cli_quota_error_detail_emitted = False
+            self._cli_suppress_quota_repeat_notices = False
+            self._cli_blacklist_announced_providers = set()
 
     def _cli_quota_error_detail_should_suppress(self) -> bool:
         return bool(getattr(self, "_cli_quota_error_detail_emitted", False))
 
     def _cli_quota_error_detail_mark_shown(self) -> None:
         self._cli_quota_error_detail_emitted = True
+
+    def _cli_quota_user_notice_should_suppress(self) -> bool:
+        return bool(getattr(self, "_cli_suppress_quota_repeat_notices", False))
+
+    def _cli_quota_ux_episode_completed(self) -> None:
+        self._cli_suppress_quota_repeat_notices = True
+
+    def _cli_provider_blacklist_should_suppress(self, provider: str) -> bool:
+        k = (provider or "").strip().lower()
+        return k in getattr(self, "_cli_blacklist_announced_providers", set())
+
+    def _cli_provider_blacklist_mark_announced(self, provider: str) -> None:
+        k = (provider or "").strip().lower()
+        if k:
+            self._cli_blacklist_announced_providers.add(k)
 
     def _status_bar_context_style(self, percent_used: Optional[int]) -> str:
         if percent_used is None:
@@ -2751,6 +2771,10 @@ class HermesCLI:
                 tool_gen_callback=self._on_tool_gen_start if self.streaming_enabled else None,
                 quota_error_detail_should_suppress=self._cli_quota_error_detail_should_suppress,
                 quota_error_detail_mark_shown=self._cli_quota_error_detail_mark_shown,
+                quota_user_notice_should_suppress=self._cli_quota_user_notice_should_suppress,
+                quota_ux_episode_completed_callback=self._cli_quota_ux_episode_completed,
+                provider_blacklist_should_suppress=self._cli_provider_blacklist_should_suppress,
+                provider_blacklist_mark_announced=self._cli_provider_blacklist_mark_announced,
             )
             # Store reference for atexit memory provider shutdown
             global _active_agent_ref
@@ -5014,6 +5038,10 @@ class HermesCLI:
                     skip_per_turn_tier_routing=bool(turn_route.get("skip_per_turn_tier_routing")),
                     quota_error_detail_should_suppress=self._cli_quota_error_detail_should_suppress,
                     quota_error_detail_mark_shown=self._cli_quota_error_detail_mark_shown,
+                    quota_user_notice_should_suppress=self._cli_quota_user_notice_should_suppress,
+                    quota_ux_episode_completed_callback=self._cli_quota_ux_episode_completed,
+                    provider_blacklist_should_suppress=self._cli_provider_blacklist_should_suppress,
+                    provider_blacklist_mark_announced=self._cli_provider_blacklist_mark_announced,
                 )
                 # Silence raw spinner; route thinking through TUI widget when no foreground agent is active.
                 bg_agent._print_fn = lambda *_a, **_kw: None
@@ -5155,6 +5183,12 @@ class HermesCLI:
                     persist_session=False,
                     router_session_override=getattr(self, "_session_router_override", None),
                     skip_per_turn_tier_routing=bool(turn_route.get("skip_per_turn_tier_routing")),
+                    quota_error_detail_should_suppress=self._cli_quota_error_detail_should_suppress,
+                    quota_error_detail_mark_shown=self._cli_quota_error_detail_mark_shown,
+                    quota_user_notice_should_suppress=self._cli_quota_user_notice_should_suppress,
+                    quota_ux_episode_completed_callback=self._cli_quota_ux_episode_completed,
+                    provider_blacklist_should_suppress=self._cli_provider_blacklist_should_suppress,
+                    provider_blacklist_mark_announced=self._cli_provider_blacklist_mark_announced,
                 )
 
                 btw_prompt = (
