@@ -771,6 +771,14 @@ OPTIONAL_ENV_VARS = {
         "category": "setting",
         "advanced": True,
     },
+    "HERMES_TURN_DONE_NOTIFY_TIMEOUT": {
+        "description": "Seconds for the HTTP GET in agent/turn_done_notify.py (default 8). Increase on slow Tailscale paths.",
+        "prompt": "Turn-done notify HTTP timeout seconds (optional)",
+        "url": None,
+        "password": False,
+        "category": "setting",
+        "advanced": True,
+    },
     # ── Local inference (vLLM / llama.cpp / Ollama OpenAI-compatible server) ──
     "HERMES_LOCAL_INFERENCE_BASE_URL": {
         "description": "Base URL for a local OpenAI-compatible inference server (vLLM, llama.cpp, Ollama). "

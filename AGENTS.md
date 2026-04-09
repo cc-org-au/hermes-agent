@@ -403,7 +403,13 @@ in config.yaml (or `HERMES_BACKGROUND_NOTIFICATIONS` env var):
 
 ### Turn-done notify (Mac sound over Tailscale)
 
-Optional: when **`HERMES_TURN_DONE_NOTIFY_URL`** is set on the **runtime that finishes the turn** (e.g. droplet `~/.hermes/.env`), Hermes issues a fire-and-forget HTTP GET at the end of each **root** `run_conversation` (not delegate subagents). Point it at a tiny listener on your Mac — **outbound-only from the VPS**, no open ports on the server. Typical setup: **`tailscale ip -4`** on the Mac, run **`scripts/macos/hermes_turn_chime_server.py --bind 0.0.0.0 --port 8765`** (or bind the Tailscale IP only), **from Terminal.app / launchd** if an IDE-embedded shell blocks inbound tailnet connections, then set **`HERMES_TURN_DONE_NOTIFY_URL=http://<mac-tailscale-ip>:8765/`** on the VPS. Default sound is **`Funk`** (`/System/Library/Sounds/Funk.aiff`); override with **`--sound`** or **`HERMES_TURN_DONE_SOUND`**.
+Optional: when **`HERMES_TURN_DONE_NOTIFY_URL`** is set on the **runtime that finishes the turn** (e.g. droplet `~/.hermes/.env`), Hermes issues a fire-and-forget HTTP GET at the end of each **root** `run_conversation` (not delegate subagents). Point it at a tiny listener on your Mac — **outbound-only from the VPS**, no open ports on the server.
+
+**Direct Tailscale (Mac must accept inbound on the tailnet):** **`tailscale ip -4`** on the Mac, run **`scripts/macos/hermes_turn_chime_server.py --bind 0.0.0.0 --port 8765`** in **Terminal.app** or **launchd** (IDE-only listeners often block non-localhost inbound). On the VPS: **`HERMES_TURN_DONE_NOTIFY_URL=http://<mac-tailscale-ip>:8765/`**. Verify from the VPS: **`curl -sS -o /dev/null -w '%{http_code}\n' http://<mac-tailscale-ip>:8765/`** → **`204`**. If that **times out**, the Mac is not listening or the path is blocked — use the tunnel below.
+
+**SSH reverse tunnel (works when the VPS cannot open TCP to the Mac):** On the Mac, start the chime server on **`127.0.0.1:8765`**, then run **`scripts/macos/hermes_turn_chime_reverse_tunnel.sh user@vps`** (or `ssh -N -R 8765:127.0.0.1:8765 user@vps`). Keep that **`ssh` session** open (or use **autossh** / **launchd**). On the VPS set **`HERMES_TURN_DONE_NOTIFY_URL=http://127.0.0.1:8765/`** and **`gateway restart`**. The VPS then talks to **itself**; SSH carries the request to the Mac.
+
+Default sound is **`Funk`** (`/System/Library/Sounds/Funk.aiff`); override with **`--sound`** or **`HERMES_TURN_DONE_SOUND`**. Optional **`HERMES_TURN_DONE_NOTIFY_TIMEOUT`** (default **8** seconds) adjusts the HTTP client timeout. Failures log at **WARNING** on the gateway (`turn_done_notify failed`).
 
 ### Gateway watchdog (production uptime)
 

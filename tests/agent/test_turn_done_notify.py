@@ -58,6 +58,9 @@ def test_notify_skips_interrupted():
 
 def test_notify_skips_empty_url():
     agent = type("A", (), {"_delegate_depth": 0})()
-    with patch.dict("os.environ", {"HERMES_TURN_DONE_NOTIFY_URL": ""}):
+    with patch.dict("os.environ", {"HERMES_TURN_DONE_NOTIFY_URL": ""}), patch(
+        "agent.turn_done_notify._merge_hermes_env_files",
+        return_value={},
+    ):
         maybe_notify_turn_done(agent=agent, final_response="ok", interrupted=False)
     # no crash
