@@ -5,6 +5,30 @@ from __future__ import annotations
 import re
 from typing import Optional, Tuple
 
+# Slack wraps people/bots as ``<@U123>`` or ``<@U123|name>``; usergroups / broadcast as ``<!…>``.
+_SLACK_LEADING_TOKEN = re.compile(
+    r"^(?:<@[^>]+>|<![^>]+>)\s*",
+    re.IGNORECASE,
+)
+
+
+def strip_slack_leading_mentions_for_profile_parse(text: str) -> str:
+    """Remove leading Slack mention tokens so ``@profile-slug`` can appear first for parsing.
+
+    The Slack adapter strips the *bot* mention in channels, but messages may still
+    begin with another ``<@U…>`` (e.g. a human ping) before ``@security-director``.
+    """
+    if not text or not isinstance(text, str):
+        return text
+    s = text.lstrip()
+    while True:
+        m = _SLACK_LEADING_TOKEN.match(s)
+        if not m:
+            break
+        s = s[m.end() :].lstrip()
+    return s
+
+
 # Hermes @ context refs — do not treat as profile names.
 _RESERVED_AT_PREFIXES = (
     "file:",

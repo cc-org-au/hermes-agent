@@ -1,6 +1,9 @@
 """Tests for leading @profile mention parsing."""
 
-from gateway.profile_mention import parse_leading_profile_mention
+from gateway.profile_mention import (
+    parse_leading_profile_mention,
+    strip_slack_leading_mentions_for_profile_parse,
+)
 
 
 def test_parse_leading_profile_basic():
@@ -44,3 +47,27 @@ def test_parse_slug_only():
     rest, slug = parse_leading_profile_mention("@coder")
     assert slug == "coder"
     assert rest == ""
+
+
+def test_slack_strip_then_profile():
+    raw = "<@U01ABC|alice> @security-director check this"
+    stripped = strip_slack_leading_mentions_for_profile_parse(raw)
+    rest, slug = parse_leading_profile_mention(stripped)
+    assert slug == "security-director"
+    assert rest == "check this"
+
+
+def test_slack_strip_bot_style_display_name():
+    raw = "<@U02BOT|hermes> @coder ping"
+    stripped = strip_slack_leading_mentions_for_profile_parse(raw)
+    rest, slug = parse_leading_profile_mention(stripped)
+    assert slug == "coder"
+    assert rest == "ping"
+
+
+def test_slack_strip_broadcast_then_profile():
+    raw = "<!here> @coder hello"
+    stripped = strip_slack_leading_mentions_for_profile_parse(raw)
+    rest, slug = parse_leading_profile_mention(stripped)
+    assert slug == "coder"
+    assert rest == "hello"

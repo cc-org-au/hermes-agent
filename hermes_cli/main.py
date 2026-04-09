@@ -4406,6 +4406,10 @@ For more help on a command:
         action="store_true",
         help="Required acknowledgement — overwrites Slack app configuration",
     )
+    slack_sub.add_parser(
+        "operator-guide",
+        help="Print Slack setup: manifest/xoxe, slash commands, reinstall, @profile rules",
+    )
     slack_parser.set_defaults(func=cmd_slack)
 
     # =========================================================================

@@ -491,6 +491,42 @@ def slack_join_public_channels(*, dry_run: bool = False) -> None:
         sys.exit(1)
 
 
+def slack_operator_guide() -> None:
+    """Print how Slack slash commands and @profile interact with Hermes."""
+    from hermes_cli.commands import slack_bolt_slash_command_paths
+
+    n_short = len(slack_bolt_slash_command_paths())
+    print("Hermes + Slack — slash commands and @profile\n")
+    print("SLASH COMMANDS\n")
+    print(
+        "Slack only delivers slash invocations that exist on your Slack app. "
+        "Hermes registers a Bolt listener for /hermes and every /hermes-<subcommand> "
+        f"({n_short} registry shortcuts), but Slack's app manifest must list each command too."
+    )
+    print("\nIf /hermes-help (etc.) does nothing or never appears in the composer:\n")
+    print("  1. Create SLACK_CONFIG_TOKEN (xoxe) at api.slack.com/apps → App configuration tokens")
+    print("  2. export SLACK_CONFIG_TOKEN='xoxe-…'")
+    print("  3. hermes slack manifest-validate --app-id YOUR_APP_ID")
+    print("  4. hermes slack manifest-update --confirm --app-id YOUR_APP_ID")
+    print(
+        "  5. In the Slack app site: reinstall the app to the workspace "
+        "(OAuth & Permissions — this refreshes scopes and slash commands)."
+    )
+    print("  6. Copy the new Bot User OAuth Token (xoxb) and App-Level Token (xapp) into")
+    print(f"     {display_hermes_home()}/.env — then restart the gateway.\n")
+    print("WORKAROUND (only needs one slash command in Slack):\n")
+    print("  Type:  /hermes <subcommand> <args>")
+    print("  Example:  /hermes help     /hermes compact")
+    print("  (Same behavior as /hermes-help when the shortcut is registered.)\n")
+    print("@PROFILE (one-turn Hermes profile override)\n")
+    print("  • Profiles are directories: ~/.hermes/profiles/<slug>/")
+    print("    Create:  hermes profile create <slug>")
+    print("  • In a channel: @mention the bot, then @<slug>, then your message, e.g.:")
+    print("      @YourBot @security-director Audit this Dockerfile")
+    print("  • In a DM with the bot: start with @<slug> then the message (no bot @ needed).")
+    print("  • Slug: lowercase letters, digits, hyphens, underscores; not @file: / @folder: / @diff.\n")
+
+
 def slack_command(args) -> None:
     """Dispatch `hermes slack …` subcommands."""
     sub = getattr(args, "slack_command", None) or ""
@@ -518,6 +554,8 @@ def slack_command(args) -> None:
             )
             sys.exit(1)
         slack_manifest_update(app_id=getattr(args, "app_id", "") or "")
+    elif sub == "operator-guide":
+        slack_operator_guide()
     else:
         print(f"Unknown slack subcommand: {sub!r}", file=sys.stderr)
         sys.exit(1)

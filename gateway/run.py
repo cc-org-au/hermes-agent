@@ -2650,10 +2650,18 @@ class GatewayRunner:
         # -----------------------------------------------------------------
         message_text = normalize_line_endings(event.text or "")
         try:
-            from gateway.profile_mention import parse_leading_profile_mention
+            from gateway.profile_mention import (
+                parse_leading_profile_mention,
+                strip_slack_leading_mentions_for_profile_parse,
+            )
             from hermes_cli.profiles import resolve_profile_home_for_gateway
 
-            _mt2, _pf_slug = parse_leading_profile_mention(message_text)
+            _mt_for_profile = message_text
+            if source.platform == Platform.SLACK:
+                _mt_for_profile = strip_slack_leading_mentions_for_profile_parse(
+                    _mt_for_profile
+                )
+            _mt2, _pf_slug = parse_leading_profile_mention(_mt_for_profile)
             if _pf_slug:
                 if not resolve_profile_home_for_gateway(_pf_slug):
                     _bad_ad = self.adapters.get(source.platform)
