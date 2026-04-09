@@ -97,5 +97,6 @@ hard_budget:
   # When true: reaching the daily cap does NOT auto-switch to fallback; all LLM calls stop
   # until the operator answers clarify_callback once per session (approve/deny). Deny blocks
   # paid calls for the session; /new or reset_session_state clears the decision. Without
-  # clarify_callback, calls stay blocked while exhausted (e.g. gateway — keep false there).
-  operator_approval_when_daily_cap_exceeded: false
+  # clarify_callback, calls stay blocked while exhausted. Gateway-only profiles: set false in
+  # ${HERMES_HOME}/routing_canon.yaml if you need auto-fallback when cap is hit without a TUI.
+  operator_approval_when_daily_cap_exceeded: true
