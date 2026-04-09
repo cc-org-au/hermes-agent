@@ -2046,6 +2046,9 @@ class GatewayRunner:
         if canonical == "profile":
             return await self._handle_profile_command(event)
 
+        if canonical == "profile-use":
+            return await self._handle_profile_use_command(event)
+
         if canonical == "status":
             return await self._handle_status_command(event)
         
@@ -3241,6 +3244,10 @@ class GatewayRunner:
         """Gateway /models — text menu (list + /models <n>) and clear; full curses submenus stay CLI-only."""
         session_key = self._session_key_for_source(event.source)
         rest = event.get_command_args().strip()
+        # Messaging: bare `/models` (or `/hermes-models` on Slack) → same as `list`. CLI opens interactive UI.
+        _plat = getattr(getattr(event, "source", None), "platform", None)
+        if not rest and _plat not in (None, Platform.LOCAL):
+            rest = "list"
 
         if rest.lower() in ("clear", "none", "reset"):
             _sl = getattr(self, "_gateway_models_sticky_lock", None)
@@ -3274,6 +3281,11 @@ class GatewayRunner:
                 f"/models — pick by number: `/models <n>` (1–{len(entries)}).",
                 "",
             ]
+            if _plat == Platform.SLACK:
+                lines.insert(
+                    0,
+                    "**Slack:** use `/hermes-models <n>` to pick (same numbers). `/hermes-models` alone shows this list.\n",
+                )
             for i, e in enumerate(entries, start=1):
                 if e.get("kind") == "action":
                     lines.append(f"{i}. {e.get('label')}")
@@ -3308,14 +3320,43 @@ class GatewayRunner:
                 f"Using `{picked['model']}` ({picked['source']}) in this chat until `/models clear`."
             )
 
-        return (
-            "Usage:\n"
-            "• `/models list` — show numbered menu\n"
-            "• `/models <n>` — select line n\n"
-            "• `/models clear` — default routing\n"
-            "Full OpenRouter browse / session-router pickers: `hermes chat`."
+        _slack = _plat == Platform.SLACK
+        _lines = [
+            "Usage:",
+            "• `/models list` — show numbered menu",
+            "• `/models <n>` — select line n",
+            "• `/models clear` — default routing",
+            "Full OpenRouter browse / session-router pickers: `hermes chat`.",
+        ]
+        if _slack:
+            _lines.insert(
+                1,
+                "**Slack:** registered slash commands use the `/hermes-…` prefix "
+                "(e.g. `/hermes-models list`, `/hermes-profile-use`). Plain `/models` is not a Hermes command.",
+            )
+        return "\n".join(_lines)
+
+    async def _handle_profile_use_command(self, event: MessageEvent) -> str:
+        """Map `/profile-use` / `/profile-switch` to `/profile menu` or `/profile use …` (CLI parity)."""
+        args = event.get_command_args().strip()
+        if not args:
+            new_text = "/profile menu"
+        else:
+            new_text = f"/profile use {args}"
+        from gateway.platforms.base import MessageEvent as _ME
+
+        ev2 = _ME(
+            text=new_text,
+            message_type=event.message_type,
+            source=event.source,
+            message_id=event.message_id,
+            raw_message=getattr(event, "raw_message", None),
         )
-    
+        slug = getattr(event, "hermes_profile_slug", None)
+        if slug is not None:
+            setattr(ev2, "hermes_profile_slug", slug)
+        return await self._handle_profile_command(ev2)
+
     async def _handle_profile_command(self, event: MessageEvent) -> str:
         """Handle /profile — show active profile, optional list / use (sticky)."""
         from hermes_constants import get_hermes_home, display_hermes_home
@@ -3368,10 +3409,11 @@ class GatewayRunner:
                     "`@<slug>` and your message. In a DM with this bot, start with `@<slug> ` "
                     "(letters, digits, `-`, `_`; not `@file:` / `@folder:` / `@diff`).",
                     "",
-                    "**Model / pipeline pick (not a Slack user):** `/models list` then `/models <n>` "
-                    "for this conversation.",
+                    "**Model / pipeline pick:** `/models list` then `/models <n>` for this conversation. "
+                    "**Slack:** `/hermes-models list` and `/hermes-models <n>` (Hermes slash commands use the `/hermes-` prefix).",
                     "",
-                    "**Sticky profile switch:** `/profile use <slug>` then restart the gateway.",
+                    "**Sticky profile switch:** `/profile use <slug>` then restart the gateway. "
+                    "**Slack:** `/hermes-profile-use <slug>` or `/hermes-profile-switch` (or `/hermes` with `profile use …` in the box).",
                     "",
                     "Shorthand: `/profile list` — full table.",
                 ]

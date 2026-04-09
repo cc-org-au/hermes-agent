@@ -80,7 +80,7 @@ COMMAND_REGISTRY: list[CommandDef] = [
         "profile-use",
         "Set sticky profile or open picker: /profile-use [<name>] (omit name = menu)",
         "Configuration",
-        cli_only=True,
+        cli_only=False,
         args_hint="[<name>]",
         aliases=("profile-switch",),
     ),

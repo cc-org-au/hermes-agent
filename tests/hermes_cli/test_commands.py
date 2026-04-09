@@ -221,6 +221,11 @@ class TestSlackSubcommandMap:
         assert "bg" in mapping
         assert "reset" in mapping
 
+    def test_includes_profile_use_for_gateway(self):
+        mapping = slack_subcommand_map()
+        assert "profile-use" in mapping
+        assert "profile-switch" in mapping
+
     def test_excludes_cli_only_without_config_gate(self):
         mapping = slack_subcommand_map()
         for cmd in COMMAND_REGISTRY:

@@ -390,15 +390,30 @@ class SlackAdapter(BasePlatformAdapter):
             _hermes_slash = re.compile(r"^/hermes(?:$|-(.+))$", re.IGNORECASE)
 
             async def _hermes_slash_router(ack, command):
-                cmd_dict = dict(command) if isinstance(command, dict) else {}
-                cmd_raw = (cmd_dict.get("command") or "").strip()
-                cmd_norm = cmd_raw if cmd_raw.startswith("/") else f"/{cmd_raw}" if cmd_raw else ""
-                m = _hermes_slash.match(cmd_norm.lower())
-                if m and m.group(1):
-                    suffix = m.group(1).strip()
-                    rest = (cmd_dict.get("text") or "").strip()
-                    cmd_dict["text"] = f"{suffix} {rest}".strip() if rest else suffix
-                await ack()
+                cmd_dict: Dict[str, Any] = {}
+                try:
+                    cmd_dict = dict(command) if isinstance(command, dict) else {}
+                    cmd_raw = (cmd_dict.get("command") or "").strip()
+                    cmd_norm = cmd_raw if cmd_raw.startswith("/") else f"/{cmd_raw}" if cmd_raw else ""
+                    m = _hermes_slash.match(cmd_norm.lower())
+                    if m and m.group(1):
+                        suffix = m.group(1).strip()
+                        rest = (cmd_dict.get("text") or "").strip()
+                        cmd_dict["text"] = f"{suffix} {rest}".strip() if rest else suffix
+                except Exception:
+                    logger.exception("[Slack] Slash preprocess failed; acking anyway")
+                    cmd_dict = {
+                        "command": "/hermes",
+                        "text": "",
+                        "user_id": "",
+                        "channel_id": "",
+                        "team_id": "",
+                    }
+                try:
+                    await ack()
+                except Exception:
+                    logger.exception("[Slack] Slash ack() failed")
+                    return
 
                 async def _slash_followup() -> None:
                     try:
