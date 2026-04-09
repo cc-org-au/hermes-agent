@@ -1155,6 +1155,11 @@ class AIAgent:
             timestamp_str = self.session_start.strftime("%Y%m%d_%H%M%S")
             short_uuid = uuid.uuid4().hex[:6]
             self.session_id = f"{timestamp_str}_{short_uuid}"
+
+        # Session-scoped UX: after the first full OPM quota cascade exhaustion, mute
+        # repeated quota/rate-limit user notices until ``session_id`` changes (e.g. /new).
+        self._quota_notice_session_id: Optional[str] = None
+        self._session_suppress_quota_user_notices = False
         
         # Session logs go into ~/.hermes/sessions/ alongside gateway sessions
         hermes_home = get_hermes_home()
@@ -1631,6 +1636,40 @@ class AIAgent:
                 self.status_callback(event_type or "lifecycle", message)
             except Exception:
                 logger.debug("status_callback error in _emit_status", exc_info=True)
+
+    def _quota_user_notices_suppressed(self) -> bool:
+        return bool(getattr(self, "_session_suppress_quota_user_notices", False))
+
+    def _emit_quota_user_notice(self, message: str, event_type: str = "lifecycle") -> None:
+        """Like ``_emit_status`` but skipped after quota cascade exhaustion for this session."""
+        if self._quota_user_notices_suppressed():
+            logger.info("%s(quota user notice suppressed) %s", self.log_prefix, message)
+            return
+        self._emit_status(message, event_type=event_type)
+
+    def _session_note_quota_cascade_exhausted_if_applicable(self) -> None:
+        """Mark session so further quota/rate-limit UX is muted (logging still runs)."""
+        try:
+            from agent.opm_cross_provider_failover import load_opm_cross_provider_quota_failover_config
+
+            xcfg = load_opm_cross_provider_quota_failover_config() or {}
+        except Exception:
+            xcfg = {}
+        phase = getattr(self, "_opm_qf_phase", None)
+        cross_on = bool(xcfg.get("enabled"))
+        if phase == "or_done":
+            self._session_suppress_quota_user_notices = True
+            return
+        if not cross_on:
+            self._session_suppress_quota_user_notices = True
+            return
+        if phase is None:
+            # Cross-provider cascade not entered (e.g. ``should_run`` false) — native-only path exhausted.
+            self._session_suppress_quota_user_notices = True
+            return
+        if phase == "native":
+            # Returned without a hop (e.g. OR begin failed before phase advanced) — no more cascade steps.
+            self._session_suppress_quota_user_notices = True
 
     def _is_direct_openai_url(self, base_url: str = None) -> bool:
         """Return True when a base URL targets OpenAI's native API."""
@@ -5591,15 +5630,19 @@ class AIAgent:
 
             _or_last = fb.get("openrouter_last_resort", False)
             if _or_last:
-                self._emit_status(
+                _fb_msg = (
                     f"⚠️ All free/direct API sources exhausted — "
                     f"last resort: {fb_model} via OpenRouter (paid)"
                 )
             else:
-                self._emit_status(
+                _fb_msg = (
                     f"🔄 Primary model failed — switching to fallback: "
                     f"{fb_model} via {fb_provider}"
                 )
+            if triggered_by_rate_limit:
+                self._emit_quota_user_notice(_fb_msg)
+            else:
+                self._emit_status(_fb_msg)
             logging.info(
                 "Fallback activated: %s → %s (%s)%s",
                 old_model, fb_model, fb_provider,
@@ -5682,7 +5725,7 @@ class AIAgent:
                 except Exception:
                     logger.debug("opm native ladder: compressor update failed", exc_info=True)
             self._opm_reconcile_primary_if_disallowed()
-            self._emit_status(
+            self._emit_quota_user_notice(
                 f"⚠️ Rate/quota on {old_model} — trying next OPM native model: {nxt}",
             )
             _om = getattr(self, "_last_opm_meta", None) or {}
@@ -5771,7 +5814,7 @@ class AIAgent:
                     )
                 except Exception:
                     logger.debug("opm openrouter hop: compressor update failed", exc_info=True)
-            self._emit_status(
+            self._emit_quota_user_notice(
                 f"⚠️ Quota / rate limit — trying OpenRouter model: {mid} …",
             )
             _om = getattr(self, "_last_opm_meta", None) or {}
@@ -5974,7 +6017,7 @@ class AIAgent:
                 if pm in ("chat_completions", "anthropic_messages"):
                     if not self._probe_primary_healthy():
                         if getattr(self, "_last_primary_probe_rate_limited", False):
-                            self._emit_status(
+                            self._emit_quota_user_notice(
                                 "🔁 Primary still rate-limited — staying on fallback model",
                                 "fallback",
                             )
@@ -7807,6 +7850,12 @@ class AIAgent:
             self._opm_suppressed_for_turn = False
             self._opm_qf_phase = None
             self._opm_qf_or_idx = 0
+            # Reset quota UX suppression when the logical session changes (/new, /resume).
+            _q_sid = str(getattr(self, "session_id", "") or "")
+            _prev_q = getattr(self, "_quota_notice_session_id", None)
+            if _prev_q is not None and _prev_q != _q_sid:
+                self._session_suppress_quota_user_notices = False
+            self._quota_notice_session_id = _q_sid
             self._turn_bar_start_usd = float(self.session_estimated_cost_usd or 0.0)
             # If the previous turn activated fallback, restore the primary
             # runtime so this turn gets a fresh attempt with the preferred model.
@@ -8986,6 +9035,7 @@ class AIAgent:
         
                         error_type = type(api_error).__name__
                         error_msg = str(api_error).lower()
+                        is_rate_limited = self._quota_style_api_failure(api_error)
                         _error_summary = self._summarize_api_error(api_error)
                         logger.warning(
                             "API call failed (attempt %s/%s) error_type=%s %s summary=%s",
@@ -9000,16 +9050,20 @@ class AIAgent:
                         _base = getattr(self, "base_url", "unknown")
                         _model = getattr(self, "model", "unknown")
                         _status_code_str = f" [HTTP {status_code}]" if status_code else ""
-                        self._vprint(f"{self.log_prefix}⚠️  API call failed (attempt {retry_count}/{max_retries}): {error_type}{_status_code_str}", force=True)
-                        self._vprint(f"{self.log_prefix}   🔌 Provider: {_provider}  Model: {_model}", force=True)
-                        self._vprint(f"{self.log_prefix}   🌐 Endpoint: {_base}", force=True)
-                        self._vprint(f"{self.log_prefix}   📝 Error: {_error_summary}", force=True)
-                        if status_code and status_code < 500:
-                            _err_body = getattr(api_error, "body", None)
-                            _err_body_str = str(_err_body)[:300] if _err_body else None
-                            if _err_body_str:
-                                self._vprint(f"{self.log_prefix}   📋 Details: {_err_body_str}", force=True)
-                        self._vprint(f"{self.log_prefix}   ⏱️  Elapsed: {elapsed_time:.2f}s  Context: {len(api_messages)} msgs, ~{approx_tokens:,} tokens")
+                        _suppress_quota_cli_detail = (
+                            is_rate_limited and self._quota_user_notices_suppressed()
+                        )
+                        if not _suppress_quota_cli_detail:
+                            self._vprint(f"{self.log_prefix}⚠️  API call failed (attempt {retry_count}/{max_retries}): {error_type}{_status_code_str}", force=True)
+                            self._vprint(f"{self.log_prefix}   🔌 Provider: {_provider}  Model: {_model}", force=True)
+                            self._vprint(f"{self.log_prefix}   🌐 Endpoint: {_base}", force=True)
+                            self._vprint(f"{self.log_prefix}   📝 Error: {_error_summary}", force=True)
+                            if status_code and status_code < 500:
+                                _err_body = getattr(api_error, "body", None)
+                                _err_body_str = str(_err_body)[:300] if _err_body else None
+                                if _err_body_str:
+                                    self._vprint(f"{self.log_prefix}   📋 Details: {_err_body_str}", force=True)
+                            self._vprint(f"{self.log_prefix}   ⏱️  Elapsed: {elapsed_time:.2f}s  Context: {len(api_messages)} msgs, ~{approx_tokens:,} tokens")
         
                         # Check for interrupt before deciding to retry
                         if self._interrupt_requested:
@@ -9041,7 +9095,7 @@ class AIAgent:
                                 )
         
                         # Eager fallback for rate limits, quota, or billing/credits errors.
-                        is_rate_limited = self._quota_style_api_failure(api_error)
+                        # (``is_rate_limited`` computed above for this exception)
                         pool = self._credential_pool
                         _quota_exhaust = self._opm_account_quota_exhaust_message(
                             api_error, error_msg
@@ -9076,12 +9130,16 @@ class AIAgent:
                             # — another pooled key will not help, but ``only_rate_limit``
                             # fallback (e.g. direct Gemini) must run.
                             if not pool_may_recover:
-                                self._emit_status(
+                                self._emit_quota_user_notice(
                                     "⚠️ Quota, billing, or rate limit — switching to fallback provider...",
                                 )
                                 if self._try_activate_fallback(triggered_by_rate_limit=True):
                                     retry_count = 0
+                                    self._session_note_quota_cascade_exhausted_if_applicable()
                                     continue
+                                self._session_note_quota_cascade_exhausted_if_applicable()
+                        elif is_rate_limited and not pool_may_recover and not ladder_stepped:
+                            self._session_note_quota_cascade_exhausted_if_applicable()
         
                         is_payload_too_large = (
                             status_code == 413
@@ -9273,9 +9331,17 @@ class AIAgent:
                                 ):
                                     retry_count = 0
                                     continue
+                                self._session_note_quota_cascade_exhausted_if_applicable()
                             # Try fallback before aborting — a different provider
                             # may not have the same issue (rate limit, auth, etc.)
-                            self._emit_status(f"⚠️ Non-retryable error (HTTP {status_code}) — trying fallback...")
+                            if is_rate_limited:
+                                self._emit_quota_user_notice(
+                                    f"⚠️ Non-retryable error (HTTP {status_code}) — trying fallback...",
+                                )
+                            else:
+                                self._emit_status(
+                                    f"⚠️ Non-retryable error (HTTP {status_code}) — trying fallback...",
+                                )
                             if self._try_activate_fallback(
                                 triggered_by_rate_limit=is_rate_limited
                                 or self._error_bypasses_fallback_only_rate_limit(api_error, error_msg),
@@ -9338,8 +9404,16 @@ class AIAgent:
                                 ):
                                     retry_count = 0
                                     continue
+                                self._session_note_quota_cascade_exhausted_if_applicable()
                             # Try fallback before giving up entirely
-                            self._emit_status(f"⚠️ Max retries ({max_retries}) exhausted — trying fallback...")
+                            if is_rate_limited:
+                                self._emit_quota_user_notice(
+                                    f"⚠️ Max retries ({max_retries}) exhausted — trying fallback...",
+                                )
+                            else:
+                                self._emit_status(
+                                    f"⚠️ Max retries ({max_retries}) exhausted — trying fallback...",
+                                )
                             if self._try_activate_fallback(
                                 triggered_by_rate_limit=is_rate_limited
                                 or self._error_bypasses_fallback_only_rate_limit(api_error, error_msg),
@@ -9348,7 +9422,11 @@ class AIAgent:
                                 continue
                             _final_summary = self._summarize_api_error(api_error)
                             if is_rate_limited:
-                                self._vprint(f"{self.log_prefix}❌ Rate limit persisted after {max_retries} retries. Please try again later.", force=True)
+                                if not self._quota_user_notices_suppressed():
+                                    self._vprint(
+                                        f"{self.log_prefix}❌ Rate limit persisted after {max_retries} retries. Please try again later.",
+                                        force=True,
+                                    )
                             else:
                                 self._vprint(f"{self.log_prefix}❌ Max retries ({max_retries}) exceeded. Giving up.", force=True)
                             self._vprint(f"{self.log_prefix}   💀 Final error: {_final_summary}", force=True)
@@ -9423,7 +9501,10 @@ class AIAgent:
                                         pass
                         wait_time = _retry_after if _retry_after else min(2 ** retry_count, 60)
                         if is_rate_limited:
-                            self._emit_status(f"⏱️ Rate limit reached. Waiting {wait_time}s before retry (attempt {retry_count + 1}/{max_retries})...")
+                            self._emit_quota_user_notice(
+                                f"⏱️ Rate limit reached. Waiting {wait_time}s before retry "
+                                f"(attempt {retry_count + 1}/{max_retries})...",
+                            )
                         else:
                             self._emit_status(f"⏳ Retrying in {wait_time}s (attempt {retry_count}/{max_retries})...")
                         logger.warning(
