@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Shim: run Hermes CLI from this checkout's venv (avoids stale venv/bin/hermes shebang after moves).
+# Trailing-argument "droplet" VPS hop is handled inside hermes_cli.main (exec agent-droplet).
+#
+# Prefer HERMES_REAL_BIN (e.g. from direnv .envrc) when set.
+set -euo pipefail
+_HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_REPO="$(cd "${_HERE}/../.." && pwd)"
+_PY="${HERMES_REAL_BIN:-}"
+if [[ -z "${_PY}" ]]; then
+  if [[ -x "${_REPO}/venv/bin/python" ]]; then
+    _PY="${_REPO}/venv/bin/python"
+  else
+    _PY="$(command -v python3)"
+  fi
+fi
+cd "${_REPO}"
+exec "${_PY}" -m hermes_cli.main "$@"

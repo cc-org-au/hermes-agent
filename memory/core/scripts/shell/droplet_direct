@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# SSH as hermesuser@host directly (no admin hop). Requires pubkey in hermesuser authorized_keys.
+set -euo pipefail
+_REPO="$(cd "$(dirname "$0")/../.." && pwd)"
+export HERMES_AGENT_REPO="${HERMES_AGENT_REPO:-${_REPO}}"
+_SH="${HERMES_AGENT_REPO}/scripts/core/ssh_droplet_hermesuser_direct.sh"
+export HERMES_DROPLET_INTERACTIVE="${HERMES_DROPLET_INTERACTIVE:-1}"
+exec bash "$_SH" "$@"

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Bare "droplet" on PATH: SSH to VPS as hermesuser (admin + sudo — see ssh_droplet_user.sh).
+# With arguments: run that command remotely as hermesuser (one bash -lc on server).
+# For Hermes CLI remote runs use: hermes <subcommand> … droplet  (trailing droplet).
+set -euo pipefail
+_REPO="$(cd "$(dirname "$0")/../.." && pwd)"
+export HERMES_AGENT_REPO="${HERMES_AGENT_REPO:-${_REPO}}"
+_SH="${HERMES_AGENT_REPO}/scripts/core/ssh_droplet_user.sh"
+export HERMES_DROPLET_INTERACTIVE="${HERMES_DROPLET_INTERACTIVE:-1}"
+exec bash "$_SH" "$@"
