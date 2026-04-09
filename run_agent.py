@@ -1177,6 +1177,10 @@ class AIAgent:
         # repeated quota/rate-limit user notices until ``session_id`` changes (e.g. /new).
         self._quota_notice_session_id: Optional[str] = None
         self._session_suppress_quota_user_notices = False
+        # After native api.openai.com quota ladder / cascade has failed once this session,
+        # skip re-walking every rung on each new turn (tier still restores primary; first
+        # quota error jumps to OpenRouter / fallback faster).
+        self._session_skip_opm_native_quota_ladder: bool = False
         # Provider-reported model from the last successful completion (OpenRouter etc.
         # often resolve openrouter/auto or hub slugs to a concrete upstream id).
         self._last_api_completion_model: Optional[str] = None
@@ -1577,6 +1581,7 @@ class AIAgent:
         self._hard_budget_operator_decision = None
         self._hard_budget_daily_cap_notice_emitted = False
         self._session_suppress_quota_user_notices = False
+        self._session_skip_opm_native_quota_ladder = False
         self._last_api_completion_model = None
 
         # Context compressor internal counters (if present)
@@ -1701,6 +1706,7 @@ class AIAgent:
         UX repeated on every retry.
         """
         self._session_suppress_quota_user_notices = True
+        self._session_skip_opm_native_quota_ladder = True
 
     def _record_completion_model_for_status(self, response: Any) -> None:
         """Remember provider-reported model from a successful completion for status UIs.
@@ -5790,6 +5796,13 @@ class AIAgent:
             )
             if not eligible:
                 return False
+            if getattr(self, "_session_skip_opm_native_quota_ladder", False):
+                logging.info(
+                    "%ssession fast-path: skip OPM native quota ladder (already exhausted earlier "
+                    "this session) — use OpenRouter / fallback on this error path",
+                    self.log_prefix,
+                )
+                return False
             nxt = next_quota_downgrade_model(
                 current_model=self.model or "",
                 api_mode=str(getattr(self, "api_mode", "") or ""),
@@ -5937,6 +5950,8 @@ class AIAgent:
                 mid,
                 reason,
             )
+            # Next user message can skip re-walking native api.openai.com rungs for quota.
+            self._session_skip_opm_native_quota_ladder = True
             return True
         except Exception:
             logger.debug("_apply_opm_openrouter_quota_runtime failed", exc_info=True)
@@ -6002,15 +6017,17 @@ class AIAgent:
 
         if not self._is_direct_openai_url():
             return self._try_opm_openrouter_from_non_native_openrouter(xcfg)
-        ncfg = load_opm_native_quota_downgrade_config()
-        if ncfg.get("enabled"):
-            nxt = next_quota_downgrade_model(
-                current_model=self.model or "",
-                api_mode=str(getattr(self, "api_mode", "") or ""),
-                cfg=ncfg,
-            )
-            if nxt is not None:
-                return False
+        session_skip = getattr(self, "_session_skip_opm_native_quota_ladder", False)
+        if not session_skip:
+            ncfg = load_opm_native_quota_downgrade_config()
+            if ncfg.get("enabled"):
+                nxt = next_quota_downgrade_model(
+                    current_model=self.model or "",
+                    api_mode=str(getattr(self, "api_mode", "") or ""),
+                    cfg=ncfg,
+                )
+                if nxt is not None:
+                    return False
         if not openrouter_api_key_available():
             self._opm_qf_phase = "or_done"
             return False
@@ -7956,6 +7973,7 @@ class AIAgent:
             _prev_q = getattr(self, "_quota_notice_session_id", None)
             if _prev_q is not None and _prev_q != _q_sid:
                 self._session_suppress_quota_user_notices = False
+                self._session_skip_opm_native_quota_ladder = False
             self._quota_notice_session_id = _q_sid
             _prev_hb = getattr(self, "_hard_budget_operator_session_id", None)
             if _prev_hb is not None and _prev_hb != _q_sid:

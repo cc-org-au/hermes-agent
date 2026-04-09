@@ -49,8 +49,10 @@ def test_emit_quota_user_notice_suppressed_after_flag(agent, caplog):
 def test_session_note_quota_exhausted_sets_flag(agent):
     agent._opm_qf_phase = "or_explicit"
     agent._session_suppress_quota_user_notices = False
+    agent._session_skip_opm_native_quota_ladder = False
     agent._session_note_quota_cascade_exhausted_if_applicable()
     assert agent._session_suppress_quota_user_notices is True
+    assert agent._session_skip_opm_native_quota_ladder is True
 
 
 def test_emit_quota_user_notice_suppresses_repeats_even_when_verbose(agent):
