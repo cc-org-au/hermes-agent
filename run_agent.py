@@ -1165,9 +1165,6 @@ class AIAgent:
         # repeated quota/rate-limit user notices until ``session_id`` changes (e.g. /new).
         self._quota_notice_session_id: Optional[str] = None
         self._session_suppress_quota_user_notices = False
-        # At most one user-visible quota/rate-limit status line per logical session_id
-        # (status_callback / TUI); further notices log at INFO only.
-        self._session_first_quota_notice_done = False
         
         # Session logs go into ~/.hermes/sessions/ alongside gateway sessions
         hermes_home = get_hermes_home()
@@ -1562,7 +1559,6 @@ class AIAgent:
         self._last_completed_turn_cost_usd = 0.0
         self._hard_budget_operator_decision = None
         self._session_suppress_quota_user_notices = False
-        self._session_first_quota_notice_done = False
 
         # Context compressor internal counters (if present)
         if hasattr(self, "context_compressor") and self.context_compressor:
@@ -1661,10 +1657,6 @@ class AIAgent:
         if self._quota_user_notices_suppressed():
             logger.info("%s(quota user notice suppressed) %s", self.log_prefix, message)
             return
-        if getattr(self, "_session_first_quota_notice_done", False):
-            logger.info("%s(subsequent quota user notice suppressed) %s", self.log_prefix, message)
-            return
-        self._session_first_quota_notice_done = True
         self._emit_status(message, event_type=event_type)
 
     def _session_note_quota_cascade_exhausted_if_applicable(self) -> None:
@@ -5699,10 +5691,9 @@ class AIAgent:
                     f"🔄 Primary model failed — switching to fallback: "
                     f"{fb_model} via {fb_provider}"
                 )
-            if triggered_by_rate_limit:
-                self._emit_quota_user_notice(_fb_msg)
-            else:
-                self._emit_status(_fb_msg)
+            # Always surface fallback target via _emit_status — quota debounce must not hide it
+            # (ladder notices may have run earlier in the same failure episode).
+            self._emit_status(_fb_msg, event_type="lifecycle")
             logging.info(
                 "Fallback activated: %s → %s (%s)%s",
                 old_model, fb_model, fb_provider,
@@ -7920,7 +7911,6 @@ class AIAgent:
             _prev_q = getattr(self, "_quota_notice_session_id", None)
             if _prev_q is not None and _prev_q != _q_sid:
                 self._session_suppress_quota_user_notices = False
-                self._session_first_quota_notice_done = False
             self._quota_notice_session_id = _q_sid
             _prev_hb = getattr(self, "_hard_budget_operator_session_id", None)
             if _prev_hb is not None and _prev_hb != _q_sid:
@@ -9138,9 +9128,8 @@ class AIAgent:
                         _base = getattr(self, "base_url", "unknown")
                         _model = getattr(self, "model", "unknown")
                         _status_code_str = f" [HTTP {status_code}]" if status_code else ""
-                        _suppress_quota_cli_detail = is_rate_limited and (
-                            self._quota_user_notices_suppressed()
-                            or getattr(self, "_session_first_quota_notice_done", False)
+                        _suppress_quota_cli_detail = (
+                            is_rate_limited and self._quota_user_notices_suppressed()
                         )
                         if not _suppress_quota_cli_detail:
                             self._vprint(f"{self.log_prefix}⚠️  API call failed (attempt {retry_count}/{max_retries}): {error_type}{_status_code_str}", force=True)

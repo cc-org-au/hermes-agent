@@ -44,10 +44,17 @@ class ProviderHealthTracker:
         return self._provider_max.get(provider, self._default_max)
 
     def record_failure(self, provider: str, error_hint: str = "") -> bool:
-        """Record a failure for *provider*. Returns True if now blacklisted."""
+        """Record a failure for *provider*.
+
+        Returns True only when this call **newly** moves the provider into the
+        blacklisted set (so callers can show a one-shot operator notice).
+        Further failures while already blacklisted return False.
+        """
         p = (provider or "").strip().lower()
-        if not p or p in self._blacklisted:
-            return p in self._blacklisted
+        if not p:
+            return False
+        if p in self._blacklisted:
+            return False
         self._failures[p] = self._failures.get(p, 0) + 1
         mx = self._max_for(p)
         if self._failures[p] >= mx:

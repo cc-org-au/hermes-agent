@@ -75,3 +75,11 @@ class TestProviderHealthTracker:
         t = ProviderHealthTracker()
         assert not t.record_failure("")
         assert not t.is_blacklisted("")
+
+    def test_already_blacklisted_returns_false(self):
+        """Subsequent record_failure must not look like a fresh blacklist event."""
+        t = ProviderHealthTracker(default_max_failures=1)
+        assert t.record_failure("openai", "500")
+        assert t.is_blacklisted("openai")
+        assert not t.record_failure("openai", "500")
+        assert not t.record_failure("openai", "500")

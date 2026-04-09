@@ -17,7 +17,6 @@ def agent():
 def test_quota_notice_resets_when_session_id_changes(agent):
     agent._quota_notice_session_id = "old"
     agent._session_suppress_quota_user_notices = True
-    agent._session_first_quota_notice_done = True
 
     # Simulate run_conversation header logic
     agent.session_id = "new_sess"
@@ -25,11 +24,9 @@ def test_quota_notice_resets_when_session_id_changes(agent):
     _prev_q = getattr(agent, "_quota_notice_session_id", None)
     if _prev_q is not None and _prev_q != _q_sid:
         agent._session_suppress_quota_user_notices = False
-        agent._session_first_quota_notice_done = False
     agent._quota_notice_session_id = _q_sid
 
     assert agent._session_suppress_quota_user_notices is False
-    assert agent._session_first_quota_notice_done is False
     assert agent._quota_notice_session_id == "new_sess"
 
 
@@ -54,22 +51,3 @@ def test_session_note_quota_exhausted_sets_flag(agent):
     agent._session_suppress_quota_user_notices = False
     agent._session_note_quota_cascade_exhausted_if_applicable()
     assert agent._session_suppress_quota_user_notices is True
-
-
-def test_emit_quota_user_notice_only_first_per_session(agent, caplog):
-    import logging
-
-    agent._session_suppress_quota_user_notices = False
-    agent._session_first_quota_notice_done = False
-    emitted = []
-
-    def _cb(et, msg):
-        emitted.append((et, msg))
-
-    agent.status_callback = _cb
-    with caplog.at_level(logging.INFO, logger="run_agent"):
-        agent._emit_quota_user_notice("first", "lifecycle")
-        agent._emit_quota_user_notice("second", "lifecycle")
-    assert len(emitted) == 1
-    assert emitted[0][1] == "first"
-    assert any("subsequent quota user notice suppressed" in r.getMessage() for r in caplog.records)
