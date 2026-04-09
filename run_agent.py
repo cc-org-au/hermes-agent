@@ -479,6 +479,8 @@ class AIAgent:
         stream_delta_callback: callable = None,
         tool_gen_callback: callable = None,
         status_callback: callable = None,
+        quota_error_detail_should_suppress: callable = None,
+        quota_error_detail_mark_shown: callable = None,
         max_tokens: int = None,
         reasoning_config: Dict[str, Any] = None,
         prefill_messages: List[Dict[str, Any]] = None,
@@ -681,6 +683,8 @@ class AIAgent:
         self.stream_delta_callback = stream_delta_callback
         self.status_callback = status_callback
         self.tool_gen_callback = tool_gen_callback
+        self.quota_error_detail_should_suppress = quota_error_detail_should_suppress
+        self.quota_error_detail_mark_shown = quota_error_detail_mark_shown
         self._last_reported_tool = None  # Track for "new tool" mode
         
         # Tool execution state — allows _vprint during tool execution
@@ -9149,8 +9153,18 @@ class AIAgent:
                         _base = getattr(self, "base_url", "unknown")
                         _model = getattr(self, "model", "unknown")
                         _status_code_str = f" [HTTP {status_code}]" if status_code else ""
-                        _suppress_quota_cli_detail = (
-                            is_rate_limited and self._quota_user_notices_suppressed()
+                        _cli_quota_suppress = False
+                        if (
+                            is_rate_limited
+                            and not self.verbose_logging
+                            and callable(getattr(self, "quota_error_detail_should_suppress", None))
+                        ):
+                            try:
+                                _cli_quota_suppress = bool(self.quota_error_detail_should_suppress())
+                            except Exception:
+                                _cli_quota_suppress = False
+                        _suppress_quota_cli_detail = is_rate_limited and (
+                            self._quota_user_notices_suppressed() or _cli_quota_suppress
                         )
                         if not _suppress_quota_cli_detail:
                             self._vprint(f"{self.log_prefix}⚠️  API call failed (attempt {retry_count}/{max_retries}): {error_type}{_status_code_str}", force=True)
@@ -9163,7 +9177,24 @@ class AIAgent:
                                 if _err_body_str:
                                     self._vprint(f"{self.log_prefix}   📋 Details: {_err_body_str}", force=True)
                             self._vprint(f"{self.log_prefix}   ⏱️  Elapsed: {elapsed_time:.2f}s  Context: {len(api_messages)} msgs, ~{approx_tokens:,} tokens")
-        
+                            if is_rate_limited and not self.verbose_logging:
+                                _mark = getattr(self, "quota_error_detail_mark_shown", None)
+                                if callable(_mark):
+                                    try:
+                                        _mark()
+                                    except Exception:
+                                        logger.debug("quota_error_detail_mark_shown failed", exc_info=True)
+                        elif is_rate_limited:
+                            logger.info(
+                                "%s(quota-class API error detail suppressed) attempt %s/%s %s model=%s — %s",
+                                self.log_prefix,
+                                retry_count,
+                                max_retries,
+                                error_type,
+                                _model,
+                                _error_summary[:120],
+                            )
+
                         # Check for interrupt before deciding to retry
                         if self._interrupt_requested:
                             self._vprint(f"{self.log_prefix}⚡ Interrupt detected during error handling, aborting retries.", force=True)

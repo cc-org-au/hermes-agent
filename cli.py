@@ -1419,6 +1419,10 @@ class HermesCLI:
         self._status_bar_visible = True
         # When profile-router / delegation uses a different model than ``self.agent`` (chief).
         self._status_bar_model_override: Optional[str] = None
+        # Suppress repeated quota-class API error vprint blocks after the first per CLI session_id
+        # (AIAgent is re-created each message; this state lives on HermesCLI).
+        self._cli_quota_error_detail_session_id: Optional[str] = None
+        self._cli_quota_error_detail_emitted: bool = False
 
         # Background task tracking: {task_id: threading.Thread}
         self._background_tasks: Dict[str, threading.Thread] = {}
@@ -1431,6 +1435,19 @@ class HermesCLI:
         if hasattr(self, "_app") and self._app and (now - self._last_invalidate) >= min_interval:
             self._last_invalidate = now
             self._app.invalidate()
+
+    def _sync_cli_quota_error_detail_session(self) -> None:
+        """Reset quota error-detail suppression when ``session_id`` changes (/new, /resume)."""
+        sid = str(getattr(self, "session_id", "") or "")
+        if getattr(self, "_cli_quota_error_detail_session_id", None) != sid:
+            self._cli_quota_error_detail_session_id = sid
+            self._cli_quota_error_detail_emitted = False
+
+    def _cli_quota_error_detail_should_suppress(self) -> bool:
+        return bool(getattr(self, "_cli_quota_error_detail_emitted", False))
+
+    def _cli_quota_error_detail_mark_shown(self) -> None:
+        self._cli_quota_error_detail_emitted = True
 
     def _status_bar_context_style(self, percent_used: Optional[int]) -> str:
         if percent_used is None:
@@ -2732,6 +2749,8 @@ class HermesCLI:
                 tool_complete_callback=self._on_tool_complete if self._inline_diffs_enabled else None,
                 stream_delta_callback=self._stream_delta if self.streaming_enabled else None,
                 tool_gen_callback=self._on_tool_gen_start if self.streaming_enabled else None,
+                quota_error_detail_should_suppress=self._cli_quota_error_detail_should_suppress,
+                quota_error_detail_mark_shown=self._cli_quota_error_detail_mark_shown,
             )
             # Store reference for atexit memory provider shutdown
             global _active_agent_ref
@@ -4993,6 +5012,8 @@ class HermesCLI:
                     skip_context_files=self.skip_context_files,
                     router_session_override=getattr(self, "_session_router_override", None),
                     skip_per_turn_tier_routing=bool(turn_route.get("skip_per_turn_tier_routing")),
+                    quota_error_detail_should_suppress=self._cli_quota_error_detail_should_suppress,
+                    quota_error_detail_mark_shown=self._cli_quota_error_detail_mark_shown,
                 )
                 # Silence raw spinner; route thinking through TUI widget when no foreground agent is active.
                 bg_agent._print_fn = lambda *_a, **_kw: None
@@ -6790,6 +6811,8 @@ class HermesCLI:
         # Refresh provider credentials if needed (handles key rotation transparently)
         if not self._ensure_runtime_credentials():
             return None
+
+        self._sync_cli_quota_error_detail_session()
 
         turn_route = self._resolve_turn_agent_config(message)
         # Skip profile_router whenever /models sticky or one-shot pipeline is active, even if
