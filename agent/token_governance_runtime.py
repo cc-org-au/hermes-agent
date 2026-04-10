@@ -474,8 +474,16 @@ def apply_per_turn_tier_model(agent: Any, user_message: str) -> None:
     if getattr(agent, "_skip_per_turn_tier_routing", False):
         return
     # Stay on the active provider/model while provider fallback is pinned (e.g. rate limits).
+    # Exception: when the runtime is OpenRouter (including OPM cross-provider failover to
+    # openai/… slugs), still run per-turn tier routing so tier_models can vary mini vs full
+    # each turn. Non-OR fallbacks (e.g. direct Gemini) stay pinned to avoid oscillation.
     if getattr(agent, "_fallback_activated", False):
-        return
+        try:
+            or_runtime = bool(getattr(agent, "_is_openrouter_url", lambda: False)())
+        except Exception:
+            or_runtime = False
+        if not or_runtime:
+            return
     # If the user set a concrete model in config (not tier:X / tier:dynamic),
     # do not override it with per-turn routing. This ensures /model switches persist.
     if not getattr(agent, "_model_is_tier_routed", True):

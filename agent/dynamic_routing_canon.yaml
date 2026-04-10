@@ -13,6 +13,10 @@ version: 3
 #   4) Config fallback chain (direct Gemini tier router, optional_gemini,
 #      openrouter_last_resort, etc. — see free_model_routing + fallback_providers)
 # Each new user turn resets to step 1 via tier/OPM primary selection.
+#
+# While ``_fallback_activated`` is true (still on a fallback stack), per-turn tier routing
+# is skipped for non-OpenRouter runtimes so the provider stays stable. On OpenRouter,
+# tier routing still runs so ``tier_models`` can change per turn (e.g. gpt-5.4 vs mini).
 
 openai_primary_mode:
   # When true in config, native OpenAI slugs are treated as "free tier" for policy.

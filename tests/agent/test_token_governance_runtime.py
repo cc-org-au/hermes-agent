@@ -274,7 +274,8 @@ def test_per_turn_tier_dynamic_resolves(gov_env):
     assert a.model == "cheap-b"
 
 
-def test_per_turn_skipped_when_fallback_active(gov_env):
+def test_per_turn_skipped_when_fallback_active_non_openrouter(gov_env):
+    """Pinned fallback on direct Gemini (etc.): do not override model each turn."""
     p = gov_env / RUNTIME_FILENAME
     p.write_text(
         yaml.safe_dump(
@@ -302,6 +303,37 @@ def test_per_turn_skipped_when_fallback_active(gov_env):
     a._token_governance_cfg = load_runtime_config()
     apply_per_turn_tier_model(a, "summarize the following paragraph in three bullets")
     assert a.model == "gemini-2.5-flash"
+
+
+def test_per_turn_applies_when_fallback_active_openrouter(gov_env):
+    """OpenRouter fallback: still pick tier_models per turn (mini vs full, etc.)."""
+    p = gov_env / RUNTIME_FILENAME
+    p.write_text(
+        yaml.safe_dump(
+            {
+                "enabled": True,
+                "dynamic_tier_routing": True,
+                "tier_models": {"B": "openai/gpt-5.4-nano", "D": "openai/gpt-5.4"},
+                "default_routing_tier": "D",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    class _A:
+        def __init__(self):
+            self.model = "openai/gpt-5.4"
+            self.api_mode = "chat_completions"
+            self._base_url_lower = "https://openrouter.ai/api/v1"
+            self._fallback_activated = True
+
+        def _is_openrouter_url(self):
+            return True
+
+    a = _A()
+    a._token_governance_cfg = load_runtime_config()
+    apply_per_turn_tier_model(a, "summarize the following paragraph in three bullets")
+    assert a.model == "openai/gpt-5.4-nano"
 
 
 def test_per_turn_skipped_when_pipeline_model_once(gov_env):
