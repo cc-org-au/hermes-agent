@@ -23,11 +23,16 @@ if [[ -z "$REPO" ]]; then
   fi
 fi
 cd "$REPO"
+REPO_ABS="$(pwd)"
 
 _pick_python() {
   local try cand
   for try in python3.13 python3.12 python3.11; do
     cand="$(command -v "$try" 2>/dev/null || true)"
+    # Never use this checkout's venv Python as the *host* interpreter (would vanish after rm -rf venv).
+    if [[ -n "$cand" && "$cand" == "$REPO_ABS/venv/"* ]]; then
+      continue
+    fi
     if [[ -n "$cand" ]] && "$cand" -c 'import sys; assert sys.version_info[:2] >= (3, 11)' 2>/dev/null; then
       printf '%s' "$cand"
       return 0
@@ -76,7 +81,7 @@ fi
 
 echo "Using: $PY ($("$PY" --version 2>&1))"
 if [[ -d venv ]]; then
-  echo "Removing existing venv/ (was built with a different interpreter)."
+  echo "Removing existing venv/ before recreate."
   rm -rf venv
 fi
 "$PY" -m venv venv
