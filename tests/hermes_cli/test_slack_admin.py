@@ -134,6 +134,66 @@ def test_config_token_from_get_env_value(monkeypatch):
     assert sa._config_token_from_env() == "xoxe-from-file"
 
 
+def test_manifest_clone_split_tokens_uses_different_xoxe(monkeypatch, capsys):
+    import hermes_cli.slack_admin as sa
+
+    src_manifest = {
+        "_metadata": {"major_version": 2},
+        "display_information": {"name": "Hermes Agent"},
+        "features": {"bot_user": {"display_name": "hermes"}},
+        "settings": {"socket_mode_enabled": True},
+    }
+    calls = []
+
+    def fake_api(method: str, token: str, **fields):
+        calls.append((method, token))
+        if method == "apps.manifest.export":
+            assert token == "xoxe-droplet"
+            return {"ok": True, "manifest": src_manifest}
+        if method == "apps.manifest.validate":
+            assert token == "xoxe-operator"
+            return {"ok": True}
+        if method == "apps.manifest.create":
+            assert token == "xoxe-operator"
+            return {
+                "ok": True,
+                "app_id": "A_SPLIT",
+                "credentials": {},
+                "oauth_authorize_url": "https://slack.com/oauth/…",
+            }
+        raise AssertionError(method)
+
+    monkeypatch.setattr(sa, "_slack_tooling_api_with_token", fake_api)
+    monkeypatch.setenv("SLACK_CONFIG_TOKEN_DROPLET", "xoxe-droplet")
+    monkeypatch.setenv("SLACK_CONFIG_TOKEN_OPERATOR", "xoxe-operator")
+    monkeypatch.delenv("SLACK_CONFIG_TOKEN", raising=False)
+    monkeypatch.delenv("SLACK_MANIFEST_KEY", raising=False)
+
+    sa.slack_manifest_clone_from_app(
+        source_app_id="A_OLD",
+        new_display_name="hermes-operator",
+    )
+    assert [c[1] for c in calls] == [
+        "xoxe-droplet",
+        "xoxe-operator",
+        "xoxe-operator",
+    ]
+    assert "new_app_id=A_SPLIT" in capsys.readouterr().out
+
+
+def test_manifest_clone_only_droplet_token_errors(monkeypatch):
+    import hermes_cli.slack_admin as sa
+
+    monkeypatch.setenv("SLACK_CONFIG_TOKEN_DROPLET", "xoxe-only")
+    monkeypatch.delenv("SLACK_CONFIG_TOKEN_OPERATOR", raising=False)
+    monkeypatch.delenv("SLACK_CONFIG_TOKEN", raising=False)
+    with pytest.raises(SystemExit):
+        sa.slack_manifest_clone_from_app(
+            source_app_id="A_OLD",
+            new_display_name="hermes-operator",
+        )
+
+
 def test_manifest_clone_calls_export_validate_create(monkeypatch, capsys):
     import hermes_cli.slack_admin as sa
 
@@ -145,8 +205,8 @@ def test_manifest_clone_calls_export_validate_create(monkeypatch, capsys):
     }
     calls = []
 
-    def fake_api(method: str, **fields):
-        calls.append((method, fields))
+    def fake_api(method: str, token: str, **fields):
+        calls.append((method, token, fields))
         if method == "apps.manifest.export":
             return {"ok": True, "manifest": src_manifest}
         if method == "apps.manifest.validate":
@@ -164,8 +224,12 @@ def test_manifest_clone_calls_export_validate_create(monkeypatch, capsys):
             }
         raise AssertionError(method)
 
-    monkeypatch.setattr(sa, "_slack_tooling_api", fake_api)
-    monkeypatch.setenv("SLACK_MANIFEST_KEY", "xoxe-fake")
+    monkeypatch.setattr(sa, "_slack_tooling_api_with_token", fake_api)
+    monkeypatch.setattr(
+        sa,
+        "_manifest_clone_tokens",
+        lambda: ("xoxe-fake", "xoxe-fake", False),
+    )
 
     sa.slack_manifest_clone_from_app(
         source_app_id="A_OLD",
@@ -176,6 +240,7 @@ def test_manifest_clone_calls_export_validate_create(monkeypatch, capsys):
         "apps.manifest.validate",
         "apps.manifest.create",
     ]
+    assert all(c[1] == "xoxe-fake" for c in calls)
     out = capsys.readouterr().out
     assert "new_app_id=A_NEW123" in out
 

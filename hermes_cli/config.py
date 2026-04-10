@@ -1365,6 +1365,24 @@ OPTIONAL_ENV_VARS = {
         "password": True,
         "category": "messaging",
     },
+    "SLACK_CONFIG_TOKEN_DROPLET": {
+        "description": "Optional xoxe token for **exporting** the source app in `hermes slack manifest-clone` "
+                       "when the source app lives under a different Slack developer login than the new app. "
+                       "Use together with SLACK_CONFIG_TOKEN_OPERATOR.",
+        "prompt": "Slack config token (droplet / source app account, xoxe...)",
+        "url": "https://api.slack.com/apps",
+        "password": True,
+        "category": "messaging",
+    },
+    "SLACK_CONFIG_TOKEN_OPERATOR": {
+        "description": "Optional xoxe token for **validate + create** in `hermes slack manifest-clone` — "
+                       "the cloned app is owned by this Slack developer account. "
+                       "Use together with SLACK_CONFIG_TOKEN_DROPLET.",
+        "prompt": "Slack config token (operator / target account, xoxe...)",
+        "url": "https://api.slack.com/apps",
+        "password": True,
+        "category": "messaging",
+    },
     "SLACK_NOTIFY_WITH_USER_MENTION": {
         "description": "When true (default), prepend <@user> to Slack DM replies and to posts to "
                        "SLACK_HOME_CHANNEL so mobile/desktop treat them as @mention notifications.",

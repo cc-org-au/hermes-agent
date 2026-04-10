@@ -209,6 +209,13 @@ hermes slack manifest-clone --source-app-id A0XXXXXXXX --new-name "hermes-operat
 
 This calls `apps.manifest.export` → `apps.manifest.validate` → `apps.manifest.create`. The new app gets a distinct **display name** and **bot display name** (override with `--bot-display-name`). The manifest includes a default **OAuth redirect URL** (`https://localhost/slack/oauth_redirect`) so Slack’s authorize link can resolve `redirect_uri` (Hermes uses Socket Mode and does not host an OAuth callback — you still copy **xoxb** / **xapp** from the app settings after install). Save the printed **credentials** JSON, install to the workspace, then add **new** `SLACK_BOT_TOKEN` (xoxb) and `SLACK_APP_TOKEN` (xapp) for that app to the Hermes profile `.env` you use for the operator.
 
+**Two Slack developer accounts:** App configuration tokens (xoxe) are per login. To clone an app that was created under account A but **create** the duplicate under account B, generate **two** tokens at [api.slack.com/apps](https://api.slack.com/apps) (each while signed into the right Slack account), then set in `.env`:
+
+- `SLACK_CONFIG_TOKEN_DROPLET` — token for the account that can **export** the source app (manages the original app).
+- `SLACK_CONFIG_TOKEN_OPERATOR` — token for the account that should **own** the new app (`validate` + `create` use this).
+
+If both are set, Hermes uses droplet for export only and operator for validate/create. If neither is set, a single `SLACK_CONFIG_TOKEN` / `SLACK_MANIFEST_KEY` is used for all three steps (same account).
+
 **`redirect_uri did not match any configured URIs`:** Slack requires every `redirect_uri` on `https://slack.com/oauth/v2/authorize` to be listed under the app’s **OAuth & Permissions → Redirect URLs**. Easiest fix: open [api.slack.com/apps](https://api.slack.com/apps) → your app → **OAuth & Permissions** → **Install to Workspace** (uses Slack’s internal flow). Or append a matching query parameter to your install link, e.g. `&redirect_uri=https%3A%2F%2Flocalhost%2Fslack%2Foauth_redirect`. To register the default URL and optionally rename the bot user in the manifest:
 
 ```bash

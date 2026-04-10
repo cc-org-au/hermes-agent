@@ -190,6 +190,9 @@ def _config_token_from_env() -> str:
         print(
             "Error: SLACK_CONFIG_TOKEN is not set (or empty after loading env files).\n"
             "Alias: SLACK_MANIFEST_KEY (same value — Slack app configuration token xoxe…).\n"
+            "For `manifest-clone` under two Slack developer accounts, set both "
+            "SLACK_CONFIG_TOKEN_DROPLET (export source app) and SLACK_CONFIG_TOKEN_OPERATOR "
+            "(validate/create the new app).\n"
             f"Values are read from the environment and from {display_hermes_home()}/.env (HERMES_HOME).\n"
             "Generate an app configuration token at https://api.slack.com/apps "
             "(Your App → App configuration tokens → Generate token). "
@@ -208,9 +211,42 @@ def _config_token_from_env() -> str:
     return raw
 
 
-def _slack_tooling_api(method: str, **fields: Optional[str]) -> Dict[str, Any]:
-    """POST to Slack Web API using an app configuration token (form body)."""
-    token = _config_token_from_env()
+def _manifest_clone_tokens() -> tuple[str, str, bool]:
+    """Return (token_for_export, token_for_validate_and_create, split_mode).
+
+    When **both** ``SLACK_CONFIG_TOKEN_DROPLET`` and ``SLACK_CONFIG_TOKEN_OPERATOR`` are set,
+    export uses the droplet account (must manage the source app); validate/create use the
+    operator account (owns the new app). Otherwise a single ``SLACK_CONFIG_TOKEN`` / alias is used.
+    """
+    from hermes_cli.config import get_env_value
+
+    droplet = (get_env_value("SLACK_CONFIG_TOKEN_DROPLET") or "").strip()
+    operator = (get_env_value("SLACK_CONFIG_TOKEN_OPERATOR") or "").strip()
+    if droplet and operator:
+        return droplet, operator, True
+    if droplet or operator:
+        print(
+            "Error: for `hermes slack manifest-clone`, set **both** "
+            "SLACK_CONFIG_TOKEN_DROPLET and SLACK_CONFIG_TOKEN_OPERATOR "
+            "(export vs create under different Slack developer logins), "
+            "or set neither and use SLACK_CONFIG_TOKEN / SLACK_MANIFEST_KEY only.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    single = _config_token_raw()
+    if not single:
+        print(
+            "Error: no Slack app configuration token found for manifest-clone.\n"
+            "Set SLACK_CONFIG_TOKEN (or SLACK_MANIFEST_KEY), or set both "
+            "SLACK_CONFIG_TOKEN_DROPLET and SLACK_CONFIG_TOKEN_OPERATOR.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return single, single, False
+
+
+def _slack_tooling_api_with_token(method: str, token: str, **fields: Optional[str]) -> Dict[str, Any]:
+    """POST to Slack Web API using the given app configuration token (form body)."""
     payload: Dict[str, str] = {"token": token}
     for k, v in fields.items():
         if v is not None:
@@ -240,6 +276,11 @@ def _slack_tooling_api(method: str, **fields: Optional[str]) -> Dict[str, Any]:
         except json.JSONDecodeError:
             print(f"HTTP {e.code}: {body[:800]}", file=sys.stderr)
             sys.exit(1)
+
+
+def _slack_tooling_api(method: str, **fields: Optional[str]) -> Dict[str, Any]:
+    """POST to Slack Web API using ``SLACK_CONFIG_TOKEN`` (or aliases) from env."""
+    return _slack_tooling_api_with_token(method, _config_token_from_env(), **fields)
 
 
 def slack_config_test() -> None:
@@ -336,7 +377,15 @@ def slack_manifest_clone_from_app(
         print("Error: --new-name must be non-empty", file=sys.stderr)
         sys.exit(1)
 
-    ex = _slack_tooling_api("apps.manifest.export", app_id=src)
+    ex_tok, cr_tok, split_clone = _manifest_clone_tokens()
+    if split_clone:
+        print(
+            "manifest-clone: using SLACK_CONFIG_TOKEN_DROPLET for export, "
+            "SLACK_CONFIG_TOKEN_OPERATOR for validate/create (new app owned by operator account).",
+            file=sys.stderr,
+        )
+
+    ex = _slack_tooling_api_with_token("apps.manifest.export", ex_tok, app_id=src)
     if not ex.get("ok"):
         print(f"export failed: {ex.get('error')}", file=sys.stderr)
         sys.exit(1)
@@ -361,8 +410,9 @@ def slack_manifest_clone_from_app(
 
     manifest_json = json.dumps(manifest, separators=(",", ":"))
 
-    val = _slack_tooling_api(
+    val = _slack_tooling_api_with_token(
         "apps.manifest.validate",
+        cr_tok,
         manifest=manifest_json,
     )
     if not val.get("ok"):
@@ -374,7 +424,7 @@ def slack_manifest_clone_from_app(
                 print(f"  - {err}", file=sys.stderr)
         sys.exit(1)
 
-    created = _slack_tooling_api("apps.manifest.create", manifest=manifest_json)
+    created = _slack_tooling_api_with_token("apps.manifest.create", cr_tok, manifest=manifest_json)
     if not created.get("ok"):
         print(f"create failed: {created.get('error')}", file=sys.stderr)
         for err in created.get("errors") or []:
