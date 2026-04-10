@@ -6049,6 +6049,11 @@ class GatewayRunner:
             if _msg.lstrip().startswith("[RouteTrace]"):
                 return
             _et_lc = (event_type or "lifecycle").lower()
+            # Budget / hard-cap lines are log-only in the agent (see run_agent._emit_status);
+            # never mirror them into the chat thread.
+            if _et_lc == "budget_notice":
+                logger.info("gateway status_callback budget_notice (dropped for chat): %s", _msg[:500])
+                return
             # Routing JSON and similar instrumentation never belong in chat.
             if _et_lc == "routing_trace":
                 return

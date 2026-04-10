@@ -115,6 +115,40 @@ def clear_quota_suppress_registry_entry(agent: Any) -> None:
         _quota_ux_suppress_by_session.pop(key, None)
 
 
+# At most one budget_notice (hard cap, cost monitor, session step-down) per
+# (HERMES_HOME, session_id) — survives gateway AIAgent cache replacement.
+_budget_ux_notice_lock = threading.RLock()
+_budget_ux_notice_by_session: dict[str, bool] = {}
+
+
+def sync_budget_ux_notice_from_registry(agent: Any) -> None:
+    sid = str(getattr(agent, "session_id", "") or "")
+    if not sid:
+        return
+    key = _quota_ux_registry_key(agent)
+    with _budget_ux_notice_lock:
+        if _budget_ux_notice_by_session.get(key):
+            agent._session_budget_ux_notice_done = True
+
+
+def persist_budget_ux_notice_to_registry(agent: Any) -> None:
+    sid = str(getattr(agent, "session_id", "") or "")
+    if not sid:
+        return
+    key = _quota_ux_registry_key(agent)
+    with _budget_ux_notice_lock:
+        _budget_ux_notice_by_session[key] = True
+
+
+def clear_budget_ux_notice_registry_entry(agent: Any) -> None:
+    sid = str(getattr(agent, "session_id", "") or "")
+    if not sid:
+        return
+    key = _quota_ux_registry_key(agent)
+    with _budget_ux_notice_lock:
+        _budget_ux_notice_by_session.pop(key, None)
+
+
 # Import our tool system
 from model_tools import (
     get_tool_definitions,
@@ -1525,8 +1559,8 @@ class AIAgent:
         self._hard_budget_operator_approval_required = False
         self._hard_budget_operator_decision = None
         self._hard_budget_operator_session_id = None
-        # One user-visible nag when daily cap is hit and approval is pending (not after approve).
-        self._hard_budget_daily_cap_notice_emitted = False
+        # First budget_notice (hard cap / cost monitor / step-down) per session; see _emit_status.
+        self._session_budget_ux_notice_done = False
         try:
             from agent.budget_ledger import BudgetLedger
             from agent.routing_canon import load_hard_budget_config
@@ -1629,7 +1663,8 @@ class AIAgent:
         self._turn_bar_start_usd = 0.0
         self._last_completed_turn_cost_usd = 0.0
         self._hard_budget_operator_decision = None
-        self._hard_budget_daily_cap_notice_emitted = False
+        self._session_budget_ux_notice_done = False
+        clear_budget_ux_notice_registry_entry(self)
         self._session_suppress_quota_user_notices = False
         clear_quota_suppress_registry_entry(self)
         self._quota_notice_emitted_this_turn = False
@@ -1704,9 +1739,10 @@ class AIAgent:
         ``router_progress``, ``summary_review``, and ``delegation_heartbeat`` are
         not printed on the CLI (``status_callback`` still runs).
 
-        ``budget_notice`` — hard budget / session cost lines. On ``platform=="cli"``,
-        prints to **stderr** only so messages do not appear inside the streamed Hermes
-        response box; gateway adapters still receive ``status_callback``.
+        ``budget_notice`` — hard budget / session cost lines. **At most once** per
+        logical session (``(HERMES_HOME, session_id)``, registry-backed for gateway
+        cache churn). On ``platform=="cli"``, prints to **stderr** only. On messaging
+        and other non-CLI platforms, **log-only** (no ``status_callback`` / chat).
 
         This helper never raises — exceptions are swallowed so it cannot
         interrupt the retry/fallback logic.
@@ -1718,8 +1754,6 @@ class AIAgent:
             "summary_review",
             "delegation_heartbeat",
         )
-        # Budget / cost lines: print to stderr on CLI so they do not interleave with the
-        # streamed Hermes response box (stdout goes through patch_stdout / stream buffer).
         if getattr(self, "_session_suppress_quota_user_notices", False):
             try:
                 if self._is_quota_recovery_status_message(message):
@@ -1731,13 +1765,32 @@ class AIAgent:
                     return
             except Exception:
                 pass
-        _budget_cli_stderr = _et == "budget_notice" and getattr(self, "platform", None) == "cli"
-        if _budget_cli_stderr:
+        _plat = getattr(self, "platform", None)
+        if _et == "budget_notice":
+            if getattr(self, "_session_budget_ux_notice_done", False):
+                logger.info(
+                    "%s(budget_notice suppressed for session) %s",
+                    self.log_prefix,
+                    (message or "")[:220],
+                )
+                return
+            self._session_budget_ux_notice_done = True
             try:
-                print(f"{self.log_prefix}{message}", file=sys.stderr, flush=True)
+                persist_budget_ux_notice_to_registry(self)
             except Exception:
                 pass
-        elif not _skip_cli and not _quiet_cli_noise:
+            if _plat == "cli":
+                try:
+                    print(f"{self.log_prefix}{message}", file=sys.stderr, flush=True)
+                except Exception:
+                    pass
+                return
+            try:
+                logger.info("%s%s", self.log_prefix, message)
+            except Exception:
+                pass
+            return
+        if not _skip_cli and not _quiet_cli_noise:
             try:
                 self._vprint(f"{self.log_prefix}{message}", force=True)
             except Exception:
@@ -1866,11 +1919,8 @@ class AIAgent:
     def _handle_hard_budget_ledger_exhausted_after_spend(self) -> None:
         """User-visible notices + fallback when the daily ledger is over cap after a spend delta.
 
-        Called only when ``_budget_ledger.is_daily_exhausted()`` is already true. The
-        non-operator path must not call :meth:`_emit_status` on every tool/API iteration
-        in the same session — reuse ``_hard_budget_daily_cap_notice_emitted`` (cleared
-        when the session id changes or when the ledger is no longer exhausted at turn
-        start).
+        Called only when ``_budget_ledger.is_daily_exhausted()`` is already true.
+        :meth:`_emit_status` with ``budget_notice`` is session-gated (once per chat session).
         """
         _bl = getattr(self, "_budget_ledger", None)
         if _bl is None or not _bl.is_daily_exhausted():
@@ -1879,21 +1929,17 @@ class AIAgent:
             _dec = getattr(self, "_hard_budget_operator_decision", None)
             if _dec == HARD_BUDGET_APPROVE_CHOICE:
                 return
-            if not getattr(self, "_hard_budget_daily_cap_notice_emitted", False):
-                self._emit_status(
-                    "⚠️ Daily budget cap reached — paid API calls will pause "
-                    "until you approve or deny on the next model request.",
-                    event_type="budget_notice",
-                )
-                self._hard_budget_daily_cap_notice_emitted = True
-            return
-        if not getattr(self, "_hard_budget_daily_cap_notice_emitted", False):
             self._emit_status(
-                "⚠️ Daily budget cap (routing_canon hard_budget) reached "
-                "— switching to cheaper or fallback model",
+                "⚠️ Daily budget cap reached — paid API calls will pause "
+                "until you approve or deny on the next model request.",
                 event_type="budget_notice",
             )
-            self._hard_budget_daily_cap_notice_emitted = True
+            return
+        self._emit_status(
+            "⚠️ Daily budget cap (routing_canon hard_budget) reached "
+            "— switching to cheaper or fallback model",
+            event_type="budget_notice",
+        )
         _hb_fb = self._try_activate_fallback(triggered_by_rate_limit=True)
         if not _hb_fb:
             self._try_session_budget_cheaper_model()
@@ -8386,15 +8432,17 @@ class AIAgent:
                 self._session_skip_opm_native_quota_ladder = False
             self._quota_notice_session_id = _q_sid
             sync_quota_suppress_from_registry(self)
+            sync_budget_ux_notice_from_registry(self)
             _prev_hb = getattr(self, "_hard_budget_operator_session_id", None)
             if _prev_hb is not None and _prev_hb != _q_sid:
                 self._hard_budget_operator_decision = None
-                self._hard_budget_daily_cap_notice_emitted = False
+                self._session_budget_ux_notice_done = False
             self._hard_budget_operator_session_id = _q_sid
             try:
                 _bl_turn = getattr(self, "_budget_ledger", None)
                 if _bl_turn is not None and not _bl_turn.is_daily_exhausted():
-                    self._hard_budget_daily_cap_notice_emitted = False
+                    clear_budget_ux_notice_registry_entry(self)
+                    self._session_budget_ux_notice_done = False
             except Exception:
                 pass
             self._turn_bar_start_usd = float(self.session_estimated_cost_usd or 0.0)
