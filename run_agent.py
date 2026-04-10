@@ -1863,6 +1863,41 @@ class AIAgent:
                 "Daily API budget cap reached — continuing paid model use was declined for this session."
             )
 
+    def _handle_hard_budget_ledger_exhausted_after_spend(self) -> None:
+        """User-visible notices + fallback when the daily ledger is over cap after a spend delta.
+
+        Called only when ``_budget_ledger.is_daily_exhausted()`` is already true. The
+        non-operator path must not call :meth:`_emit_status` on every tool/API iteration
+        in the same session — reuse ``_hard_budget_daily_cap_notice_emitted`` (cleared
+        when the session id changes or when the ledger is no longer exhausted at turn
+        start).
+        """
+        _bl = getattr(self, "_budget_ledger", None)
+        if _bl is None or not _bl.is_daily_exhausted():
+            return
+        if getattr(self, "_hard_budget_operator_approval_required", False):
+            _dec = getattr(self, "_hard_budget_operator_decision", None)
+            if _dec == HARD_BUDGET_APPROVE_CHOICE:
+                return
+            if not getattr(self, "_hard_budget_daily_cap_notice_emitted", False):
+                self._emit_status(
+                    "⚠️ Daily budget cap reached — paid API calls will pause "
+                    "until you approve or deny on the next model request.",
+                    event_type="budget_notice",
+                )
+                self._hard_budget_daily_cap_notice_emitted = True
+            return
+        if not getattr(self, "_hard_budget_daily_cap_notice_emitted", False):
+            self._emit_status(
+                "⚠️ Daily budget cap (routing_canon hard_budget) reached "
+                "— switching to cheaper or fallback model",
+                event_type="budget_notice",
+            )
+            self._hard_budget_daily_cap_notice_emitted = True
+        _hb_fb = self._try_activate_fallback(triggered_by_rate_limit=True)
+        if not _hb_fb:
+            self._try_session_budget_cheaper_model()
+
     def _is_direct_openai_url(self, base_url: str = None) -> bool:
         """Return True when a base URL targets OpenAI's native API."""
         url = (base_url or self._base_url_lower).lower()
@@ -8356,6 +8391,12 @@ class AIAgent:
                 self._hard_budget_operator_decision = None
                 self._hard_budget_daily_cap_notice_emitted = False
             self._hard_budget_operator_session_id = _q_sid
+            try:
+                _bl_turn = getattr(self, "_budget_ledger", None)
+                if _bl_turn is not None and not _bl_turn.is_daily_exhausted():
+                    self._hard_budget_daily_cap_notice_emitted = False
+            except Exception:
+                pass
             self._turn_bar_start_usd = float(self.session_estimated_cost_usd or 0.0)
             # If the previous turn activated fallback, restore the primary
             # runtime so this turn gets a fresh attempt with the preferred model.
@@ -9399,32 +9440,7 @@ class AIAgent:
                             if _bl is not None and _delta_led > 0:
                                 _bl.add_spend_usd(_delta_led)
                                 if _bl.is_daily_exhausted():
-                                    if getattr(self, "_hard_budget_operator_approval_required", False):
-                                        _dec = getattr(
-                                            self, "_hard_budget_operator_decision", None
-                                        )
-                                        if _dec == HARD_BUDGET_APPROVE_CHOICE:
-                                            pass
-                                        elif not getattr(
-                                            self, "_hard_budget_daily_cap_notice_emitted", False
-                                        ):
-                                            self._emit_status(
-                                                "⚠️ Daily budget cap reached — paid API calls will pause "
-                                                "until you approve or deny on the next model request.",
-                                                event_type="budget_notice",
-                                            )
-                                            self._hard_budget_daily_cap_notice_emitted = True
-                                    else:
-                                        self._emit_status(
-                                            "⚠️ Daily budget cap (routing_canon hard_budget) reached "
-                                            "— switching to cheaper or fallback model",
-                                            event_type="budget_notice",
-                                        )
-                                        _hb_fb = self._try_activate_fallback(
-                                            triggered_by_rate_limit=True,
-                                        )
-                                        if not _hb_fb:
-                                            self._try_session_budget_cheaper_model()
+                                    self._handle_hard_budget_ledger_exhausted_after_spend()
         
                             # Persist token counts to session DB for /insights.
                             # Do this for every platform with a session_id so non-CLI
