@@ -11,11 +11,12 @@
 # HERMES_OPERATOR_WORKSTATION_CLI=1 (set by `hermes … operator`): do not use env-file SSH_PASSPHRASE /
 # ASKPASS — type the key passphrase at the prompt (same pattern as ssh_droplet.sh).
 #
-# Sudo: this script does **not** pipe a sudo password (unlike ssh_droplet). macOS sudo needs a TTY to
-# prompt. By default we always use **ssh -tt** (forced PTY) and run **sudo -k** on the remote before
-# your command so cached credentials are cleared — the next **sudo** must ask for a password (unless
-# sudoers grants NOPASSWD — fix that on the mini). Opt out: HERMES_OPERATOR_SSH_NO_TTY=1 (ssh -T),
-# HERMES_OPERATOR_SKIP_SUDO_K=1 (skip sudo -k).
+# Sudo: no **sudo -S** / env password (unlike ssh_droplet). Remote **bash -lc** often has stdin on a
+# pipe — sudo cannot read a password. We **reattach to /dev/tty** (same pattern as ssh_droplet after
+# sudo -S), then **sudo -k** and **sudo -v** so this session must authenticate (unless sudoers has
+# NOPASSWD — fix on the mini). **sudo -v** runs only when stdin is a TTY or **HERMES_OPERATOR_INTERACTIVE=1**
+# (e.g. **hermes … operator**); set **HERMES_OPERATOR_SKIP_SUDO_VERIFY=1** for unattended automation.
+# Opt out: **HERMES_OPERATOR_SSH_NO_TTY=1**, **HERMES_OPERATOR_SKIP_SUDO_K=1**, **HERMES_OPERATOR_REQUIRE_SUDO_VERIFY=0**.
 #
 # Usage:
 #   ./ssh_operator.sh
@@ -127,6 +128,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   _SSH_FLAGS+=(-o UseKeychain=no)
 fi
 if [[ "$_USE_TT" == "1" ]]; then
+  _SSH_FLAGS+=(-o RequestTTY=force)
   _SSH_BASE=(ssh -tt "${_SSH_FLAGS[@]}" "${MACMINI_USER}@${MACMINI_HOST}")
 else
   _SSH_BASE=(ssh -T "${_SSH_FLAGS[@]}" "${MACMINI_USER}@${MACMINI_HOST}")
@@ -134,9 +136,21 @@ fi
 
 _run_remote() {
   local remote_bash_cmd="$1"
-  if [[ "${HERMES_OPERATOR_SKIP_SUDO_K:-0}" != "1" ]]; then
-    remote_bash_cmd="sudo -k 2>/dev/null || true; ${remote_bash_cmd}"
+  local pre=""
+  # Reattach fds to the SSH PTY so sudo can prompt (bash -lc alone often leaves stdin non-tty).
+  if [[ "$_USE_TT" == "1" ]]; then
+    pre="exec >/dev/tty 2>&1; exec </dev/tty 2>/dev/null || true; "
   fi
+  if [[ "${HERMES_OPERATOR_SKIP_SUDO_K:-0}" != "1" ]]; then
+    pre+="sudo -k 2>/dev/null || true; "
+  fi
+  # Force an authentication check (prompts for password when needed). Skip for unattended runs.
+  if [[ "${HERMES_OPERATOR_REQUIRE_SUDO_VERIFY:-1}" != "0" ]] && [[ "${HERMES_OPERATOR_SKIP_SUDO_VERIFY:-0}" != "1" ]]; then
+    if [[ -t 0 ]] || [[ "${HERMES_OPERATOR_INTERACTIVE:-0}" == "1" ]]; then
+      pre+="sudo -v || exit 1; "
+    fi
+  fi
+  remote_bash_cmd="${pre}${remote_bash_cmd}"
   "${_SSH_ENV[@]}" "${_SSH_BASE[@]}" "bash -lc $(printf '%q' "$remote_bash_cmd")"
 }
 
