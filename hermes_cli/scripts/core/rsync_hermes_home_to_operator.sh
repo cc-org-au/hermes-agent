@@ -1,41 +1,38 @@
 #!/usr/bin/env bash
-# SSH to the Mac mini as MACMINI_SSH_USER (operator) — Tailscale-hardened SSH (see macmini_* scripts).
-#
-# Credentials: HERMES_OPERATOR_ENV or ~/.env/.env (same file as droplet is fine):
-#   MACMINI_SSH_USER (default operator), MACMINI_SSH_HOST, MACMINI_SSH_PORT (default 52822),
-#   optional MACMINI_SSH_KEY (else SSH_KEY_FILE or ~/.env/.ssh_key)
-#   optional HERMES_OPERATOR_REPO — absolute path on the mini (e.g. /Users/operator/hermes-agent)
-#   optional HERMES_OPERATOR_ALLOW_ENV_PASSPHRASE or HERMES_DROPLET_ALLOW_ENV_PASSPHRASE + SSH_PASSPHRASE
-#   for encrypted keys without TTY (shared ~/.env)
-#
-# HERMES_OPERATOR_WORKSTATION_CLI=1 (set by `hermes … operator`): do not use env-file SSH_PASSPHRASE /
-# ASKPASS — type the key passphrase at the prompt (same pattern as ssh_droplet.sh).
+# Push workstation HERMES_HOME to the Mac mini operator account (~/.hermes), using the same
+# ~/.env/.env layout as ssh_operator.sh (MACMINI_*, SSH_PASSPHRASE + HERMES_DROPLET_ALLOW_ENV_PASSPHRASE).
 #
 # Usage:
-#   ./ssh_operator.sh
-#   ./ssh_operator.sh 'hostname'
+#   ./rsync_hermes_home_to_operator.sh
+#   ./rsync_hermes_home_to_operator.sh --dry-run
+#   ./rsync_hermes_home_to_operator.sh --remove-in-repo-copy   # rm -rf ~/hermes-agent/.hermes on mini
 #
 set -euo pipefail
 
 ENV_FILE="${HERMES_OPERATOR_ENV:-${HERMES_DROPLET_ENV:-${HOME}/.env/.env}}"
-_SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=operator_remote_venv.sh
-source "${_SCRIPTS_DIR}/operator_remote_venv.sh"
-
 KEY_FILE="${MACMINI_SSH_KEY:-${SSH_KEY_FILE:-${HOME}/.env/.ssh_key}}"
+DRY_RUN=()
+REMOVE_REPO=0
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) DRY_RUN=(--dry-run) ;;
+    --remove-in-repo-copy) REMOVE_REPO=1 ;;
+    *) echo "Unknown option: $arg" >&2; exit 2 ;;
+  esac
+done
+
 MACMINI_USER=""
 MACMINI_HOST=""
 MACMINI_PORT="52822"
-HERMES_OPERATOR_REPO_REMOTE=""
 _ALLOW_ENV_PASS_FROM_FILE=0
 _RAW_SSH_PASSPHRASE=""
 
 if [[ ! -f "$ENV_FILE" ]]; then
-  echo "ssh_operator.sh: missing env file ${ENV_FILE} (set HERMES_OPERATOR_ENV)" >&2
+  echo "rsync_hermes_home_to_operator.sh: missing env file ${ENV_FILE}" >&2
   exit 1
 fi
 if [[ ! -f "$KEY_FILE" ]]; then
-  echo "ssh_operator.sh: missing key ${KEY_FILE} (set MACMINI_SSH_KEY or SSH_KEY_FILE)" >&2
+  echo "rsync_hermes_home_to_operator.sh: missing key ${KEY_FILE}" >&2
   exit 1
 fi
 
@@ -51,11 +48,9 @@ while IFS= read -r line || [[ -n "$line" ]]; do
       ;;
     MACMINI_SSH_PORT) MACMINI_PORT="${val}" ;;
     MACMINI_SSH_KEY) KEY_FILE="${val}" ;;
-    HERMES_OPERATOR_REPO) HERMES_OPERATOR_REPO_REMOTE="${val}" ;;
     HERMES_OPERATOR_ALLOW_ENV_PASSPHRASE)
       case "$val" in 1|true|TRUE|True|yes|YES) _ALLOW_ENV_PASS_FROM_FILE=1 ;; esac
       ;;
-    # Same shared ~/.env as droplet — unlock encrypted key for non-interactive SSH
     HERMES_DROPLET_ALLOW_ENV_PASSPHRASE)
       case "$val" in 1|true|TRUE|True|yes|YES) _ALLOW_ENV_PASS_FROM_FILE=1 ;; esac
       ;;
@@ -65,14 +60,9 @@ done <"$ENV_FILE"
 
 MACMINI_USER="${MACMINI_USER:-operator}"
 [[ -n "$MACMINI_HOST" ]] || {
-  echo "ssh_operator.sh: set MACMINI_SSH_HOST (or SSH_IP_OPERATOR) in ${ENV_FILE}" >&2
+  echo "rsync_hermes_home_to_operator.sh: set MACMINI_SSH_HOST (or SSH_IP_OPERATOR) in ${ENV_FILE}" >&2
   exit 1
 }
-
-if [[ "${HERMES_OPERATOR_WORKSTATION_CLI:-0}" == "1" ]]; then
-  _ALLOW_ENV_PASS_FROM_FILE=0
-  _RAW_SSH_PASSPHRASE=""
-fi
 
 _op_cleanup() {
   [[ -n "${_OP_PASSFILE:-}" && -f "$_OP_PASSFILE" ]] && rm -f "$_OP_PASSFILE"
@@ -96,11 +86,6 @@ fi
 
 unset SSH_PASSPHRASE 2>/dev/null || true
 
-_USE_TT=0
-if [[ -t 0 ]] || [[ "${HERMES_OPERATOR_INTERACTIVE:-1}" == "1" ]]; then
-  _USE_TT=1
-fi
-
 _SSH_FLAGS=(
   -o BatchMode=no
   -o IdentitiesOnly=yes
@@ -119,29 +104,36 @@ _SSH_FLAGS=(
 if [[ "$(uname -s)" == "Darwin" ]]; then
   _SSH_FLAGS+=(-o UseKeychain=no)
 fi
-if [[ "$_USE_TT" == "1" ]]; then
-  _SSH_BASE=(ssh -tt "${_SSH_FLAGS[@]}" "${MACMINI_USER}@${MACMINI_HOST}")
-else
-  _SSH_BASE=(ssh -T "${_SSH_FLAGS[@]}" "${MACMINI_USER}@${MACMINI_HOST}")
-fi
 
-_run_remote() {
-  local remote_bash_cmd="$1"
-  "${_SSH_ENV[@]}" "${_SSH_BASE[@]}" "bash -lc $(printf '%q' "$remote_bash_cmd")"
+_SRC="${HERMES_HOME_RSYNC_SRC:-${HOME}/.hermes}"
+[[ -d "$_SRC" ]] || {
+  echo "rsync_hermes_home_to_operator.sh: missing source dir ${_SRC}" >&2
+  exit 1
 }
 
-_REPO_EXPORT=""
-if [[ -n "$HERMES_OPERATOR_REPO_REMOTE" ]]; then
-  _rq=$(printf '%q' "$HERMES_OPERATOR_REPO_REMOTE")
-  _REPO_EXPORT="export HERMES_OPERATOR_REPO=${_rq}; "
+# rsync -e must be a single program name; use a temp wrapper to preserve array + env.
+_WRAPPER=$(mktemp)
+trap '_op_cleanup; rm -f "${_WRAPPER:-}"' EXIT
+{
+  echo '#!/usr/bin/env bash'
+  echo 'set -euo pipefail'
+  printf 'exec '
+  printf '%q ' "${_SSH_ENV[@]}"
+  printf '%q ' ssh -T
+  printf '%q ' "${_SSH_FLAGS[@]}"
+  echo '"$@"'
+} >"$_WRAPPER"
+chmod 700 "$_WRAPPER"
+
+echo "rsync: ${_SRC}/ -> ${MACMINI_USER}@${MACMINI_HOST}:.hermes/"
+# Bash 3.2 + set -u: "${empty[@]}" can error — branch on dry-run
+if [[ ${#DRY_RUN[@]} -gt 0 ]]; then
+  rsync -avz "${DRY_RUN[@]}" -e "$_WRAPPER" "${_SRC}/" "${MACMINI_USER}@${MACMINI_HOST}:.hermes/"
+else
+  rsync -avz -e "$_WRAPPER" "${_SRC}/" "${MACMINI_USER}@${MACMINI_HOST}:.hermes/"
 fi
 
-if [[ $# -eq 0 ]]; then
-  _INNER="${_REPO_EXPORT}$(_operator_interactive_shell_cmd)"
-  _run_remote "$_INNER"
-  exit $?
+if [[ "$REMOVE_REPO" == "1" && ${#DRY_RUN[@]} -eq 0 ]]; then
+  echo "Removing ~/hermes-agent/.hermes on mini (if present)…"
+  "${_WRAPPER}" "${MACMINI_USER}@${MACMINI_HOST}" "rm -rf \"\$HOME/hermes-agent/.hermes\" 2>/dev/null; echo done"
 fi
-
-_USER_CMD="$*"
-_USER_CMD="${_REPO_EXPORT}$(_operator_wrap_cmd_with_venv "$_USER_CMD")"
-_run_remote "$_USER_CMD"

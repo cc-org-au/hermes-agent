@@ -5,7 +5,8 @@
 #   MACMINI_SSH_USER (default operator), MACMINI_SSH_HOST, MACMINI_SSH_PORT (default 52822),
 #   optional MACMINI_SSH_KEY (else SSH_KEY_FILE or ~/.env/.ssh_key)
 #   optional HERMES_OPERATOR_REPO — absolute path on the mini (e.g. /Users/operator/hermes-agent)
-#   optional HERMES_OPERATOR_ALLOW_ENV_PASSPHRASE + SSH_PASSPHRASE for encrypted keys without TTY
+#   optional HERMES_OPERATOR_ALLOW_ENV_PASSPHRASE or HERMES_DROPLET_ALLOW_ENV_PASSPHRASE + SSH_PASSPHRASE
+#   for encrypted keys without TTY (shared ~/.env)
 #
 # HERMES_OPERATOR_WORKSTATION_CLI=1 (set by `hermes … operator`): do not use env-file SSH_PASSPHRASE /
 # ASKPASS — type the key passphrase at the prompt (same pattern as ssh_droplet.sh).
@@ -52,6 +53,10 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     MACMINI_SSH_KEY) KEY_FILE="${val}" ;;
     HERMES_OPERATOR_REPO) HERMES_OPERATOR_REPO_REMOTE="${val}" ;;
     HERMES_OPERATOR_ALLOW_ENV_PASSPHRASE)
+      case "$val" in 1|true|TRUE|True|yes|YES) _ALLOW_ENV_PASS_FROM_FILE=1 ;; esac
+      ;;
+    # Same shared ~/.env as droplet — unlock encrypted key for non-interactive SSH
+    HERMES_DROPLET_ALLOW_ENV_PASSPHRASE)
       case "$val" in 1|true|TRUE|True|yes|YES) _ALLOW_ENV_PASS_FROM_FILE=1 ;; esac
       ;;
     SSH_PASSPHRASE) _RAW_SSH_PASSPHRASE="${val}" ;;
