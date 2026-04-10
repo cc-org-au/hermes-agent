@@ -201,7 +201,7 @@ if [[ "${HERMES_PULL_STRIP_MESSAGING_ENV:-0}" == "1" ]]; then
     _d="$(dirname "$_d")"
   done
   if [[ -n "$_repo" && -x "$_repo/venv/bin/python" ]]; then
-    echo ">>> HERMES_PULL_STRIP_MESSAGING_ENV=1: stripping messaging keys from ${HOME}/.hermes/.env files ..."
+    echo ">>> HERMES_PULL_STRIP_MESSAGING_ENV=1: stripping messaging *secrets* from ${HOME}/.hermes/.env files (allowlists/IDs kept) ..."
     "$_repo/venv/bin/python" "$ROOT/strip_messaging_env_from_hermes_home.py" "${HOME}/.hermes"
   else
     echo "warning: could not find repo venv; run manually: python scripts/core/strip_messaging_env_from_hermes_home.py" >&2

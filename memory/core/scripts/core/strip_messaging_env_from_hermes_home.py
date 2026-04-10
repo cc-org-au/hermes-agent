@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-"""Remove social/chat messaging credentials from Hermes ``.env`` files.
+"""Strip **secrets** from social/chat lines in Hermes ``.env`` files (keep allowlist / ID lines).
 
 Scans ``HERMES_HOME`` (default: ``~/.hermes``) recursively for files named ``.env``.
-Drops variables that belong to chat/messaging platforms (Telegram, Slack, Discord,
-WhatsApp, Signal, Matrix, Mattermost, Feishu, WeCom, DingTalk, SMS/Twilio, etc.)
-based on ``hermes_cli.config.OPTIONAL_ENV_VARS`` (category ``messaging``), while
-**keeping** API server, webhook adapter, and ``HERMES_GATEWAY_LOCK_INSTANCE`` entries.
+Removes variables that are messaging **tokens/secrets** (``password: true`` in
+``OPTIONAL_ENV_VARS`` for category ``messaging``), plus a small set of secrets that
+only appear in ``_EXTRA_ENV_KEYS`` (Feishu, Matrix password, Twilio auth, etc.).
 
-Also removes lines whose keys start with ``TELEGRAM_WEBHOOK_`` (webhook mode) and
-``GATEWAY_ALLOWED_USERS`` / ``GATEWAY_ALLOW_ALL_USERS`` if still present under other names.
+**Keeps** allowlists and identifiers: ``TELEGRAM_ALLOWED_*``, ``SLACK_ALLOWED_*``,
+``DISCORD_ALLOWED_*``, ``*_HOME_CHANNEL*``, ``MATRIX_USER_ID``, ``MATTERMOST_URL``,
+``GATEWAY_ALLOW_ALL_USERS``, boolean/UX flags like ``SLACK_NOTIFY_*``, and the
+API server / webhook entries listed in ``_KEEP_MESSAGING_KEYS``.
+
+Also keeps ``TELEGRAM_WEBHOOK_URL`` / ``TELEGRAM_WEBHOOK_PORT``; removes
+``TELEGRAM_WEBHOOK_SECRET`` only.
 
 Usage (from repo root, venv active)::
 
@@ -31,7 +35,7 @@ from pathlib import Path
 
 _ENV_LINE_KEY_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*=")
 
-# Not removed: local API server, inbound webhook adapter config, per-host lock id.
+# Not removed: local API server, inbound webhook adapter, per-host gateway lock id.
 _KEEP_MESSAGING_KEYS = frozenset(
     {
         "HERMES_GATEWAY_LOCK_INSTANCE",
@@ -46,15 +50,26 @@ _KEEP_MESSAGING_KEYS = frozenset(
     }
 )
 
-_EXTRA_STRIP_PREFIXES = (
-    "TELEGRAM_WEBHOOK_",
+# Messaging-related secrets listed in _EXTRA_ENV_KEYS / SMS / webhook secret (not full OPTIONAL rows).
+_EXTRA_MESSAGING_SECRET_KEYS = frozenset(
+    {
+        "MATRIX_PASSWORD",
+        "TWILIO_AUTH_TOKEN",
+        "TWILIO_ACCOUNT_SID",  # paired with auth token for SMS; strip to avoid overlap
+        "TELEGRAM_WEBHOOK_SECRET",
+        "FEISHU_APP_SECRET",
+        "FEISHU_ENCRYPT_KEY",
+        "FEISHU_VERIFICATION_TOKEN",
+        "DINGTALK_CLIENT_SECRET",
+        "WECOM_SECRET",
+    }
 )
 
 
-def _strip_key_names() -> frozenset[str]:
+def _messaging_secret_key_names() -> frozenset[str]:
     from hermes_cli.config import OPTIONAL_ENV_VARS
 
-    out: set[str] = set()
+    out: set[str] = set(_EXTRA_MESSAGING_SECRET_KEYS)
     for name, meta in OPTIONAL_ENV_VARS.items():
         if not isinstance(meta, dict):
             continue
@@ -62,20 +77,16 @@ def _strip_key_names() -> frozenset[str]:
             continue
         if name in _KEEP_MESSAGING_KEYS:
             continue
-        out.add(name)
+        if meta.get("password") is True:
+            out.add(name)
     return frozenset(out)
 
 
-def _should_remove_line(key: str, strip_names: frozenset[str]) -> bool:
-    if key in strip_names:
-        return True
-    for prefix in _EXTRA_STRIP_PREFIXES:
-        if key.startswith(prefix):
-            return True
-    return False
+def _should_remove_secret_line(key: str, secret_keys: frozenset[str]) -> bool:
+    return key in secret_keys
 
 
-def _process_file(path: Path, *, strip_names: frozenset[str], dry_run: bool) -> tuple[int, bool]:
+def _process_file(path: Path, *, secret_keys: frozenset[str], dry_run: bool) -> tuple[int, bool]:
     try:
         raw = path.read_text(encoding="utf-8")
     except OSError:
@@ -95,7 +106,7 @@ def _process_file(path: Path, *, strip_names: frozenset[str], dry_run: bool) -> 
             kept.append(line)
             continue
         key = m.group(1)
-        if _should_remove_line(key, strip_names):
+        if _should_remove_secret_line(key, secret_keys):
             removed += 1
             continue
         kept.append(line)
@@ -142,29 +153,33 @@ def main() -> int:
         print(f"error: not a directory: {root}", file=sys.stderr)
         return 1
 
-    strip_names = _strip_key_names()
+    secret_keys = _messaging_secret_key_names()
     total_removed = 0
     files_changed = 0
     for env_path in sorted(root.rglob(".env")):
         if not env_path.is_file():
             continue
-        # Skip accidental hits under unusual trees
         try:
             n, changed = _process_file(
-                env_path, strip_names=strip_names, dry_run=args.dry_run
+                env_path, secret_keys=secret_keys, dry_run=args.dry_run
             )
         except OSError as e:
             print(f"error: {env_path}: {e}", file=sys.stderr)
             return 1
         if n:
             rel = env_path.relative_to(root)
-            print(f"{'would strip' if args.dry_run else 'stripped'} {n} line(s): {rel}")
+            print(
+                f"{'would remove' if args.dry_run else 'removed'} {n} secret line(s): {rel}"
+            )
             total_removed += n
             if changed:
                 files_changed += 1
 
     suffix = " (dry-run)" if args.dry_run else ""
-    print(f"Done{suffix}: {files_changed} file(s), {total_removed} line(s) removed.")
+    print(
+        f"Done{suffix}: {files_changed} file(s), {total_removed} messaging-secret line(s) removed "
+        f"(allowlist / ID vars kept)."
+    )
     return 0
 
 
