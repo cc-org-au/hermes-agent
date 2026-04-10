@@ -101,6 +101,40 @@ def ladder_model_set_non_empty(cfg: Dict[str, Any]) -> bool:
     return bool(cfg.get("ladder_model_set"))
 
 
+def session_budget_next_cheaper_model(
+    *,
+    current_model: str,
+    base_url: str,
+    api_mode: str,
+) -> Optional[str]:
+    """Next cheaper slug from ``opm_native_quota_downgrade`` lists for session cost circuit.
+
+    Used when session spend rate / budget trips the cost monitor: try a smaller ladder
+    rung before or after ``fallback_providers``. Does **not** require OPM or a quota
+    API error — only that the merged canon lists include the current model.
+
+    OpenRouter ``openai/…`` slugs are preserved (``gpt-5.4`` → ``openai/gpt-5.4-mini``).
+    """
+    cfg = load_opm_native_quota_downgrade_config()
+    if not cfg.get("enabled") or not ladder_model_set_non_empty(cfg):
+        return None
+    nxt = next_quota_downgrade_model(
+        current_model=current_model,
+        api_mode=api_mode,
+        cfg=cfg,
+    )
+    if not nxt:
+        return None
+    low = (base_url or "").lower()
+    cur_raw = (current_model or "").strip()
+    if "openrouter" in low and cur_raw.lower().startswith("openai/"):
+        bn = _bare_slug(nxt)
+        if not bn.lower().startswith("openai/"):
+            return f"openai/{bn}"
+        return bn
+    return nxt
+
+
 def next_quota_downgrade_model(
     *,
     current_model: str,

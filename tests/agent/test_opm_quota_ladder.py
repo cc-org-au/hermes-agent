@@ -8,6 +8,7 @@ import yaml
 from agent.opm_quota_ladder import (
     load_opm_native_quota_downgrade_config,
     next_quota_downgrade_model,
+    session_budget_next_cheaper_model,
     should_attempt_opm_native_downgrade,
 )
 from agent.routing_canon import invalidate_routing_canon_cache, load_merged_routing_canon
@@ -36,6 +37,29 @@ def test_normalize_ladder_maps_legacy_gpt53_to_official_mini():
     chat = cfg.get("chat_models") or []
     assert "gpt-5.3" not in chat
     assert "gpt-5.4-mini" in chat
+
+
+def test_session_budget_next_cheaper_model_preserves_openrouter_prefix():
+    """Session cost path keeps ``openai/`` when stepping the ladder on OpenRouter."""
+    assert (
+        session_budget_next_cheaper_model(
+            current_model="openai/gpt-5.4",
+            base_url="https://openrouter.ai/api/v1",
+            api_mode="chat_completions",
+        )
+        == "openai/gpt-5.4-mini"
+    )
+
+
+def test_session_budget_next_cheaper_model_native_matches_bare_ladder():
+    assert (
+        session_budget_next_cheaper_model(
+            current_model="gpt-5.4",
+            base_url="https://api.openai.com/v1",
+            api_mode="chat_completions",
+        )
+        == "gpt-5.4-mini"
+    )
 
 
 def test_next_quota_downgrade_model_chat():

@@ -1652,6 +1652,10 @@ class AIAgent:
         ``router_progress``, ``summary_review``, and ``delegation_heartbeat`` are
         not printed on the CLI (``status_callback`` still runs).
 
+        ``budget_notice`` — hard budget / session cost lines. On ``platform=="cli"``,
+        prints to **stderr** only so messages do not appear inside the streamed Hermes
+        response box; gateway adapters still receive ``status_callback``.
+
         This helper never raises — exceptions are swallowed so it cannot
         interrupt the retry/fallback logic.
         """
@@ -1662,7 +1666,15 @@ class AIAgent:
             "summary_review",
             "delegation_heartbeat",
         )
-        if not _skip_cli and not _quiet_cli_noise:
+        # Budget / cost lines: print to stderr on CLI so they do not interleave with the
+        # streamed Hermes response box (stdout goes through patch_stdout / stream buffer).
+        _budget_cli_stderr = _et == "budget_notice" and getattr(self, "platform", None) == "cli"
+        if _budget_cli_stderr:
+            try:
+                print(f"{self.log_prefix}{message}", file=sys.stderr, flush=True)
+            except Exception:
+                pass
+        elif not _skip_cli and not _quiet_cli_noise:
             try:
                 self._vprint(f"{self.log_prefix}{message}", force=True)
             except Exception:
@@ -5769,6 +5781,111 @@ class AIAgent:
             logging.error("Failed to activate fallback %s: %s", fb_model, e)
             return self._try_activate_fallback(triggered_by_rate_limit=triggered_by_rate_limit)  # try next in chain
 
+    def _try_session_budget_cheaper_model(self) -> bool:
+        """When cost monitor trips, step to next ``opm_native_quota_downgrade`` rung if available."""
+        try:
+            from agent.auxiliary_client import resolve_provider_client
+            from agent.opm_quota_ladder import session_budget_next_cheaper_model
+            from agent.routing_trace import emit_routing_decision_trace
+
+            nxt = session_budget_next_cheaper_model(
+                current_model=self.model or "",
+                base_url=self.base_url or "",
+                api_mode=str(getattr(self, "api_mode", "") or ""),
+            )
+            if not nxt:
+                return False
+            if str(nxt).strip() == str(self.model or "").strip():
+                return False
+            old_model = self.model
+            low = (self.base_url or "").lower()
+            if "openrouter" in low:
+                or_client, _ = resolve_provider_client(
+                    "openrouter",
+                    model=nxt,
+                    raw_codex=True,
+                    explicit_api_key=None,
+                    explicit_base_url=None,
+                )
+                if or_client is None:
+                    logging.warning(
+                        "session budget downgrade: resolve_provider_client(None) for %s",
+                        nxt,
+                    )
+                    return False
+                fb_base_url = str(or_client.base_url)
+                self.model = nxt
+                self.provider = "openrouter"
+                self.base_url = fb_base_url
+                self.api_mode = "chat_completions"
+                self.api_key = or_client.api_key
+                self.client = or_client
+                self._client_kwargs = {
+                    "api_key": or_client.api_key,
+                    "base_url": fb_base_url,
+                }
+                self._use_prompt_caching = (
+                    "openrouter" in fb_base_url.lower() and "claude" in nxt.lower()
+                )
+            else:
+                self.model = nxt
+                self._reconcile_runtime_after_tier_model_change()
+
+            if hasattr(self, "context_compressor") and self.context_compressor:
+                try:
+                    from agent.model_metadata import get_model_context_length
+
+                    fb_context_length = get_model_context_length(
+                        self.model,
+                        base_url=self.base_url,
+                        api_key=self.api_key,
+                        provider=self.provider,
+                    )
+                    self.context_compressor.model = self.model
+                    self.context_compressor.base_url = self.base_url
+                    self.context_compressor.api_key = self.api_key
+                    self.context_compressor.provider = self.provider
+                    self.context_compressor.context_length = fb_context_length
+                    self.context_compressor.threshold_tokens = int(
+                        fb_context_length * self.context_compressor.threshold_percent
+                    )
+                except Exception:
+                    logger.debug("session budget downgrade: compressor update failed", exc_info=True)
+            self._opm_reconcile_primary_if_disallowed()
+            self._emit_status(
+                f"⚠️ Session cost high — stepped down: {old_model} → {self.model}",
+                event_type="budget_notice",
+            )
+            try:
+                emit_routing_decision_trace(
+                    stage="session_cost_downgrade",
+                    chosen_model=str(self.model or ""),
+                    chosen_provider=str(getattr(self, "provider", "") or ""),
+                    reason_code="routing_canon_ladder",
+                    opm_enabled=False,
+                    opm_source="",
+                    tier_source="cost_monitor",
+                    skip_flags={
+                        "from_model": str(old_model or ""),
+                        "to_model": str(self.model or ""),
+                    },
+                    fallback_activated=bool(getattr(self, "_fallback_activated", False)),
+                    explicit_user_model=not bool(getattr(self, "_model_is_tier_routed", True)),
+                    profile=str(getattr(self, "profile", "") or ""),
+                    session_id=str(getattr(self, "session_id", "") or ""),
+                )
+            except Exception:
+                logger.debug("session_cost_downgrade trace failed", exc_info=True)
+            logging.info(
+                "Session cost downgrade: %s -> %s",
+                old_model,
+                self.model,
+            )
+            return True
+        except Exception:
+            logger.debug("_try_session_budget_cheaper_model failed", exc_info=True)
+            return False
+
     def _try_opm_native_quota_downgrade(
         self,
         api_error: BaseException,
@@ -9008,12 +9125,18 @@ class AIAgent:
                                 if _ca == "circuit_break":
                                     self._emit_status(
                                         f"⚠️ {_cm.status_line(self.session_estimated_cost_usd)} "
-                                        "— switching to free model",
+                                        "— switching to cheaper or fallback model",
+                                        event_type="budget_notice",
                                     )
-                                    self._try_activate_fallback(triggered_by_rate_limit=True)
+                                    _fb_ok = self._try_activate_fallback(
+                                        triggered_by_rate_limit=True,
+                                    )
+                                    if not _fb_ok:
+                                        self._try_session_budget_cheaper_model()
                                 elif _ca == "warn":
                                     self._emit_status(
                                         f"💰 {_cm.status_line(self.session_estimated_cost_usd)}",
+                                        event_type="budget_notice",
                                     )
                             _prev_ledger = float(getattr(self, "_ledger_baseline_session_cost", 0.0) or 0.0)
                             _delta_led = max(0.0, float(self.session_estimated_cost_usd or 0.0) - _prev_ledger)
@@ -9034,14 +9157,20 @@ class AIAgent:
                                             self._emit_status(
                                                 "⚠️ Daily budget cap reached — paid API calls will pause "
                                                 "until you approve or deny on the next model request.",
+                                                event_type="budget_notice",
                                             )
                                             self._hard_budget_daily_cap_notice_emitted = True
                                     else:
                                         self._emit_status(
                                             "⚠️ Daily budget cap (routing_canon hard_budget) reached "
-                                            "— switching to fallback model",
+                                            "— switching to cheaper or fallback model",
+                                            event_type="budget_notice",
                                         )
-                                        self._try_activate_fallback(triggered_by_rate_limit=True)
+                                        _hb_fb = self._try_activate_fallback(
+                                            triggered_by_rate_limit=True,
+                                        )
+                                        if not _hb_fb:
+                                            self._try_session_budget_cheaper_model()
         
                             # Persist token counts to session DB for /insights.
                             # Do this for every platform with a session_id so non-CLI
