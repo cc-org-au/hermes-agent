@@ -194,7 +194,7 @@ _HERMES_SUBCOMMANDS = frozenset({
     "chat", "tui", "model", "gateway", "setup", "whatsapp", "login", "logout",
     "status", "cron", "doctor", "config", "pairing", "skills", "tools",
     "mcp", "sessions", "insights", "version", "update", "uninstall",
-    "profile", "plugins", "honcho", "acp", "droplet",
+    "profile", "plugins", "honcho", "acp", "droplet", "operator",
 })
 
 
@@ -1169,7 +1169,7 @@ _hermes_completion() {
 
     # Top-level subcommands
     if [[ "$COMP_CWORD" == 1 ]]; then
-        local commands="chat tui model gateway setup status cron doctor config skills tools mcp sessions profile droplet update version"
+        local commands="chat tui model gateway setup status cron doctor config skills tools mcp sessions profile droplet operator update version"
         COMPREPLY=($(compgen -W "$commands" -- "$cur"))
     fi
 }
@@ -1194,7 +1194,7 @@ _hermes() {
     _arguments \\
         '-p[Profile name]:profile:($profiles)' \\
         '--profile[Profile name]:profile:($profiles)' \\
-        '1:command:(chat tui model gateway setup status cron doctor config skills tools mcp sessions profile droplet update version)' \\
+        '1:command:(chat tui model gateway setup status cron doctor config skills tools mcp sessions profile droplet operator update version)' \\
         '*::arg:->args'
 
     case $words[1] in

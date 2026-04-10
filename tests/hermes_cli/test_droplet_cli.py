@@ -33,6 +33,25 @@ def test_strip_trailing_droplet_hop_argv():
     assert _strip_trailing_droplet_hop_argv([]) is None
 
 
+def test_resolve_agent_operator_script_exists():
+    from hermes_cli.main import _resolve_agent_operator_script
+
+    p = _resolve_agent_operator_script()
+    assert p is not None and p.is_file()
+    assert p.name == "agent-operator"
+
+
+def test_strip_trailing_operator_hop_argv():
+    from hermes_cli.main import _strip_trailing_operator_hop_argv
+
+    assert _strip_trailing_operator_hop_argv(["operator"]) == []
+    assert _strip_trailing_operator_hop_argv(["chat", "operator"]) == ["chat"]
+    assert _strip_trailing_operator_hop_argv(["-p", "operator"]) is None
+    assert _strip_trailing_operator_hop_argv(["--profile", "operator"]) is None
+    assert _strip_trailing_operator_hop_argv(["profile", "list"]) is None
+    assert _strip_trailing_operator_hop_argv([]) is None
+
+
 def test_validate_profile_name_rejects_droplet():
     from hermes_cli.profiles import validate_profile_name
 

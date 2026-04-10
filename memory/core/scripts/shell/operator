@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Interactive SSH to the Mac mini as MACMINI_SSH_USER (venv + login shell on the remote checkout).
+# Requires HERMES_AGENT_REPO and scripts/core/ssh_operator.sh (see hermes-env.sh).
+set -euo pipefail
+_REPO="${HERMES_AGENT_REPO:?set HERMES_AGENT_REPO}"
+exec bash "${_REPO}/scripts/core/ssh_operator.sh" "$@"

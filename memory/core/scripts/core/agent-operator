@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Mac mini hop: run Hermes CLI on the operator account over SSH (see AGENTS.md).
+# Invoked when argv ends with "operator", or via: hermes operator [args...]
+#
+# Reads workstation ~/.hermes/active_profile for remote -p (default: chief-orchestrator).
+# Override with AGENT_OPERATOR_PROFILE. Trailing "operator" is the hop token, not a profile name
+# when it is the last argv word (same pattern as droplet).
+#
+set -euo pipefail
+_HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+PROFILE="${AGENT_OPERATOR_PROFILE:-}"
+if [[ -z "$PROFILE" && -f "${HOME}/.hermes/active_profile" ]]; then
+  PROFILE="$(tr -d '\r\n' <"${HOME}/.hermes/active_profile" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+fi
+if [[ -z "$PROFILE" || "$PROFILE" == "default" ]]; then
+  PROFILE="chief-orchestrator"
+fi
+_profile_lc=$(printf '%s' "$PROFILE" | tr '[:upper:]' '[:lower:]')
+# "operator" as sticky profile name is valid; do not rewrite (unlike droplet).
+unset _profile_lc
+
+REMOTE_CMD=$(printf '%q ' "./venv/bin/python" "-m" "hermes_cli.main" "-p" "$PROFILE" "$@")
+REMOTE_CMD=${REMOTE_CMD%% }
+
+export HERMES_OPERATOR_WORKSTATION_CLI=1
+export HERMES_OPERATOR_INTERACTIVE="${HERMES_OPERATOR_INTERACTIVE:-1}"
+
+exec env -u HERMES_DROPLET_ALLOW_ENV_PASSPHRASE -u HERMES_OPERATOR_ALLOW_ENV_PASSPHRASE \
+  bash "${_HERE}/ssh_operator.sh" "$REMOTE_CMD"

@@ -41,6 +41,8 @@ Usage:
     hermes sessions browse     Interactive session picker with search
     hermes droplet             Run Hermes CLI on the VPS over SSH (bundled agent-droplet)
     hermes tui droplet         Same with explicit TUI subcommand (tui == chat)
+    hermes operator            Mac mini hop — run Hermes on operator@MACMINI (bundled agent-operator)
+    hermes tui operator        Same; trailing operator must be last argument (like droplet)
 
     hermes claw migrate --dry-run  # Preview migration without changes
 """
@@ -115,6 +117,22 @@ def _resolve_agent_droplet_script() -> Optional[Path]:
     return None
 
 
+def _resolve_agent_operator_script() -> Optional[Path]:
+    """Path to ``agent-operator`` (Mac mini SSH hop)."""
+    pkg = Path(__file__).resolve().parent / "scripts" / "core" / "agent-operator"
+    if pkg.is_file():
+        return pkg
+    legacy = PROJECT_ROOT / "scripts" / "core" / "agent-operator"
+    if legacy.is_file():
+        return legacy
+    env_repo = os.environ.get("HERMES_AGENT_REPO", "").strip()
+    if env_repo:
+        p = Path(env_repo).expanduser().resolve() / "scripts" / "core" / "agent-operator"
+        if p.is_file():
+            return p
+    return None
+
+
 def _rewrite_mistaken_profile_droplet_argv(argv: list) -> Optional[list]:
     """Turn ``-p droplet`` / ``--profile=droplet`` into a real VPS hop (``droplet`` last).
 
@@ -155,6 +173,19 @@ def _strip_trailing_droplet_hop_argv(argv: list) -> Optional[list]:
     ``--profile`` (that names a profile, not this hop).
     """
     if len(argv) < 1 or argv[-1] != "droplet":
+        return None
+    if len(argv) >= 2 and argv[-2] in ("-p", "--profile"):
+        return None
+    return argv[:-1]
+
+
+def _strip_trailing_operator_hop_argv(argv: list) -> Optional[list]:
+    """If argv ends with the Mac mini hop token ``operator``, return argv without it.
+
+    Same trailing-argument pattern as ``droplet``. Does **not** strip when ``operator`` is
+    the value of ``-p`` / ``--profile`` (valid profile name).
+    """
+    if len(argv) < 1 or argv[-1] != "operator":
         return None
     if len(argv) >= 2 and argv[-2] in ("-p", "--profile"):
         return None
@@ -279,16 +310,28 @@ def _apply_profile_override() -> None:
 _p_droplet_fix = _rewrite_mistaken_profile_droplet_argv(list(sys.argv[1:]))
 if _p_droplet_fix is not None:
     sys.argv = [sys.argv[0]] + _p_droplet_fix
-_drop_argv = _strip_trailing_droplet_hop_argv(sys.argv[1:])
+_orig_argv1 = list(sys.argv[1:])
+_drop_argv = _strip_trailing_droplet_hop_argv(_orig_argv1)
 _agent_droplet_path = _resolve_agent_droplet_script()
 _delegate_droplet = bool(_drop_argv is not None and _agent_droplet_path is not None)
 if _delegate_droplet:
     sys.argv = [sys.argv[0]] + _drop_argv
 
+_op_argv = None
+_agent_operator_path = _resolve_agent_operator_script()
+_delegate_operator = False
+if not _delegate_droplet:
+    _op_argv = _strip_trailing_operator_hop_argv(_orig_argv1)
+    _delegate_operator = bool(_op_argv is not None and _agent_operator_path is not None)
+    if _delegate_operator:
+        sys.argv = [sys.argv[0]] + _op_argv
+
 _apply_profile_override()
 
 if _delegate_droplet:
     os.execv("/bin/bash", ["/bin/bash", str(_agent_droplet_path), *sys.argv[1:]])
+if _delegate_operator:
+    os.execv("/bin/bash", ["/bin/bash", str(_agent_operator_path), *sys.argv[1:]])
 
 # Load .env from ~/.hermes/.env first, then project root as dev fallback.
 # User-managed env files should override stale shell exports on restart.
@@ -3707,7 +3750,7 @@ def _coalesce_session_name_args(argv: list) -> list:
         "chat", "tui", "model", "gateway", "setup", "whatsapp", "login", "logout", "auth",
         "status", "cron", "doctor", "config", "pairing", "skills", "tools",
         "mcp", "sessions", "insights", "version", "update", "uninstall",
-        "profile", "droplet",
+        "profile", "droplet", "operator",
     }
     _SESSION_FLAGS = {"-c", "--continue", "-r", "--resume"}
 
@@ -5496,6 +5539,40 @@ For more help on a command:
         os.execv("/bin/bash", ["/bin/bash", str(script), *args.remote_args])
 
     droplet_parser.set_defaults(func=cmd_droplet)
+
+    # =========================================================================
+    # operator command (Mac mini hop — parity with agent-operator)
+    # =========================================================================
+    operator_parser = subparsers.add_parser(
+        "operator",
+        help="Mac mini hop — canonical form: hermes <subcommand> … operator (operator last)",
+        description=(
+            "SSH to the Mac mini and run Hermes there (venv + HERMES_HOME). "
+            "Append operator as the last argument (e.g. hermes doctor operator); "
+            "this subcommand is a fallback when scripts/core/agent-operator was not available. "
+            "Configure ~/.env/.env with MACMINI_SSH_* (see scripts/core/ssh_operator.sh)."
+        ),
+    )
+    operator_parser.add_argument(
+        "remote_args",
+        nargs="*",
+        default=[],
+        help="Extra arguments passed to hermes on the mini (e.g. doctor, profile list)",
+    )
+
+    def cmd_operator(args):
+        script = _resolve_agent_operator_script()
+        if script is None or not script.is_file():
+            print(
+                "hermes operator: agent-operator script not found (bundled with hermes_cli).\n"
+                "  Reinstall: pip install -U -e '.[dev]' from a git checkout, or set\n"
+                "  HERMES_AGENT_REPO to your clone if scripts live only under scripts/core/.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        os.execv("/bin/bash", ["/bin/bash", str(script), *args.remote_args])
+
+    operator_parser.set_defaults(func=cmd_operator)
 
     # =========================================================================
     # profile command
