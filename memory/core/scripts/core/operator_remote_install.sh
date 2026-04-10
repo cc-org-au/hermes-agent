@@ -20,7 +20,23 @@ if command -v brew >/dev/null 2>&1; then
 fi
 export PATH="/opt/homebrew/opt/python@3.12/bin:/usr/local/opt/python@3.12/bin:$PATH"
 
-./scripts/core/operator_bootstrap_venv.sh
+if ./scripts/core/operator_bootstrap_venv.sh; then
+  :
+else
+  echo "operator_remote_install.sh: no system Python >=3.11; installing **uv** and creating venv with downloaded Python 3.12…" >&2
+  export PATH="${HOME}/.local/bin:${PATH}"
+  if ! command -v uv >/dev/null 2>&1; then
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+  fi
+  export PATH="${HOME}/.local/bin:${PATH}"
+  command -v uv >/dev/null || {
+    echo "operator_remote_install.sh: uv not available after install" >&2
+    exit 1
+  }
+  rm -rf venv
+  uv venv venv --python 3.12
+  ./venv/bin/python -m pip install -U pip
+fi
 
 if ! ./venv/bin/pip install -q -e ".[messaging]"; then
   ./venv/bin/pip install -q -e "."

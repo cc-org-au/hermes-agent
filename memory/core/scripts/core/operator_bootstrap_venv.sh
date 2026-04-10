@@ -43,6 +43,16 @@ _pick_python() {
       fi
     done
   done
+  # python.org macOS installer (no Homebrew)
+  local fw
+  for fw in /Library/Frameworks/Python.framework/Versions/*; do
+    [[ -d "$fw" ]] || continue
+    cand="${fw}/bin/python3"
+    if [[ -x "$cand" ]] && "$cand" -c 'import sys; assert sys.version_info[:2] >= (3, 11)' 2>/dev/null; then
+      printf '%s' "$cand"
+      return 0
+    fi
+  done
   return 1
 }
 
@@ -57,7 +67,9 @@ Install Homebrew Python, then re-run this script:
   echo 'export PATH="/opt/homebrew/opt/python@3.12/bin:$PATH"' >> ~/.zprofile   # Apple Silicon
   # Intel Mac: use /usr/local/opt/python@3.12/bin instead
 
-Or install from https://www.python.org/downloads/ and ensure `python3.12` is on PATH.
+Or install from https://www.python.org/downloads/ (adds **/Library/Frameworks/.../python3**).
+
+Or run **./scripts/core/operator_remote_install.sh** on the mini — it can fall back to **uv** (downloads Python; no sudo).
 EOF
   exit 1
 fi
