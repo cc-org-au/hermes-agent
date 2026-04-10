@@ -8,8 +8,16 @@
 # for remote sudo (hermesadmin reads hermesuser home via sudo tar).
 #
 # Usage:
-#   ./scripts/core/droplet_pull_hermes_home.sh              # backup ~/.hermes then replace
-#   ./scripts/core/droplet_pull_hermes_home.sh --dry-run    # only show what would run
+#   ./scripts/core/droplet_pull_hermes_home.sh              # default: slim pull (see below)
+#   ./scripts/core/droplet_pull_hermes_home.sh --full         # entire .hermes (large; live gateway may warn)
+#   ./scripts/core/droplet_pull_hermes_home.sh --dry-run      # only show what would run
+#
+# Slim mode (default): skips heavy trees (logs, sessions, caches, WhatsApp bridge data,
+# per-profile skills copies, sqlite session DB, etc.) but still pulls ``config.yaml``,
+# ``.env`` files, ``workspace/memory/**``, ``workspace/policies/**``, and top-level
+# ``policies/**``. Override defaults with:
+#   HERMES_DROPLET_PULL_SLIM=0   # same as --full
+#   HERMES_DROPLET_PULL_FULL=1   # same as --full
 #
 # Optional: after a successful extract, strip chat/messaging keys from every ``.env`` under
 # ``~/.hermes`` (see strip_messaging_env_from_hermes_home.py). Set:
@@ -21,7 +29,23 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 ENV_FILE="${HERMES_DROPLET_ENV:-${HOME}/.env/.env}"
 KEY_FILE="${SSH_KEY_FILE:-${HOME}/.env/.ssh_key}"
 DRY=0
-[[ "${1:-}" == "--dry-run" ]] && DRY=1
+FULL=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run) DRY=1; shift ;;
+    --full) FULL=1; shift ;;
+    --slim) FULL=0; shift ;;
+    *)
+      echo "droplet_pull_hermes_home.sh: unknown option: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
+SLIM=1
+[[ "$FULL" == "1" ]] && SLIM=0
+case "${HERMES_DROPLET_PULL_FULL:-0}" in 1|true|TRUE|yes|YES) SLIM=0 ;; esac
+case "${HERMES_DROPLET_PULL_SLIM:-1}" in 0|false|FALSE|no|NO) SLIM=0 ;; esac
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "droplet_pull_hermes_home.sh: missing ${ENV_FILE}" >&2
@@ -96,14 +120,46 @@ fi
 ARCHIVE="${TMPDIR:-/tmp}/hermes-home-from-droplet.$$".tar.gz
 PW_B64=$(printf '%s' "$SSH_SUDO_PASSWORD" | base64 | tr -d '\n')
 # Live gateway may mutate files during archive; GNU tar otherwise exits 1 and breaks the SSH pipe.
-REMOTE_CMD="printf '%s' '${PW_B64}' | base64 -d | sudo -S tar czf - --warning=no-file-changed -C /home/hermesuser .hermes"
+# Slim excludes use --wildcards so patterns like .hermes/profiles/*/logs match; they intentionally
+# avoid .hermes/profiles/*/workspace so workspace/memory and workspace/policies are included.
+REMOTE_CMD="printf '%s' '${PW_B64}' | base64 -d | sudo -S tar czf - --warning=no-file-changed"
+if [[ "$SLIM" == "1" ]]; then
+  REMOTE_CMD+=" --wildcards --wildcards-match-slash"
+  _slim_excludes=(
+    '--exclude=.hermes/logs'
+    '--exclude=.hermes/sessions'
+    '--exclude=.hermes/cache'
+    '--exclude=.hermes/whatsapp'
+    '--exclude=.hermes/skills'
+    '--exclude=.hermes/bin'
+    '--exclude=.hermes/archive'
+    '--exclude=.hermes/backups'
+    '--exclude=.hermes/profiles/*/logs'
+    '--exclude=.hermes/profiles/*/sessions'
+    '--exclude=.hermes/profiles/*/cache'
+    '--exclude=.hermes/profiles/*/skills'
+    '--exclude=.hermes/profiles/*/whatsapp'
+    '--exclude=.hermes/profiles/*/state.db'
+    '--exclude=.hermes/profiles/*/models_dev_cache.json'
+    '--exclude=*.log'
+  )
+  for _ex in "${_slim_excludes[@]}"; do
+    REMOTE_CMD+=" $(printf '%q' "$_ex")"
+  done
+fi
+REMOTE_CMD+=" -C /home/hermesuser .hermes"
 
 if [[ "$DRY" == "1" ]]; then
   echo "Would backup ${HOME}/.hermes then stream remote tar to ${ARCHIVE} and extract to ${HOME}"
+  if [[ "$SLIM" == "1" ]]; then
+    echo "(slim mode: heavy dirs excluded; workspace/memory and workspace/policies retained)"
+  else
+    echo "(full mode: entire .hermes)"
+  fi
   exit 0
 fi
 
-echo "Streaming /home/hermesuser/.hermes from ${REMOTE_USER}@${HOST} ..."
+echo "Streaming /home/hermesuser/.hermes from ${REMOTE_USER}@${HOST} ($([[ "$SLIM" == "1" ]] && echo slim || echo full)) ..."
 if ! "${_SSH_ENV[@]}" "${SSH_BASE[@]}" "${REMOTE_USER}@${HOST}" "bash -lc $(printf '%q' "$REMOTE_CMD")" >"$ARCHIVE"; then
   echo "droplet_pull_hermes_home.sh: ssh/tar failed" >&2
   rm -f "$ARCHIVE"

@@ -7,6 +7,7 @@ import pytest
 
 _REPO = Path(__file__).resolve().parents[2]
 _SCRIPTS = [
+    _REPO / "scripts/core/droplet_pull_hermes_home.sh",
     _REPO / "scripts/core/gateway-watchdog.sh",
     _REPO / "scripts/core/install_and_restart_gateway_watchdog.sh",
 ]
