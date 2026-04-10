@@ -779,6 +779,14 @@ OPTIONAL_ENV_VARS = {
         "category": "setting",
         "advanced": True,
     },
+    "HERMES_GATEWAY_LOCK_INSTANCE": {
+        "description": "Optional subdirectory under the gateway messaging lock directory (e.g. mac-mini) so this host keeps token lock files separate from another machine or a copied ~/.local/state tree. Two live gateways still need distinct bot tokens or non-overlapping platforms.",
+        "prompt": "Gateway lock instance id (optional, e.g. mac-mini)",
+        "url": None,
+        "password": False,
+        "category": "messaging",
+        "advanced": True,
+    },
     # ── Local inference (vLLM / llama.cpp / Ollama OpenAI-compatible server) ──
     "HERMES_LOCAL_INFERENCE_BASE_URL": {
         "description": "Base URL for a local OpenAI-compatible inference server (vLLM, llama.cpp, Ollama). "

@@ -11,6 +11,10 @@
 #   ./scripts/core/droplet_pull_hermes_home.sh              # backup ~/.hermes then replace
 #   ./scripts/core/droplet_pull_hermes_home.sh --dry-run    # only show what would run
 #
+# Optional: after a successful extract, strip chat/messaging keys from every ``.env`` under
+# ``~/.hermes`` (see strip_messaging_env_from_hermes_home.py). Set:
+#   HERMES_PULL_STRIP_MESSAGING_ENV=1
+#
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -91,7 +95,8 @@ fi
 
 ARCHIVE="${TMPDIR:-/tmp}/hermes-home-from-droplet.$$".tar.gz
 PW_B64=$(printf '%s' "$SSH_SUDO_PASSWORD" | base64 | tr -d '\n')
-REMOTE_CMD="printf '%s' '${PW_B64}' | base64 -d | sudo -S tar czf - -C /home/hermesuser .hermes"
+# Live gateway may mutate files during archive; GNU tar otherwise exits 1 and breaks the SSH pipe.
+REMOTE_CMD="printf '%s' '${PW_B64}' | base64 -d | sudo -S tar czf - --warning=no-file-changed -C /home/hermesuser .hermes"
 
 if [[ "$DRY" == "1" ]]; then
   echo "Would backup ${HOME}/.hermes then stream remote tar to ${ARCHIVE} and extract to ${HOME}"
@@ -128,3 +133,21 @@ rm -f "${HOME}/.hermes/gateway.pid" "${HOME}/.hermes/profiles/"*/gateway.pid 2>/
 
 echo "Done. Previous tree (if any): ${BACKUP}"
 echo "Do not run a second messaging gateway with the same bot tokens locally; use a different profile or stop the VPS gateway first."
+
+if [[ "${HERMES_PULL_STRIP_MESSAGING_ENV:-0}" == "1" ]]; then
+  _repo=""
+  _d="$ROOT"
+  while [[ "$_d" != "/" ]]; do
+    if [[ -f "$_d/pyproject.toml" ]] || [[ -f "$_d/hermes_cli/main.py" ]]; then
+      _repo="$_d"
+      break
+    fi
+    _d="$(dirname "$_d")"
+  done
+  if [[ -n "$_repo" && -x "$_repo/venv/bin/python" ]]; then
+    echo ">>> HERMES_PULL_STRIP_MESSAGING_ENV=1: stripping messaging keys from ${HOME}/.hermes/.env files ..."
+    "$_repo/venv/bin/python" "$ROOT/strip_messaging_env_from_hermes_home.py" "${HOME}/.hermes"
+  else
+    echo "warning: could not find repo venv; run manually: python scripts/core/strip_messaging_env_from_hermes_home.py" >&2
+  fi
+fi
