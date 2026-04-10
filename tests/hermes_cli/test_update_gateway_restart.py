@@ -243,6 +243,8 @@ class TestLaunchdPlistRefresh:
             return SimpleNamespace(returncode=0, stdout="", stderr="")
 
         monkeypatch.setattr(gateway_cli.subprocess, "run", fake_run)
+        monkeypatch.setattr(gateway_cli, "_profile_gateway_dedupe_log", lambda phase: None)
+        monkeypatch.setattr(gateway_cli, "_profile_gateway_dedupe_after_service_pause", lambda: None)
 
         gateway_cli.launchd_start()
 
@@ -264,6 +266,8 @@ class TestLaunchdPlistRefresh:
             return SimpleNamespace(returncode=0, stdout="", stderr="")
 
         monkeypatch.setattr(gateway_cli.subprocess, "run", fake_run)
+        monkeypatch.setattr(gateway_cli, "_profile_gateway_dedupe_log", lambda phase: None)
+        monkeypatch.setattr(gateway_cli, "_profile_gateway_dedupe_after_service_pause", lambda: None)
 
         gateway_cli.launchd_start()
 

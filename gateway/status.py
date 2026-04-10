@@ -30,6 +30,30 @@ _RUNTIME_STATUS_FILE = "gateway_state.json"
 _LOCKS_DIRNAME = "gateway-locks"
 
 
+def _sanitize_gateway_lock_instance(raw: str) -> str:
+    """Return a safe subdirectory name for HERMES_GATEWAY_LOCK_INSTANCE, or ''."""
+    s = (raw or "").strip()
+    if not s or len(s) > 72:
+        return ""
+    out: list[str] = []
+    for ch in s:
+        if ch.isalnum() or ch in "-_":
+            out.append(ch)
+        elif ch in " ./\\":
+            out.append("_")
+        else:
+            out.append("_")
+    cleaned = "".join(out).strip("._-")
+    if not cleaned or len(cleaned) > 64:
+        return ""
+    return cleaned
+
+
+def _effective_gateway_lock_instance() -> Optional[str]:
+    inst = _sanitize_gateway_lock_instance(os.getenv("HERMES_GATEWAY_LOCK_INSTANCE", ""))
+    return inst or None
+
+
 def _get_pid_path() -> Path:
     """Return the path to the gateway PID file, respecting HERMES_HOME."""
     home = get_hermes_home()
@@ -42,12 +66,22 @@ def _get_runtime_status_path() -> Path:
 
 
 def _get_lock_dir() -> Path:
-    """Return the machine-local directory for token-scoped gateway locks."""
+    """Return the machine-local directory for token-scoped gateway locks.
+
+    Optional ``HERMES_GATEWAY_LOCK_INSTANCE`` (e.g. ``mac-mini``) appends a
+    subdirectory so a second Mac or restored home-dir copy does not reuse lock
+    files from another gateway host. Use **distinct messaging tokens** (or
+    disable overlapping platforms) when running a second live gateway—this
+    only isolates filesystem locks, not Telegram/Slack single-session rules.
+    """
     override = os.getenv("HERMES_GATEWAY_LOCK_DIR")
     if override:
-        return Path(override)
-    state_home = Path(os.getenv("XDG_STATE_HOME", Path.home() / ".local" / "state"))
-    return state_home / "hermes" / _LOCKS_DIRNAME
+        base = Path(override)
+    else:
+        state_home = Path(os.getenv("XDG_STATE_HOME", Path.home() / ".local" / "state"))
+        base = state_home / "hermes" / _LOCKS_DIRNAME
+    inst = _effective_gateway_lock_instance()
+    return base / inst if inst else base
 
 
 def _utc_now_iso() -> str:
@@ -120,12 +154,16 @@ def _record_looks_like_gateway(record: dict[str, Any]) -> bool:
 
 
 def _build_pid_record() -> dict:
-    return {
+    rec = {
         "pid": os.getpid(),
         "kind": _GATEWAY_KIND,
         "argv": list(sys.argv),
         "start_time": _get_process_start_time(os.getpid()),
     }
+    gli = _effective_gateway_lock_instance()
+    if gli:
+        rec["gateway_lock_instance"] = gli
+    return rec
 
 
 def _build_runtime_status_record() -> dict[str, Any]:
@@ -206,6 +244,11 @@ def write_runtime_status(
     payload["pid"] = os.getpid()
     payload["start_time"] = _get_process_start_time(os.getpid())
     payload["updated_at"] = _utc_now_iso()
+    gli = _effective_gateway_lock_instance()
+    if gli:
+        payload["gateway_lock_instance"] = gli
+    else:
+        payload.pop("gateway_lock_instance", None)
 
     if gateway_state is not None:
         payload["gateway_state"] = gateway_state
@@ -423,6 +466,46 @@ def dedupe_gateway_processes_for_current_home() -> Tuple[int, str]:
     return killed, f"terminated_pids={','.join(detail_parts)} keeper={keeper}"
 
 
+def kill_all_gateway_processes_for_current_home(force: bool = False) -> Tuple[int, str]:
+    """SIGTERM (or SIGKILL when ``force``) every long-running gateway for this ``HERMES_HOME``.
+
+    Unlike :func:`dedupe_gateway_processes_for_current_home`, this does not keep a
+    canonical PID — used by ``hermes gateway stop`` / manual restart so only the
+    active profile's gateways are stopped, not every gateway on the machine.
+
+    Clears ``gateway.pid`` when any process was signalled.
+    """
+    try:
+        from hermes_cli.gateway import find_gateway_pids
+    except Exception:
+        logger.debug("kill_all_gateway_processes: find_gateway_pids unavailable", exc_info=True)
+        return 0, "skip_import"
+
+    home = get_hermes_home()
+    raw = find_gateway_pids()
+    candidates = [
+        p
+        for p in raw
+        if _looks_like_long_running_gateway_process(p) and _pid_belongs_to_this_hermes_home(p, home)
+    ]
+    if not candidates:
+        return 0, "none"
+
+    sig = signal.SIGKILL if force and not sys.platform.startswith("win") else signal.SIGTERM
+    killed = 0
+    detail_parts: list[str] = []
+    for pid in candidates:
+        try:
+            os.kill(pid, sig)
+            killed += 1
+            detail_parts.append(str(pid))
+        except (ProcessLookupError, PermissionError):
+            pass
+    if killed:
+        remove_pid_file()
+    return killed, f"signalled_pids={','.join(detail_parts)}"
+
+
 def runtime_status_watchdog_healthy(
     payload: Optional[dict[str, Any]] = None,
     *,
@@ -536,6 +619,11 @@ def acquire_scoped_lock(scope: str, identity: str, metadata: Optional[dict[str, 
 
     Used to prevent multiple local gateways from using the same external identity
     at once (e.g. the same Telegram bot token across different HERMES_HOME dirs).
+
+    Lock files live under ``HERMES_GATEWAY_LOCK_DIR`` or
+    ``$XDG_STATE_HOME/hermes/gateway-locks``; set ``HERMES_GATEWAY_LOCK_INSTANCE``
+    (e.g. ``mac-mini``) to use a dedicated subdirectory on a second host without
+    touching the default lock path used elsewhere.
     """
     lock_path = _get_scope_lock_path(scope, identity)
     lock_path.parent.mkdir(parents=True, exist_ok=True)

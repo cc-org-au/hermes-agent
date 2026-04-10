@@ -45,6 +45,8 @@ class TestSystemdServiceRefresh:
             return SimpleNamespace(returncode=0, stdout="", stderr="")
 
         monkeypatch.setattr(gateway_cli.subprocess, "run", fake_run)
+        monkeypatch.setattr(gateway_cli, "_profile_gateway_dedupe_log", lambda phase: None)
+        monkeypatch.setattr(gateway_cli, "_profile_gateway_dedupe_after_service_pause", lambda: None)
 
         gateway_cli.systemd_start()
 
@@ -68,6 +70,8 @@ class TestSystemdServiceRefresh:
             return SimpleNamespace(returncode=0, stdout="", stderr="")
 
         monkeypatch.setattr(gateway_cli.subprocess, "run", fake_run)
+        monkeypatch.setattr(gateway_cli, "_profile_gateway_dedupe_log", lambda phase: None)
+        monkeypatch.setattr(gateway_cli, "_profile_gateway_dedupe_after_service_pause", lambda: None)
 
         gateway_cli.systemd_restart()
 
@@ -117,7 +121,7 @@ class TestGatewayStopCleanup:
         monkeypatch.setattr(gateway_cli, "systemd_stop", lambda system=False: service_calls.append("stop"))
         monkeypatch.setattr(
             gateway_cli,
-            "kill_gateway_processes",
+            "kill_gateway_processes_for_active_profile",
             lambda force=False: kill_calls.append(force) or 2,
         )
 
@@ -165,6 +169,8 @@ class TestLaunchdServiceRecovery:
 
         monkeypatch.setattr(gateway_cli, "get_launchd_plist_path", lambda: plist_path)
         monkeypatch.setattr(gateway_cli.subprocess, "run", fake_run)
+        monkeypatch.setattr(gateway_cli, "_profile_gateway_dedupe_log", lambda phase: None)
+        monkeypatch.setattr(gateway_cli, "_profile_gateway_dedupe_after_service_pause", lambda: None)
 
         gateway_cli.launchd_start()
 
@@ -272,7 +278,7 @@ class TestGatewaySystemServiceRouting:
 
         run_calls = []
         monkeypatch.setattr(gateway_cli, "run_gateway", lambda verbose=0, quiet=False, replace=False: run_calls.append((verbose, quiet, replace)))
-        monkeypatch.setattr(gateway_cli, "kill_gateway_processes", lambda force=False: 0)
+        monkeypatch.setattr(gateway_cli, "kill_gateway_processes_for_active_profile", lambda force=False: 0)
 
         try:
             gateway_cli.gateway_command(SimpleNamespace(gateway_command="restart", system=False))

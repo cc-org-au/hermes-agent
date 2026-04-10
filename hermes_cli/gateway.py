@@ -115,6 +115,51 @@ def kill_gateway_processes(force: bool = False) -> int:
     return killed
 
 
+def kill_gateway_processes_for_active_profile(force: bool = False) -> int:
+    """Terminate gateway daemons scoped to the current ``HERMES_HOME`` / ``-p`` profile only.
+
+    Prefer this over :func:`kill_gateway_processes` when multiple profiles may run
+    concurrently — the latter matches every gateway-like process on the machine.
+    """
+    try:
+        from gateway.status import kill_all_gateway_processes_for_current_home
+
+        n, _detail = kill_all_gateway_processes_for_current_home(force=force)
+        return n
+    except Exception:
+        return 0
+
+
+def _profile_gateway_dedupe_silent():
+    try:
+        from gateway.status import dedupe_gateway_processes_for_current_home
+
+        return dedupe_gateway_processes_for_current_home()
+    except Exception:
+        return (0, "skip")
+
+
+def _profile_gateway_dedupe_log(phase: str) -> None:
+    n, detail = _profile_gateway_dedupe_silent()
+    if n:
+        try:
+            from hermes_constants import display_hermes_home
+
+            label = display_hermes_home()
+        except Exception:
+            label = "HERMES_HOME"
+        print_info(
+            f"Stopped {n} extra gateway process(es) for {label} ({phase}: {detail})"
+        )
+
+
+def _profile_gateway_dedupe_after_service_pause() -> None:
+    import time
+
+    time.sleep(1.5)
+    _profile_gateway_dedupe_log("post-start")
+
+
 def is_linux() -> bool:
     return sys.platform.startswith('linux')
 
@@ -738,7 +783,9 @@ def systemd_start(system: bool = False):
     if system:
         _require_root_for_system_service("start")
     refresh_systemd_unit_if_needed(system=system)
+    _profile_gateway_dedupe_log("pre-start")
     subprocess.run(_systemctl_cmd(system) + ["start", get_service_name()], check=True)
+    _profile_gateway_dedupe_after_service_pause()
     print(f"✓ {_service_scope_label(system).capitalize()} service started")
 
 
@@ -757,7 +804,9 @@ def systemd_restart(system: bool = False):
     if system:
         _require_root_for_system_service("restart")
     refresh_systemd_unit_if_needed(system=system)
+    _profile_gateway_dedupe_log("pre-restart")
     subprocess.run(_systemctl_cmd(system) + ["restart", get_service_name()], check=True)
+    _profile_gateway_dedupe_after_service_pause()
     print(f"✓ {_service_scope_label(system).capitalize()} service restarted")
 
 
@@ -986,6 +1035,8 @@ def launchd_start():
     plist_path = get_launchd_plist_path()
     label = get_launchd_label()
 
+    _profile_gateway_dedupe_log("pre-start")
+
     # Self-heal if the plist is missing entirely (e.g., manual cleanup, failed upgrade)
     if not plist_path.exists():
         print("↻ launchd plist missing; regenerating service definition")
@@ -994,6 +1045,7 @@ def launchd_start():
         subprocess.run(["launchctl", "load", str(plist_path)], check=True)
         subprocess.run(["launchctl", "start", label], check=True)
         print("✓ Service started")
+        _profile_gateway_dedupe_after_service_pause()
         return
 
     refresh_launchd_plist_if_needed()
@@ -1006,6 +1058,7 @@ def launchd_start():
         subprocess.run(["launchctl", "load", str(plist_path)], check=True)
         subprocess.run(["launchctl", "start", label], check=True)
     print("✓ Service started")
+    _profile_gateway_dedupe_after_service_pause()
 
 def launchd_stop():
     label = get_launchd_label()
@@ -1053,6 +1106,7 @@ def _wait_for_gateway_exit(timeout: float = 10.0, force_after: float = 5.0):
 
 
 def launchd_restart():
+    _profile_gateway_dedupe_log("pre-restart")
     try:
         launchd_stop()
     except subprocess.CalledProcessError as e:
@@ -1834,7 +1888,7 @@ def gateway_setup():
                     elif is_macos():
                         launchd_restart()
                     else:
-                        kill_gateway_processes()
+                        kill_gateway_processes_for_active_profile()
                         print_info("Start manually: hermes gateway")
                 except subprocess.CalledProcessError as e:
                     print_error(f"  Restart failed: {e}")
@@ -2012,14 +2066,14 @@ def gateway_command(args):
             except subprocess.CalledProcessError:
                 pass
 
-        killed = kill_gateway_processes()
+        killed = kill_gateway_processes_for_active_profile()
         if not service_available:
             if killed:
-                print(f"✓ Stopped {killed} gateway process(es)")
+                print(f"✓ Stopped {killed} gateway process(es) for this profile")
             else:
-                print("✗ No gateway processes found")
+                print("✗ No gateway processes found for this profile")
         elif killed:
-            print(f"✓ Stopped {killed} additional manual gateway process(es)")
+            print(f"✓ Stopped {killed} additional manual gateway process(es) for this profile")
     
     elif subcmd == "restart":
         # Try service first, fall back to killing and restarting
@@ -2066,10 +2120,10 @@ def gateway_command(args):
                 print("  Fix the service, then retry: hermes gateway start")
                 sys.exit(1)
 
-            # Manual restart: kill existing processes
-            killed = kill_gateway_processes()
+            # Manual restart: kill existing processes for this HERMES_HOME only
+            killed = kill_gateway_processes_for_active_profile()
             if killed:
-                print(f"✓ Stopped {killed} gateway process(es)")
+                print(f"✓ Stopped {killed} gateway process(es) for this profile")
 
             _wait_for_gateway_exit(timeout=10.0, force_after=5.0)
 

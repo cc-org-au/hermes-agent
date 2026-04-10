@@ -19,6 +19,15 @@ class TestGatewayPidState:
         assert isinstance(payload["argv"], list)
         assert payload["argv"]
 
+    def test_write_pid_file_records_gateway_lock_instance(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+        monkeypatch.setenv("HERMES_GATEWAY_LOCK_INSTANCE", "mac-mini")
+
+        status.write_pid_file()
+
+        payload = json.loads((tmp_path / "gateway.pid").read_text())
+        assert payload["gateway_lock_instance"] == "mac-mini"
+
     def test_get_running_pid_rejects_live_non_gateway_pid(self, tmp_path, monkeypatch):
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         pid_path = tmp_path / "gateway.pid"
@@ -106,6 +115,15 @@ class TestGatewayRuntimeStatus:
 
 
 class TestScopedLocks:
+    def test_lock_dir_uses_gateway_lock_instance_subdir(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HERMES_GATEWAY_LOCK_DIR", str(tmp_path / "locks"))
+        monkeypatch.setenv("HERMES_GATEWAY_LOCK_INSTANCE", "mac-mini")
+
+        acquired, _ = status.acquire_scoped_lock("telegram-bot-token", "secret", metadata={"platform": "telegram"})
+        assert acquired is True
+        lock_path = tmp_path / "locks" / "mac-mini" / "telegram-bot-token-2bb80d537b1da3e3.lock"
+        assert lock_path.is_file()
+
     def test_acquire_scoped_lock_rejects_live_other_process(self, tmp_path, monkeypatch):
         monkeypatch.setenv("HERMES_GATEWAY_LOCK_DIR", str(tmp_path / "locks"))
         lock_path = tmp_path / "locks" / "telegram-bot-token-2bb80d537b1da3e3.lock"
@@ -237,6 +255,29 @@ class TestGatewaySingletonDedupe:
         assert n == 1
         assert killed == [(111, signal.SIGTERM)]
         assert "111" in detail and "keeper=222" in detail
+
+    def test_kill_all_gateway_processes_for_current_home(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+        killed = []
+
+        def fake_kill(pid, sig):
+            killed.append((pid, sig))
+
+        monkeypatch.setattr(status.os, "kill", fake_kill)
+        monkeypatch.setattr(
+            "hermes_cli.gateway.find_gateway_pids",
+            lambda: [111, 222],
+        )
+        monkeypatch.setattr(status, "_pid_belongs_to_this_hermes_home", lambda pid, home: True)
+        monkeypatch.setattr(status, "_looks_like_long_running_gateway_process", lambda pid: True)
+        removed = []
+        monkeypatch.setattr(status, "remove_pid_file", lambda: removed.append(1))
+
+        n, detail = status.kill_all_gateway_processes_for_current_home()
+        assert n == 2
+        assert set(killed) == {(111, signal.SIGTERM), (222, signal.SIGTERM)}
+        assert removed == [1]
+        assert "111" in detail and "222" in detail
 
     def test_env_disables_dedupe_in_watchdog(self, tmp_path, monkeypatch):
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
