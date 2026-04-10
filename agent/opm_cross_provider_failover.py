@@ -55,10 +55,16 @@ def openrouter_api_key_available() -> bool:
 
 
 def openrouter_explicit_models_for_agent(agent: Any, xcfg: Dict[str, Any]) -> List[str]:
-    """Ordered OpenRouter hub ids for the current agent stack (chat vs codex)."""
-    api_mode = str(getattr(agent, "api_mode", "") or "")
-    mid = str(getattr(agent, "model", "") or "").lower()
-    if api_mode == "codex_responses" or "codex" in mid:
+    """Ordered OpenRouter hub ids for the current agent stack (chat vs codex).
+
+    Native ``api.openai.com`` often runs as ``codex_responses`` even for chat-tier slugs
+    (``gpt-5.4``, ``gpt-5.2``, …). Choose the OR list from the **model id**, not HTTP mode,
+    so quota failover + step-up use ``openrouter_chat_models`` (nano→…) for chat ladders.
+    """
+    mid = str(getattr(agent, "model", "") or "")
+    bare = norm_model_slug(mid)
+    low = mid.lower()
+    if "codex" in bare.lower() or "codex" in low:
         return list(xcfg.get("openrouter_codex_models") or [])
     return list(xcfg.get("openrouter_chat_models") or [])
 

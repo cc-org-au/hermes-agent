@@ -47,12 +47,19 @@ def test_openrouter_explicit_models_chat_vs_codex():
         api_mode = "chat_completions"
         model = "gpt-5.4"
 
+    class _NativeChatCodexHttpMode:
+        """Hermes uses codex_responses on api.openai.com for chat-tier ids too."""
+        api_mode = "codex_responses"
+        model = "gpt-5.4"
+
     class _Codex:
         api_mode = "codex_responses"
         model = "gpt-5.3-codex"
 
     xcfg = load_opm_cross_provider_quota_failover_config()
     chat = openrouter_explicit_models_for_agent(_Chat(), xcfg)
+    native_chat_stack = openrouter_explicit_models_for_agent(_NativeChatCodexHttpMode(), xcfg)
     codex = openrouter_explicit_models_for_agent(_Codex(), xcfg)
     assert "openai/gpt-5.4" in chat or chat[0].startswith("openai/")
+    assert native_chat_stack == chat
     assert codex and ("codex" in codex[0].lower())

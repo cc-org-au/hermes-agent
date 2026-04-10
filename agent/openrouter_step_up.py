@@ -81,9 +81,11 @@ def build_ladder_to_ceiling(ordered_cheap_to_capable: List[str], ceiling: str) -
 
 
 def _hub_models_for_agent(agent: Any, cfg: Dict[str, Any]) -> List[str]:
-    api_mode = str(getattr(agent, "api_mode", "") or "")
-    mid = str(getattr(agent, "model", "") or "").lower()
-    if api_mode == "codex_responses" or "codex" in mid:
+    """Match :func:`openrouter_explicit_models_for_agent` — slug-driven, not ``api_mode``."""
+    mid = str(getattr(agent, "model", "") or "")
+    bare = _norm_slug(mid)
+    low = mid.lower()
+    if "codex" in bare.lower() or "codex" in low:
         return list(cfg.get("codex_models") or [])
     return list(cfg.get("chat_models") or [])
 
