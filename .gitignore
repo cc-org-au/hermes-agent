@@ -1,4 +1,6 @@
 /venv/
+# Hermes runtime belongs in ~/.hermes — never keep HERMES_HOME inside the checkout
+/.hermes/
 /_pycache/
 *.pyc*
 __pycache__/
