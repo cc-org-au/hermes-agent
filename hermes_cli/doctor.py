@@ -102,8 +102,9 @@ def _check_gateway_singleton_processes() -> None:
             check_warn(
                 "Multiple gateway-like processes",
                 f"PIDs {pids} — expect one supervised instance per HERMES_HOME; "
-                "`hermes gateway audit-singleton` and gateway-watchdog "
-                "(WATCHDOG_ENFORCE_SINGLE_GATEWAY)",
+                "`hermes gateway audit-singleton`, `hermes gateway watchdog-check` "
+                "(dedupes by default; disable with HERMES_GATEWAY_WATCHDOG_ENFORCE_SINGLE=0), "
+                "or an external gateway-watchdog loop.",
             )
         elif len(pids) == 1:
             check_ok("Gateway process scan (heuristic)", f"single PID {pids[0]}")

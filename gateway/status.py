@@ -15,11 +15,13 @@ import hashlib
 import json
 import logging
 import os
+import re
+import signal
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from hermes_constants import get_hermes_home
-from typing import Any, Optional, Sequence
+from typing import Any, Optional, Sequence, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -264,6 +266,163 @@ def _resolve_watchdog_require_all_platforms(explicit: Optional[bool]) -> bool:
     return _config_watchdog_require_all_platforms()
 
 
+def _env_watchdog_enforce_singleton() -> bool:
+    """Default True: ``watchdog-check`` may SIGTERM duplicate gateways for this HERMES_HOME.
+
+    Disable with ``HERMES_GATEWAY_WATCHDOG_ENFORCE_SINGLE=0`` or legacy
+    ``WATCHDOG_ENFORCE_SINGLE_GATEWAY=0``.
+    """
+    specific = (os.environ.get("HERMES_GATEWAY_WATCHDOG_ENFORCE_SINGLE") or "").strip().lower()
+    if specific:
+        return specific not in ("0", "false", "no", "off")
+    legacy = (os.environ.get("WATCHDOG_ENFORCE_SINGLE_GATEWAY") or "").strip().lower()
+    if legacy:
+        return legacy not in ("0", "false", "no", "off")
+    return True
+
+
+def _read_hermes_home_from_pid_environ(pid: int) -> Optional[str]:
+    """Return HERMES_HOME from ``/proc/<pid>/environ`` when available (Linux)."""
+    path = Path(f"/proc/{pid}/environ")
+    if not path.exists():
+        return None
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return None
+    for part in raw.split(b"\0"):
+        if part.startswith(b"HERMES_HOME="):
+            return part.split(b"=", 1)[1].decode("utf-8", errors="surrogateescape")
+    return None
+
+
+def _gateway_profile_cli_token() -> Optional[str]:
+    """Profile name used with ``-p`` for the current HERMES_HOME, or None for default ``~/.hermes``."""
+    home = get_hermes_home().resolve()
+    default = (Path.home() / ".hermes").resolve()
+    if home == default:
+        return None
+    profiles_root = (default / "profiles").resolve()
+    try:
+        rel = home.relative_to(profiles_root)
+        if len(rel.parts) == 1 and re.match(r"^[a-z0-9][a-z0-9_-]{0,63}$", rel.parts[0]):
+            return rel.parts[0]
+    except ValueError:
+        pass
+    return None
+
+
+def _pid_belongs_to_this_hermes_home(pid: int, home: Path) -> bool:
+    """True when ``pid`` is a gateway process for ``home`` (env or ``-p`` argv)."""
+    resolved = home.resolve()
+    envh = _read_hermes_home_from_pid_environ(pid)
+    if envh:
+        try:
+            return Path(envh).resolve() == resolved
+        except OSError:
+            return False
+    cmd = _read_process_cmdline(pid) or ""
+    tok = _gateway_profile_cli_token()
+    if tok is None:
+        m = re.search(r"(?:^|\s)-p(?:=|\s+)(\S+)", cmd)
+        if m:
+            prof = m.group(1).strip("\"'")
+            if prof:
+                return False
+        return True
+    return bool(re.search(rf"(?:^|\s)-p(?:=|\s+){re.escape(tok)}(?:\s|$)", cmd))
+
+
+def _pick_newest_gateway_pid(pids: list[int]) -> Optional[int]:
+    """Among gateway PIDs, prefer the one with the greatest kernel start time (newest)."""
+    if not pids:
+        return None
+    if len(pids) == 1:
+        return pids[0]
+    scored: list[tuple[int, int]] = []
+    for p in pids:
+        st = _get_process_start_time(p)
+        if st is not None:
+            scored.append((st, p))
+    if scored:
+        return max(scored, key=lambda t: t[0])[1]
+    return pids[-1]
+
+
+def _looks_like_long_running_gateway_process(pid: int) -> bool:
+    """Exclude ephemeral ``gateway <subcommand>`` CLIs from daemon dedupe."""
+    cmd = (_read_process_cmdline(pid) or "").lower()
+    if "watchdog-check" in cmd or "audit-singleton" in cmd:
+        return False
+    for bad in (
+        " gateway install",
+        " gateway uninstall",
+        " gateway setup",
+        " gateway stop",
+    ):
+        if bad in cmd:
+            return False
+    return True
+
+
+def dedupe_gateway_processes_for_current_home() -> Tuple[int, str]:
+    """Terminate duplicate Hermes gateway processes for the current ``HERMES_HOME``.
+
+    Keeps the PID registered in ``gateway.pid`` when it is still live and matches
+    this home; otherwise keeps the **newest** matching process (by ``/proc`` start
+    time on Linux) and sends ``SIGTERM`` to older strays.
+
+    Returns:
+        ``(kill_count, detail_string)`` — ``kill_count`` is the number of SIGTERM
+        signals sent (best-effort).
+    """
+    try:
+        from hermes_cli.gateway import find_gateway_pids
+    except Exception:
+        logger.debug("dedupe_gateway_processes: find_gateway_pids unavailable", exc_info=True)
+        return 0, "skip_import"
+
+    home = get_hermes_home()
+    raw = find_gateway_pids()
+    candidates = [
+        p
+        for p in raw
+        if _looks_like_long_running_gateway_process(p) and _pid_belongs_to_this_hermes_home(p, home)
+    ]
+    if len(candidates) <= 1:
+        return 0, "singleton"
+
+    canonical = get_running_pid()
+    if canonical is not None and canonical in candidates:
+        keeper = canonical
+    elif canonical is not None and canonical not in candidates:
+        logger.debug(
+            "dedupe_gateway_processes: gateway.pid pid=%s not in filtered candidates %s; skip",
+            canonical,
+            candidates,
+        )
+        return 0, "canonical_mismatch_skip"
+    else:
+        keeper = _pick_newest_gateway_pid(candidates)
+        if keeper is None:
+            return 0, "no_keeper"
+
+    killed = 0
+    detail_parts: list[str] = []
+    for pid in candidates:
+        if pid == keeper:
+            continue
+        try:
+            os.kill(pid, signal.SIGTERM)
+            killed += 1
+            detail_parts.append(str(pid))
+        except (ProcessLookupError, PermissionError):
+            pass
+    if not detail_parts:
+        return 0, "singleton"
+    return killed, f"terminated_pids={','.join(detail_parts)} keeper={keeper}"
+
+
 def runtime_status_watchdog_healthy(
     payload: Optional[dict[str, Any]] = None,
     *,
@@ -295,6 +454,17 @@ def runtime_status_watchdog_healthy(
     so external watchdogs can restart the gateway and bring every adapter up.
     """
     loaded_from_disk = payload is None
+    if loaded_from_disk and _env_watchdog_enforce_singleton():
+        try:
+            n_killed, detail = dedupe_gateway_processes_for_current_home()
+            if n_killed:
+                logger.warning(
+                    "watchdog singleton enforced: terminated %s duplicate gateway process(es) (%s)",
+                    n_killed,
+                    detail,
+                )
+        except Exception:
+            logger.debug("watchdog singleton dedupe failed", exc_info=True)
     if loaded_from_disk:
         payload = read_runtime_status()
     if not payload:

@@ -54,6 +54,9 @@ def find_gateway_pids() -> list:
                 elif line.startswith("ProcessId="):
                     pid_str = line[len("ProcessId="):]
                     if any(p in current_cmd for p in patterns):
+                        if "watchdog-check" in current_cmd or "audit-singleton" in current_cmd:
+                            current_cmd = ""
+                            continue
                         try:
                             pid = int(pid_str)
                             if pid != os.getpid() and pid not in pids:
@@ -70,6 +73,9 @@ def find_gateway_pids() -> list:
             for line in result.stdout.split('\n'):
                 # Skip grep and current process
                 if 'grep' in line or str(os.getpid()) in line:
+                    continue
+                # Ephemeral CLI invocations — not the long-running gateway daemon
+                if 'watchdog-check' in line or 'audit-singleton' in line:
                     continue
                 for pattern in patterns:
                     if pattern in line:
@@ -1921,9 +1927,10 @@ def gateway_audit_singleton() -> None:
             print(f"\n(systemctl is-active skipped: {exc})")
 
     print(
-        "\nExpect one supervised gateway per HERMES_HOME. Use gateway-watchdog with "
-        "WATCHDOG_ENFORCE_SINGLE_GATEWAY so external loops and Hermes do not leave "
-        "duplicate gateway PIDs."
+        "\nExpect one supervised gateway per HERMES_HOME. "
+        "`hermes gateway watchdog-check` enforces singletons by default "
+        "(disable: HERMES_GATEWAY_WATCHDOG_ENFORCE_SINGLE=0). "
+        "External gateway-watchdog loops may use the same env vars."
     )
 
 

@@ -4263,7 +4263,9 @@ For more help on a command:
             "Exit 0 if gateway.pid process is alive, gateway_state=running, "
             "and messaging is healthy (default: ≥1 platform connected; "
             "strict: all configured platforms connected — see "
-            "messaging.watchdog_require_all_platforms)"
+            "messaging.watchdog_require_all_platforms). "
+            "By default also SIGTERM duplicate gateway daemons for this HERMES_HOME "
+            "(disable: HERMES_GATEWAY_WATCHDOG_ENFORCE_SINGLE=0)."
         ),
     )
     gateway_subparsers.add_parser(

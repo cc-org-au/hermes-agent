@@ -2,6 +2,7 @@
 
 import json
 import os
+import signal
 
 from gateway import status
 
@@ -198,6 +199,67 @@ class TestRuntimeWatchdogHealthy:
         ok, reason = status.runtime_status_watchdog_healthy()
         assert ok is False
         assert "not running" in reason
+
+    def test_explicit_payload_skips_singleton_dedupe(self, monkeypatch):
+        called = []
+        monkeypatch.setattr(
+            status,
+            "dedupe_gateway_processes_for_current_home",
+            lambda: called.append(1) or (0, ""),
+        )
+        payload = {
+            "gateway_state": "running",
+            "platforms": {"slack": {"state": "connected"}},
+        }
+        ok, _ = status.runtime_status_watchdog_healthy(payload)
+        assert ok is True
+        assert called == []
+
+
+class TestGatewaySingletonDedupe:
+    def test_dedupe_sends_sigterm_to_older_stray(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+        killed = []
+
+        def fake_kill(pid, sig):
+            killed.append((pid, sig))
+
+        monkeypatch.setattr(status.os, "kill", fake_kill)
+        monkeypatch.setattr(
+            "hermes_cli.gateway.find_gateway_pids",
+            lambda: [111, 222],
+        )
+        monkeypatch.setattr(status, "_pid_belongs_to_this_hermes_home", lambda pid, home: True)
+        monkeypatch.setattr(status, "_looks_like_long_running_gateway_process", lambda pid: True)
+        monkeypatch.setattr(status, "get_running_pid", lambda: 222)
+
+        n, detail = status.dedupe_gateway_processes_for_current_home()
+        assert n == 1
+        assert killed == [(111, signal.SIGTERM)]
+        assert "111" in detail and "keeper=222" in detail
+
+    def test_env_disables_dedupe_in_watchdog(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+        monkeypatch.setenv("HERMES_GATEWAY_WATCHDOG_ENFORCE_SINGLE", "0")
+        called = []
+        monkeypatch.setattr(
+            status,
+            "dedupe_gateway_processes_for_current_home",
+            lambda: called.append(1) or (0, ""),
+        )
+        monkeypatch.setattr(status, "get_running_pid", lambda: 1)
+        (tmp_path / "gateway_state.json").write_text(
+            json.dumps(
+                {
+                    "gateway_state": "running",
+                    "platforms": {"slack": {"state": "connected"}},
+                }
+            ),
+            encoding="utf-8",
+        )
+        ok, _ = status.runtime_status_watchdog_healthy()
+        assert ok is True
+        assert called == []
 
 
 class TestRuntimeWatchdogRequireAllPlatforms:
