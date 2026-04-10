@@ -46,3 +46,19 @@ fi
 echo "--- hermes doctor (first lines) ---"
 ./venv/bin/python -m hermes_cli.main doctor 2>&1 | head -50 || true
 echo "--- done ---"
+REPO_ABS="$(pwd)"
+cat <<EOF
+
+=== Hermes is not on PATH until you activate the venv ===
+  cd "$REPO_ABS"
+  source venv/bin/activate
+  hermes setup
+  hermes doctor --fix
+
+Or use the venv binary directly (no activate):
+  "$REPO_ABS/venv/bin/hermes" setup
+  "$REPO_ABS/venv/bin/python" -m hermes_cli.main doctor --fix
+
+Optional (persistent): append venv to PATH in ~/.zprofile
+  echo "export PATH=\"$REPO_ABS/venv/bin:\$PATH\"" >> ~/.zprofile
+EOF
