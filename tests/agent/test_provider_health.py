@@ -71,6 +71,17 @@ class TestProviderHealthTracker:
         assert "3 consecutive failures" in reason
         assert "HTTP 500" in reason
 
+    def test_blacklist_reason_long_hint_truncates_cleanly(self):
+        """No nested parens; long hints ellipsize (avoids malformed '… and ))')."""
+        t = ProviderHealthTracker()
+        long_hint = "X" * 200
+        for _ in range(3):
+            t.record_failure("openai", long_hint)
+        reason = t.blacklist_reason("openai")
+        assert "3 consecutive failures" in reason
+        assert "…" in reason
+        assert reason.count("(") == 0
+
     def test_empty_provider_ignored(self):
         t = ProviderHealthTracker()
         assert not t.record_failure("")

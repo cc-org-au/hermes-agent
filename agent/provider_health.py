@@ -59,9 +59,14 @@ class ProviderHealthTracker:
         mx = self._max_for(p)
         if self._failures[p] >= mx:
             self._blacklisted.add(p)
-            reason = f"{self._failures[p]} consecutive failures"
-            if error_hint:
-                reason = f"{reason} ({error_hint[:80]})"
+            # Single-line detail (no nested parens — avoids "… and ))" when truncated mid-message).
+            detail = (error_hint or "").strip().replace("\n", " ")
+            if len(detail) > 160:
+                detail = detail[:157].rstrip() + "…"
+            if detail:
+                reason = f"{self._failures[p]} consecutive failures — {detail}"
+            else:
+                reason = f"{self._failures[p]} consecutive failures"
             self._blacklist_reasons[p] = reason
             logger.warning(
                 "provider_health: blacklisted %s for session (%s)", p, reason,

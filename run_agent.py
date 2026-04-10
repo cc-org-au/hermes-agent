@@ -9300,16 +9300,29 @@ class AIAgent:
                                         )
                                     except Exception:
                                         _suppress_bl = False
-                                if not _suppress_bl:
+                                _suppress_hb_quota = (
+                                    getattr(self, "_hard_budget_operator_decision", None)
+                                    == HARD_BUDGET_APPROVE_CHOICE
+                                    and self._quota_style_api_failure(api_error)
+                                )
+                                if not _suppress_bl and not _suppress_hb_quota:
                                     self._emit_status(
-                                        f"⚠️ Provider {self.provider} blacklisted for this session "
-                                        f"({ph.blacklist_reason(self.provider)})",
+                                        "⚠️ Provider "
+                                        f"{self.provider} blacklisted for this session — "
+                                        f"{ph.blacklist_reason(self.provider)}",
                                     )
                                     if not self.verbose_logging:
                                         self._turn_had_quota_ux_for_cli_latch = True
-                                else:
+                                elif _suppress_bl:
                                     logger.info(
                                         "%s(provider blacklist status suppressed — CLI session) %s",
+                                        self.log_prefix,
+                                        _prov_k,
+                                    )
+                                else:
+                                    logger.info(
+                                        "%s(provider blacklist notice suppressed — "
+                                        "hard_budget session approved, quota-class error) %s",
                                         self.log_prefix,
                                         _prov_k,
                                     )
