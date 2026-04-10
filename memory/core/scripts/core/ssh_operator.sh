@@ -11,11 +11,11 @@
 # HERMES_OPERATOR_WORKSTATION_CLI=1 (set by `hermes … operator`): do not use env-file SSH_PASSPHRASE /
 # ASKPASS — type the key passphrase at the prompt (same pattern as ssh_droplet.sh).
 #
-# Sudo: no **sudo -S** / env password (unlike ssh_droplet). Default **HERMES_OPERATOR_REQUIRE_SUDO_SESSION=1**:
-# reattach **/dev/tty**, **sudo -k**, **sudo -v** — session continues only after sudo authenticates (password,
-# **NOPASSWD**, or Touch ID). Set **HERMES_OPERATOR_REQUIRE_SUDO_SESSION=0** for unattended SSH (e.g. git pull).
-# With REQUIRE=0: optional **HERMES_OPERATOR_SUDO_VERIFY_SOFT=1** adds **sudo -v || true** after **sudo -k**.
-# **HERMES_OPERATOR_SKIP_SUDO_K=1** skips only the **sudo -k** line.
+# Sudo: no **sudo -S** / env password (unlike ssh_droplet). Default **HERMES_OPERATOR_REQUIRE_SUDO_SESSION=0**
+# so SSH always reaches the shell (many minis: **operator** is not in **sudoers**, so **sudo -v** would drop
+# the session). **Strict gate (opt-in):** set **HERMES_OPERATOR_REQUIRE_SUDO_SESSION=1** — **/dev/tty** reattach,
+# **sudo -k**, **sudo -v** or disconnect. Optional when REQUIRE=0: **HERMES_OPERATOR_SUDO_VERIFY_SOFT=1**,
+# **HERMES_OPERATOR_SKIP_SUDO_K=1**.
 #
 # Usage:
 #   ./ssh_operator.sh
@@ -136,7 +136,7 @@ fi
 _run_remote() {
   local remote_bash_cmd="$1"
   local pre=""
-  if [[ "${HERMES_OPERATOR_REQUIRE_SUDO_SESSION:-1}" != "0" ]]; then
+  if [[ "${HERMES_OPERATOR_REQUIRE_SUDO_SESSION:-0}" == "1" ]]; then
     if [[ "$_USE_TT" != "1" ]]; then
       echo "ssh_operator.sh: HERMES_OPERATOR_REQUIRE_SUDO_SESSION needs a PTY — unset HERMES_OPERATOR_SSH_NO_TTY or set HERMES_OPERATOR_REQUIRE_SUDO_SESSION=0" >&2
       exit 1
