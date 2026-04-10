@@ -8,7 +8,7 @@
 # Add to ~/.env/.env (same file as droplet):
 #   MACMINI_SSH_USER=operator
 #   MACMINI_SSH_HOST=100.x.y.z          # Tailscale IP of the Mac mini (preferred)
-#   MACMINI_SSH_PORT=22                 # optional, default 22 (use non-default after macmini_apply_sshd_tailscale_only.sh, e.g. 52822)
+#   MACMINI_SSH_PORT=52822              # optional; default 22 — use 52822 after macOS hardening (see macmini_* scripts)
 #   MACMINI_SSH_KEY=...                 # optional; defaults to SSH_KEY_FILE / ~/.env/.ssh_key
 #   MACMINI_REPO=                       # optional; default remote $HOME/hermes-agent
 #
