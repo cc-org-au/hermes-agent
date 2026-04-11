@@ -3,7 +3,8 @@
 #
 # Credentials (never committed): load from HERMES_DROPLET_ENV or ~/.env/.env — same layout as
 # ssh_droplet_user.sh / droplet_pull_hermes_home.sh:
-#   SSH_PORT, SSH_USER, SSH_TAILSCALE_IP (or SSH_IP), optional SSH_SUDO_PASSWORD,
+#   SSH_PORT, SSH_USER, and at least one of SSH_TAILSCALE_IP or SSH_IP (host to connect to),
+#   optional SSH_SUDO_PASSWORD,
 #   optional HERMES_DROPLET_ALLOW_ENV_PASSPHRASE + SSH_PASSPHRASE for encrypted keys without TTY.
 # Private key: SSH_KEY_FILE or ~/.env/.ssh_key
 #
@@ -39,6 +40,16 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
   key="${line%%=*}"
   val="${line#*=}"
+  # Support `export SSH_IP=...` lines (common in shell-style env files).
+  if [[ "$key" == export* ]]; then
+    key="${key#export}"
+    key="${key##[[:space:]]}"
+    key="${key%%[[:space:]]}"
+  fi
+  # Strip optional surrounding double quotes from values.
+  if [[ "$val" =~ ^\"(.*)\"$ ]]; then
+    val="${BASH_REMATCH[1]}"
+  fi
   case "$key" in
     SSH_PORT|SSH_USER|SSH_TAILSCALE_IP|SSH_IP|HERMES_DROPLET_REPO|HERMES_DROPLET_VENV_USER)
       export "${key}=${val}"
@@ -51,7 +62,21 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   esac
 done < "$ENV_FILE"
 
-HOST="${SSH_TAILSCALE_IP:-${SSH_IP:?}}"
+HOST="${SSH_TAILSCALE_IP:-${SSH_IP:-}}"
+if [[ -z "$HOST" ]]; then
+  echo "ssh_droplet.sh: set SSH_TAILSCALE_IP or SSH_IP in ${ENV_FILE}" >&2
+  echo "  Example:  SSH_TAILSCALE_IP=100.x.x.x" >&2
+  echo "  Or:       SSH_IP=203.0.113.1" >&2
+  exit 1
+fi
+if [[ -z "${SSH_USER:-}" ]]; then
+  echo "ssh_droplet.sh: set SSH_USER in ${ENV_FILE} (admin SSH account on the droplet)" >&2
+  exit 1
+fi
+if [[ -z "${SSH_PORT:-}" ]]; then
+  echo "ssh_droplet.sh: set SSH_PORT in ${ENV_FILE} (use 22 if unsure)" >&2
+  exit 1
+fi
 NEED_SUDO=0
 [[ "${HERMES_DROPLET_REQUIRE_SUDO:-0}" == "1" ]] && NEED_SUDO=1
 SUDO_AS="${HERMES_DROPLET_VENV_USER:-hermesuser}"
@@ -127,15 +152,15 @@ _SSH_FLAGS=(
   -o ServerAliveCountMax=30
   -o TCPKeepAlive=yes
   -i "$KEY_FILE"
-  -p "${SSH_PORT:?}"
+  -p "${SSH_PORT}"
 )
 if [[ "$(uname -s)" == "Darwin" ]]; then
   _SSH_FLAGS+=(-o UseKeychain=no)
 fi
 if [[ "$_USE_TT" == "1" ]]; then
-  _SSH_BASE=(ssh -tt "${_SSH_FLAGS[@]}" "${SSH_USER:?}@${HOST}")
+  _SSH_BASE=(ssh -tt "${_SSH_FLAGS[@]}" "${SSH_USER}@${HOST}")
 else
-  _SSH_BASE=(ssh -T "${_SSH_FLAGS[@]}" "${SSH_USER:?}@${HOST}")
+  _SSH_BASE=(ssh -T "${_SSH_FLAGS[@]}" "${SSH_USER}@${HOST}")
 fi
 
 _run_remote() {
