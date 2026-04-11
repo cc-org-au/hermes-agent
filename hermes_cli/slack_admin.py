@@ -19,6 +19,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from hermes_constants import display_hermes_home
@@ -38,6 +39,112 @@ def _slack_urlopen(req: urllib.request.Request, *, timeout: float = 90):
         return urllib.request.urlopen(req, timeout=timeout, context=ctx)
     except ImportError:
         return urllib.request.urlopen(req, timeout=timeout)
+
+
+def _config_token_operator_preferred() -> str:
+    """Prefer ``SLACK_CONFIG_TOKEN_OPERATOR`` for ``apps.manifest.create`` (qow / operator account)."""
+    from hermes_cli.config import get_env_value
+
+    for key in (
+        "SLACK_CONFIG_TOKEN_OPERATOR",
+        "SLACK_CONFIG_TOKEN",
+        "SLACK_APP_CONFIG_TOKEN",
+        "SLACK_MANIFEST_KEY",
+    ):
+        v = (get_env_value(key) or "").strip()
+        if v:
+            return v
+    print(
+        "Error: set SLACK_CONFIG_TOKEN_OPERATOR (recommended for this command) or "
+        "SLACK_CONFIG_TOKEN / SLACK_MANIFEST_KEY (xoxe app configuration token).",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+
+def normalize_slack_manifest_v2_for_api(manifest: Dict[str, Any]) -> Dict[str, Any]:
+    """Ensure v2 manifest fields Slack expects: metadata, long_description length, redirect URLs."""
+    m = copy.deepcopy(manifest)
+    m.setdefault("_metadata", {"major_version": 2, "minor_version": 1})
+    disp = m.setdefault("display_information", {})
+    if not isinstance(disp, dict):
+        disp = {}
+        m["display_information"] = disp
+    ld = disp.get("long_description") or ""
+    long_description = str(ld)
+    if len(long_description) < 174:
+        long_description = (long_description + " ") * 6
+    while len(long_description) < 174:
+        long_description = long_description + " "
+    disp["long_description"] = long_description[:4000]
+    _merge_oauth_redirect_urls(m, _DEFAULT_SLACK_OAUTH_REDIRECT_URLS)
+    st = m.setdefault("settings", {})
+    if isinstance(st, dict):
+        st.setdefault("is_hosted", False)
+    return m
+
+
+def slack_manifest_create_from_json_file(*, path: str) -> None:
+    """Load a JSON manifest file, normalize, validate, and ``apps.manifest.create``."""
+    p = Path(path).expanduser().resolve()
+    if not p.is_file():
+        print(f"Error: manifest file not found: {p}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        raw = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
+        print(f"Error reading manifest JSON: {e}", file=sys.stderr)
+        sys.exit(1)
+    if not isinstance(raw, dict):
+        print("Error: manifest JSON must be an object at the top level.", file=sys.stderr)
+        sys.exit(1)
+
+    tok = _config_token_operator_preferred()
+    from hermes_cli.config import get_env_value
+
+    if (get_env_value("SLACK_CONFIG_TOKEN_OPERATOR") or "").strip():
+        print(
+            "manifest-create-from-json: using SLACK_CONFIG_TOKEN_OPERATOR (new app owned by that account).",
+            file=sys.stderr,
+        )
+
+    m = normalize_slack_manifest_v2_for_api(raw)
+    manifest_json = json.dumps(m, separators=(",", ":"))
+
+    val = _slack_tooling_api_with_token("apps.manifest.validate", tok, manifest=manifest_json)
+    if not val.get("ok"):
+        print(f"validate failed: {val.get('error')}", file=sys.stderr)
+        for err in val.get("errors") or []:
+            if isinstance(err, dict):
+                print(f"  - {err.get('pointer')}: {err.get('message')}", file=sys.stderr)
+            else:
+                print(f"  - {err}", file=sys.stderr)
+        sys.exit(1)
+
+    created = _slack_tooling_api_with_token("apps.manifest.create", tok, manifest=manifest_json)
+    if not created.get("ok"):
+        print(f"create failed: {created.get('error')}", file=sys.stderr)
+        for err in created.get("errors") or []:
+            if isinstance(err, dict):
+                print(f"  - {err.get('pointer')}: {err.get('message')}", file=sys.stderr)
+            else:
+                print(f"  - {err}", file=sys.stderr)
+        sys.exit(1)
+
+    new_id = created.get("app_id", "")
+    creds = created.get("credentials") or {}
+    oauth_url = created.get("oauth_authorize_url", "")
+    print("ok=true")
+    print(f"new_app_id={new_id}")
+    if oauth_url:
+        print(f"oauth_authorize_url={oauth_url}")
+    print(
+        "\nSave the credentials below once — treat like passwords. "
+        "Install the app to your workspace, then add SLACK_BOT_TOKEN (xoxb) and "
+        "SLACK_APP_TOKEN (xapp) to Hermes .env.\n",
+        file=sys.stderr,
+    )
+    print(json.dumps({"credentials": creds}, indent=2))
 
 
 def _merge_oauth_redirect_urls(manifest: Dict[str, Any], urls: List[str]) -> None:
@@ -871,6 +978,15 @@ def slack_command(args) -> None:
             new_display_name=getattr(args, "new_name", "") or "",
             bot_display_name=getattr(args, "bot_display_name", None) or None,
         )
+    elif sub == "manifest-create-from-json":
+        if not getattr(args, "confirm", False):
+            print(
+                "Refusing to create a Slack app without --confirm.\n"
+                "This calls apps.manifest.create with your JSON file.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        slack_manifest_create_from_json_file(path=getattr(args, "manifest_file", "") or "")
     elif sub == "manifest-patch-oauth":
         if not getattr(args, "confirm", False):
             print(

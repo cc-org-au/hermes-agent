@@ -216,6 +216,14 @@ This calls `apps.manifest.export` → `apps.manifest.validate` → `apps.manifes
 
 If both are set, Hermes uses droplet for export only and operator for validate/create. If neither is set, a single `SLACK_CONFIG_TOKEN` / `SLACK_MANIFEST_KEY` is used for all three steps (same account).
 
+**Create from a JSON file** (e.g. exported manifest you edited), owned by **`SLACK_CONFIG_TOKEN_OPERATOR`** when set:
+
+```bash
+hermes slack manifest-create-from-json ./my-manifest.json --confirm
+```
+
+Hermes adds `_metadata`, default **redirect URLs**, pads `long_description` if under Slack’s minimum, and sets `settings.is_hosted` when missing.
+
 **`redirect_uri did not match any configured URIs`:** Slack requires every `redirect_uri` on `https://slack.com/oauth/v2/authorize` to be listed under the app’s **OAuth & Permissions → Redirect URLs**. Easiest fix: open [api.slack.com/apps](https://api.slack.com/apps) → your app → **OAuth & Permissions** → **Install to Workspace** (uses Slack’s internal flow). Or append a matching query parameter to your install link, e.g. `&redirect_uri=https%3A%2F%2Flocalhost%2Fslack%2Foauth_redirect`. To register the default URL and optionally rename the bot user in the manifest:
 
 ```bash

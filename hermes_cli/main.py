@@ -4460,6 +4460,23 @@ For more help on a command:
         default=None,
         help="Bot display name (features.bot_user.display_name); default: derived from --new-name",
     )
+    slack_mjson = slack_sub.add_parser(
+        "manifest-create-from-json",
+        help=(
+            "Create a new Slack app from a v2 manifest JSON file (apps.manifest.validate + create). "
+            "Prefers SLACK_CONFIG_TOKEN_OPERATOR."
+        ),
+    )
+    slack_mjson.add_argument(
+        "manifest_file",
+        metavar="FILE",
+        help="Path to manifest JSON (v2; Hermes adds _metadata, redirect_urls, pads long_description if needed)",
+    )
+    slack_mjson.add_argument(
+        "--confirm",
+        action="store_true",
+        help="Required — performs apps.manifest.create",
+    )
     slack_mpo = slack_sub.add_parser(
         "manifest-patch-oauth",
         help=(

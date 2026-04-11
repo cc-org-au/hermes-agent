@@ -111,6 +111,24 @@ def test_slack_command_manifest_update_requires_confirm(monkeypatch):
         sa.slack_command(args)
 
 
+def test_normalize_slack_manifest_v2_adds_metadata_and_redirect():
+    import hermes_cli.slack_admin as sa
+
+    m = sa.normalize_slack_manifest_v2_for_api(
+        {
+            "display_information": {
+                "name": "X",
+                "long_description": "short",
+            },
+            "settings": {"socket_mode_enabled": True},
+        }
+    )
+    assert m["_metadata"]["major_version"] == 2
+    assert len(m["display_information"]["long_description"]) >= 174
+    assert "https://localhost/slack/oauth_redirect" in m["oauth_config"]["redirect_urls"]
+    assert m["settings"].get("is_hosted") is False
+
+
 def test_config_token_accepts_slack_manifest_key(monkeypatch):
     import hermes_cli.slack_admin as sa
 
@@ -243,6 +261,15 @@ def test_manifest_clone_calls_export_validate_create(monkeypatch, capsys):
     assert all(c[1] == "xoxe-fake" for c in calls)
     out = capsys.readouterr().out
     assert "new_app_id=A_NEW123" in out
+
+
+def test_slack_command_manifest_create_from_json_requires_confirm(monkeypatch):
+    import hermes_cli.slack_admin as sa
+
+    monkeypatch.setattr(sa, "slack_manifest_create_from_json_file", lambda **kw: None)
+    args = MagicMock(slack_command="manifest-create-from-json", manifest_file="/x.json", confirm=False)
+    with pytest.raises(SystemExit):
+        sa.slack_command(args)
 
 
 def test_slack_command_manifest_patch_oauth_requires_confirm(monkeypatch):
