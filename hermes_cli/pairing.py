@@ -6,7 +6,13 @@ Usage:
     hermes pairing approve <platform> <code>  # Approve a pairing code
     hermes pairing revoke <platform> <user_id> # Revoke user access
     hermes pairing clear-pending     # Clear all expired/pending codes
+
+If the gateway runs under a profile (HERMES_HOME=.../profiles/<name>), use the same
+profile for pairing:  hermes -p <name> pairing approve ...
 """
+
+from hermes_constants import display_hermes_home
+
 
 def pairing_command(args):
     """Handle hermes pairing subcommands."""
@@ -33,8 +39,14 @@ def _cmd_list(store):
     pending = store.list_pending()
     approved = store.list_approved()
 
+    print(f"\n  Pairing data directory (HERMES_HOME): {display_hermes_home()}/")
+
     if not pending and not approved:
         print("No pairing data found. No one has tried to pair yet~")
+        print(
+            "  If your gateway uses a profile, run the same profile here, e.g.\n"
+            "    hermes -p chief-orchestrator pairing list\n"
+        )
         return
 
     if pending:
@@ -75,7 +87,12 @@ def _cmd_approve(store, platform: str, code: str):
         print("  They'll be recognized automatically on their next message.\n")
     else:
         print(f"\n  Code '{code}' not found or expired for platform '{platform}'.")
-        print("  Run 'hermes pairing list' to see pending codes.\n")
+        print(f"  Looking under HERMES_HOME: {display_hermes_home()}/")
+        print("  Run 'hermes pairing list' to see pending codes.")
+        print(
+            "  If the gateway uses a profile (e.g. chief-orchestrator), approve with the same profile:\n"
+            f"    hermes -p chief-orchestrator pairing approve {platform} {code}\n"
+        )
 
 
 def _cmd_revoke(store, platform: str, user_id: str):

@@ -59,6 +59,17 @@ const REPLY_PREFIX = process.env.WHATSAPP_REPLY_PREFIX === undefined
   ? DEFAULT_REPLY_PREFIX
   : process.env.WHATSAPP_REPLY_PREFIX.replace(/\\n/g, '\n');
 
+/** Min length for prefix-based echo detection (avoids `''.startsWith('')` / tiny-prefix false positives). */
+const MIN_PREFIX_ECHO_LEN = 8;
+
+function isLikelyAgentEchoBody(body, messageId) {
+  if (recentlySentIds.has(messageId)) return true;
+  const rp = (REPLY_PREFIX || '').replace(/\r\n/g, '\n');
+  if (rp.length < MIN_PREFIX_ECHO_LEN) return false;
+  const bn = (body || '').replace(/\r\n/g, '\n');
+  return bn.startsWith(rp);
+}
+
 function formatOutgoingMessage(message) {
   // In bot mode, messages come from a different number so the prefix is
   // redundant — the sender identity is already clear.  Only prepend in
@@ -339,7 +350,7 @@ async function startSocket() {
       }
 
       // Ignore Hermes' own reply messages in self-chat mode to avoid loops.
-      if (msg.key.fromMe && ((REPLY_PREFIX && body.startsWith(REPLY_PREFIX)) || recentlySentIds.has(msg.key.id))) {
+      if (msg.key.fromMe && isLikelyAgentEchoBody(body, msg.key.id)) {
         if (WHATSAPP_DEBUG) {
           try { console.log(JSON.stringify({ event: 'ignored', reason: 'agent_echo', chatId, messageId: msg.key.id })); } catch {}
         }
