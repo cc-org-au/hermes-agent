@@ -1585,9 +1585,9 @@ def setup_terminal_backend(config: dict):
             save_env_value("TERMINAL_SSH_USER", user)
 
         # SSH port
-        current_port = get_env_value("TERMINAL_SSH_PORT") or "22"
+        current_port = get_env_value("TERMINAL_SSH_PORT") or "40227"
         port = prompt("  SSH port", current_port)
-        if port and port != "22":
+        if port and port != "40227":
             save_env_value("TERMINAL_SSH_PORT", port)
 
         # SSH key
@@ -1605,7 +1605,7 @@ def setup_terminal_backend(config: dict):
             ssh_cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5"]
             if ssh_key:
                 ssh_cmd.extend(["-i", ssh_key])
-            if port and port != "22":
+            if port:
                 ssh_cmd.extend(["-p", port])
             ssh_cmd.append(f"{user}@{host}" if user else host)
             ssh_cmd.append("echo ok")

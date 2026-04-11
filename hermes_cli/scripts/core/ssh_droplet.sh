@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # SSH to the droplet as the admin user (SSH_USER), optionally sudo to hermesuser (or --sudo-user).
 #
-# Credentials (never committed): load from HERMES_DROPLET_ENV or ~/.env/.env — same layout as
-# ssh_droplet_user.sh / droplet_pull_hermes_home.sh:
-#   SSH_PORT, SSH_USER, and at least one of SSH_TAILSCALE_IP or SSH_IP (host to connect to),
+# Credentials are read only from THIS MACHINE (your Mac), never from the VPS:
+#   HERMES_DROPLET_ENV  — path to your local env file (default: ~/.env/.env)
+# Same key layout as ssh_droplet_user.sh / droplet_pull_hermes_home.sh:
+#   SSH_USER (or SSH_USER_DROPLET), at least one of SSH_TAILSCALE_IP, SSH_IP, or SSH_TAILSCALE_DNS_DROPLET
+#   (or SSH_*_DROPLET aliases), optional SSH_PORT / SSH_PORT_DROPLET (defaults to 40227 if omitted),
 #   optional SSH_SUDO_PASSWORD,
 #   optional HERMES_DROPLET_ALLOW_ENV_PASSPHRASE + SSH_PASSPHRASE for encrypted keys without TTY.
 # Private key: SSH_KEY_FILE or ~/.env/.ssh_key
@@ -25,7 +27,7 @@ _SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${_SCRIPTS_DIR}/droplet_remote_venv.sh"
 
 if [[ ! -f "$ENV_FILE" ]]; then
-  echo "ssh_droplet.sh: missing env file ${ENV_FILE} (set HERMES_DROPLET_ENV)" >&2
+  echo "ssh_droplet.sh: missing local env file ${ENV_FILE} (set HERMES_DROPLET_ENV to your workstation secrets path)" >&2
   exit 1
 fi
 if [[ ! -f "$KEY_FILE" ]]; then
@@ -51,7 +53,8 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     val="${BASH_REMATCH[1]}"
   fi
   case "$key" in
-    SSH_PORT|SSH_USER|SSH_TAILSCALE_IP|SSH_IP|HERMES_DROPLET_REPO|HERMES_DROPLET_VENV_USER)
+    SSH_PORT|SSH_USER|SSH_TAILSCALE_IP|SSH_IP|HERMES_DROPLET_REPO|HERMES_DROPLET_VENV_USER|\
+    SSH_PORT_DROPLET|SSH_USER_DROPLET|SSH_TAILSCALE_IP_DROPLET|SSH_IP_DROPLET|SSH_TAILSCALE_DNS_DROPLET)
       export "${key}=${val}"
       ;;
     SSH_SUDO_PASSWORD) SSH_SUDO_PASSWORD="${val}" ;;
@@ -62,21 +65,24 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   esac
 done < "$ENV_FILE"
 
-HOST="${SSH_TAILSCALE_IP:-${SSH_IP:-}}"
+# Alternate key names common in ~/.env/.env (values never printed).
+if [[ -z "${SSH_TAILSCALE_IP:-}" && -n "${SSH_TAILSCALE_IP_DROPLET:-}" ]]; then SSH_TAILSCALE_IP="${SSH_TAILSCALE_IP_DROPLET}"; export SSH_TAILSCALE_IP; fi
+if [[ -z "${SSH_IP:-}" && -n "${SSH_IP_DROPLET:-}" ]]; then SSH_IP="${SSH_IP_DROPLET}"; export SSH_IP; fi
+if [[ -z "${SSH_USER:-}" && -n "${SSH_USER_DROPLET:-}" ]]; then SSH_USER="${SSH_USER_DROPLET}"; export SSH_USER; fi
+if [[ -z "${SSH_PORT:-}" && -n "${SSH_PORT_DROPLET:-}" ]]; then SSH_PORT="${SSH_PORT_DROPLET}"; export SSH_PORT; fi
+
+HOST="${SSH_TAILSCALE_IP:-${SSH_IP:-${SSH_TAILSCALE_DNS_DROPLET:-}}}"
 if [[ -z "$HOST" ]]; then
-  echo "ssh_droplet.sh: set SSH_TAILSCALE_IP or SSH_IP in ${ENV_FILE}" >&2
-  echo "  Example:  SSH_TAILSCALE_IP=100.x.x.x" >&2
-  echo "  Or:       SSH_IP=203.0.113.1" >&2
+  echo "ssh_droplet.sh: set SSH_TAILSCALE_IP, SSH_IP, or SSH_TAILSCALE_DNS_DROPLET (or SSH_*_DROPLET aliases) in ${ENV_FILE}" >&2
   exit 1
 fi
 if [[ -z "${SSH_USER:-}" ]]; then
-  echo "ssh_droplet.sh: set SSH_USER in ${ENV_FILE} (admin SSH account on the droplet)" >&2
+  echo "ssh_droplet.sh: set SSH_USER or SSH_USER_DROPLET in ${ENV_FILE} (admin SSH account on the droplet)" >&2
   exit 1
 fi
-if [[ -z "${SSH_PORT:-}" ]]; then
-  echo "ssh_droplet.sh: set SSH_PORT in ${ENV_FILE} (use 22 if unsure)" >&2
-  exit 1
-fi
+# Port from local env only; if your file sets SSH_PORT / SSH_PORT_DROPLET, that value is used. Else 40227 (management port).
+SSH_PORT="${SSH_PORT:-40227}"
+export SSH_PORT
 NEED_SUDO=0
 [[ "${HERMES_DROPLET_REQUIRE_SUDO:-0}" == "1" ]] && NEED_SUDO=1
 SUDO_AS="${HERMES_DROPLET_VENV_USER:-hermesuser}"

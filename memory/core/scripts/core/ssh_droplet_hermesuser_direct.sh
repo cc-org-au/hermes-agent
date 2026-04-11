@@ -4,7 +4,7 @@
 # Requires the same key in hermesuser's ~/.ssh/authorized_keys on the server. If you only have
 # admin SSH access, use ./scripts/core/ssh_droplet_user.sh instead (SSH as admin, sudo to hermesuser).
 #
-# Expects ~/.env/.env: SSH_PORT, SSH_TAILSCALE_IP (or SSH_IP)
+# Expects ~/.env/.env: SSH_TAILSCALE_IP (or SSH_IP); optional SSH_PORT (default 40227)
 # Key: ~/.env/.ssh_key unless SSH_KEY_FILE is set.
 # Optional: SSH_LOGIN_USER (default hermesuser) — remote account to SSH as.
 # Optional: HERMES_DROPLET_REPO, HERMES_DROPLET_VENV_USER — same as ssh_droplet_user.sh (venv on login).
@@ -48,8 +48,19 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
   key="${line%%=*}"
   val="${line#*=}"
+  if [[ "$key" == export* ]]; then
+    key="${key#export}"
+    key="${key##[[:space:]]}"
+    key="${key%%[[:space:]]}"
+  fi
+  if [[ "$val" =~ ^\"(.*)\"$ ]]; then
+    val="${BASH_REMATCH[1]}"
+  fi
   case "$key" in
-    SSH_PORT|SSH_TAILSCALE_IP|SSH_IP|HERMES_DROPLET_REPO|HERMES_DROPLET_VENV_USER) export "${key}=${val}" ;;
+    SSH_PORT|SSH_TAILSCALE_IP|SSH_IP|HERMES_DROPLET_REPO|HERMES_DROPLET_VENV_USER|\
+    SSH_PORT_DROPLET|SSH_TAILSCALE_IP_DROPLET|SSH_IP_DROPLET|SSH_TAILSCALE_DNS_DROPLET)
+      export "${key}=${val}"
+      ;;
     SSH_LOGIN_USER) _LOGIN_USER="${val}" ;;
     HERMES_DROPLET_ALLOW_ENV_PASSPHRASE)
       case "$val" in 1|true|TRUE|True|yes|YES) _ALLOW_ENV_PASS_FROM_FILE=1 ;; esac
@@ -58,7 +69,18 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   esac
 done < "$ENV_FILE"
 
-HOST="${SSH_TAILSCALE_IP:-${SSH_IP:?}}"
+if [[ -z "${SSH_TAILSCALE_IP:-}" && -n "${SSH_TAILSCALE_IP_DROPLET:-}" ]]; then SSH_TAILSCALE_IP="${SSH_TAILSCALE_IP_DROPLET}"; export SSH_TAILSCALE_IP; fi
+if [[ -z "${SSH_IP:-}" && -n "${SSH_IP_DROPLET:-}" ]]; then SSH_IP="${SSH_IP_DROPLET}"; export SSH_IP; fi
+if [[ -z "${SSH_PORT:-}" && -n "${SSH_PORT_DROPLET:-}" ]]; then SSH_PORT="${SSH_PORT_DROPLET}"; export SSH_PORT; fi
+
+SSH_PORT="${SSH_PORT:-40227}"
+export SSH_PORT
+
+HOST="${SSH_TAILSCALE_IP:-${SSH_IP:-${SSH_TAILSCALE_DNS_DROPLET:-}}}"
+if [[ -z "$HOST" ]]; then
+  echo "ssh_droplet_hermesuser_direct.sh: set SSH_TAILSCALE_IP, SSH_IP, or SSH_TAILSCALE_DNS_DROPLET (or *_DROPLET aliases) in ${ENV_FILE}" >&2
+  exit 1
+fi
 REMOTE_USER="${_LOGIN_USER:-${AGENT_DROPLET_RUNTIME_USER:-hermesuser}}"
 
 REMOTE_BASE=(
@@ -66,7 +88,7 @@ REMOTE_BASE=(
   -o AddKeysToAgent=no -o ControlMaster=no -o ControlPath=none
   -o StrictHostKeyChecking=accept-new
   -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=4
-  -i "$KEY_FILE" -p "${SSH_PORT:?}"
+  -i "$KEY_FILE" -p "${SSH_PORT}"
   "${REMOTE_USER}@${HOST}"
 )
 if [[ "$(uname -s)" == "Darwin" ]]; then

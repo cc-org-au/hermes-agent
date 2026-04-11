@@ -41,7 +41,7 @@ class SSHEnvironment(PersistentShellMixin, BaseEnvironment):
     """
 
     def __init__(self, host: str, user: str, cwd: str = "~",
-                 timeout: int = 60, port: int = 22, key_path: str = "",
+                 timeout: int = 60, port: int = 40227, key_path: str = "",
                  persistent: bool = False):
         super().__init__(cwd=cwd, timeout=timeout)
         self.host = host
@@ -69,8 +69,7 @@ class SSHEnvironment(PersistentShellMixin, BaseEnvironment):
         cmd.extend(["-o", "BatchMode=yes"])
         cmd.extend(["-o", "StrictHostKeyChecking=accept-new"])
         cmd.extend(["-o", "ConnectTimeout=10"])
-        if self.port != 22:
-            cmd.extend(["-p", str(self.port)])
+        cmd.extend(["-p", str(self.port)])
         if self.key_path:
             cmd.extend(["-i", self.key_path])
         if extra_args:
@@ -113,9 +112,7 @@ class SSHEnvironment(PersistentShellMixin, BaseEnvironment):
             from tools.credential_files import get_credential_file_mounts, get_skills_directory_mount
 
             rsync_base = ["rsync", "-az", "--timeout=30", "--safe-links"]
-            ssh_opts = f"ssh -o ControlPath={self.control_socket} -o ControlMaster=auto"
-            if self.port != 22:
-                ssh_opts += f" -p {self.port}"
+            ssh_opts = f"ssh -o ControlPath={self.control_socket} -o ControlMaster=auto -p {self.port}"
             if self.key_path:
                 ssh_opts += f" -i {self.key_path}"
             rsync_base.extend(["-e", ssh_opts])

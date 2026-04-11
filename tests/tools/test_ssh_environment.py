@@ -12,7 +12,7 @@ from tools.environments import ssh as ssh_env
 
 _SSH_HOST = os.getenv("TERMINAL_SSH_HOST", "")
 _SSH_USER = os.getenv("TERMINAL_SSH_USER", "")
-_SSH_PORT = int(os.getenv("TERMINAL_SSH_PORT", "22"))
+_SSH_PORT = int(os.getenv("TERMINAL_SSH_PORT", "40227"))
 _SSH_KEY = os.getenv("TERMINAL_SSH_KEY", "")
 
 _has_ssh = bool(_SSH_HOST and _SSH_USER)
@@ -134,7 +134,7 @@ def _setup_ssh_env(monkeypatch, persistent: bool):
     monkeypatch.setenv("TERMINAL_SSH_HOST", _SSH_HOST)
     monkeypatch.setenv("TERMINAL_SSH_USER", _SSH_USER)
     monkeypatch.setenv("TERMINAL_SSH_PERSISTENT", "true" if persistent else "false")
-    if _SSH_PORT != 22:
+    if _SSH_PORT != 40227:
         monkeypatch.setenv("TERMINAL_SSH_PORT", str(_SSH_PORT))
     if _SSH_KEY:
         monkeypatch.setenv("TERMINAL_SSH_KEY", _SSH_KEY)

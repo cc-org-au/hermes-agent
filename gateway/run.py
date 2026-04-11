@@ -248,13 +248,24 @@ def _normalize_whatsapp_identifier(value: str) -> str:
     )
 
 
+def _whatsapp_bridge_session_dirs() -> list:
+    """Directories where Baileys may write lid-mapping-*.json (profile layout vs legacy)."""
+    out: list = []
+    for p in (
+        _hermes_home / "platforms" / "whatsapp" / "session",
+        _hermes_home / "whatsapp" / "session",
+    ):
+        if p.is_dir() and p not in out:
+            out.append(p)
+    return out
+
+
 def _expand_whatsapp_auth_aliases(identifier: str) -> set:
     """Resolve WhatsApp phone/LID aliases using bridge session mapping files."""
     normalized = _normalize_whatsapp_identifier(identifier)
     if not normalized:
         return set()
 
-    session_dir = _hermes_home / "whatsapp" / "session"
     resolved = set()
     queue = [normalized]
 
@@ -265,15 +276,18 @@ def _expand_whatsapp_auth_aliases(identifier: str) -> set:
 
         resolved.add(current)
         for suffix in ("", "_reverse"):
-            mapping_path = session_dir / f"lid-mapping-{current}{suffix}.json"
-            if not mapping_path.exists():
-                continue
-            try:
-                mapped = _normalize_whatsapp_identifier(
-                    json.loads(mapping_path.read_text(encoding="utf-8"))
-                )
-            except Exception:
-                continue
+            mapped: str | None = None
+            for session_dir in _whatsapp_bridge_session_dirs():
+                mapping_path = session_dir / f"lid-mapping-{current}{suffix}.json"
+                if not mapping_path.exists():
+                    continue
+                try:
+                    mapped = _normalize_whatsapp_identifier(
+                        json.loads(mapping_path.read_text(encoding="utf-8"))
+                    )
+                    break
+                except Exception:
+                    continue
             if mapped and mapped not in resolved:
                 queue.append(mapped)
 

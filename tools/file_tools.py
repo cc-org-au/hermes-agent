@@ -230,7 +230,7 @@ def _get_file_ops(task_id: str = "default") -> ShellFileOperations:
                 ssh_config = {
                     "host": config.get("ssh_host", ""),
                     "user": config.get("ssh_user", ""),
-                    "port": config.get("ssh_port", 22),
+                    "port": config.get("ssh_port", 40227),
                     "key": config.get("ssh_key", ""),
                     "persistent": config.get("ssh_persistent", False),
                 }

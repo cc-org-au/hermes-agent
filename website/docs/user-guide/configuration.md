@@ -169,7 +169,7 @@ TERMINAL_SSH_USER=ubuntu
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `TERMINAL_SSH_PORT` | `22` | SSH port |
+| `TERMINAL_SSH_PORT` | `40227` | SSH port |
 | `TERMINAL_SSH_KEY` | (system default) | Path to SSH private key |
 | `TERMINAL_SSH_PERSISTENT` | `true` | Enable persistent shell |
 

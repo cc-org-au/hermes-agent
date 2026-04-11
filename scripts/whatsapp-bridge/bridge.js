@@ -26,7 +26,12 @@ import path from 'path';
 import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync } from 'fs';
 import { randomBytes } from 'crypto';
 import qrcode from 'qrcode-terminal';
-import { matchesAllowedUser, parseAllowedUsers } from './allowlist.js';
+import {
+  matchesAllowedUser,
+  parseAllowedUsers,
+  normalizeWhatsAppIdentifier,
+  expandWhatsAppIdentifiers,
+} from './allowlist.js';
 
 // Parse CLI args
 const args = process.argv.slice(2);
@@ -79,6 +84,60 @@ function buildLidMap() {
   return map;
 }
 let lidToPhone = buildLidMap();
+
+/** Strip :device@ and @host so PN/LID JIDs match gateway allowlist + lid-mapping files. */
+function jidNumericId(jid) {
+  return normalizeWhatsAppIdentifier(jid || '');
+}
+
+/**
+ * Self-chat "fromMe" messages must pass here or they are dropped with no enqueue.
+ * WhatsApp may use `phone:device@s.whatsapp.net`, `phone@s.whatsapp.net`, or `lid@lid`;
+ * raw `split('@')[0]` is wrong when a device segment is present.
+ */
+function isSelfChatDm(chatId, sock) {
+  const myNumber = jidNumericId(sock.user?.id || '');
+  const myLid = jidNumericId(sock.user?.lid || '');
+  const chatNorm = jidNumericId(chatId);
+  if (!chatNorm) return false;
+  if (myNumber && chatNorm === myNumber) return true;
+  if (myLid && chatNorm === myLid) return true;
+  if (myNumber && lidToPhone[chatNorm] === myNumber) return true;
+  try {
+    const chatAliases = expandWhatsAppIdentifiers(chatId, SESSION_DIR);
+    for (const seed of [myNumber, myLid].filter(Boolean)) {
+      const selfAliases = expandWhatsAppIdentifiers(seed, SESSION_DIR);
+      for (const a of chatAliases) {
+        if (selfAliases.has(a)) return true;
+      }
+    }
+  } catch {
+    /* ignore mapping read errors */
+  }
+  return false;
+}
+
+/** Plain text from any common Baileys leaf (incl. wrappers + edits). */
+function extractTextBody(message) {
+  if (!message) return '';
+  if (message.conversation) return String(message.conversation);
+  const et = message.extendedTextMessage;
+  if (et?.text) return String(et.text);
+  if (message.imageMessage?.caption) return String(message.imageMessage.caption);
+  if (message.videoMessage?.caption) return String(message.videoMessage.caption);
+  if (message.documentMessage?.caption) return String(message.documentMessage.caption);
+  for (const wrap of ['ephemeralMessage', 'viewOnceMessage', 'documentWithCaptionMessage', 'buttonsMessage', 'listMessage']) {
+    if (message[wrap]?.message) {
+      const inner = extractTextBody(message[wrap].message);
+      if (inner) return inner;
+    }
+  }
+  if (message.editedMessage?.message) {
+    const inner = extractTextBody(message.editedMessage.message);
+    if (inner) return inner;
+  }
+  return '';
+}
 
 const logger = pino({ level: 'warn' });
 
@@ -184,15 +243,20 @@ async function startSocket() {
           continue;
         }
 
-        // Self-chat mode: only allow messages in the user's own self-chat
-        // WhatsApp now uses LID (Linked Identity Device) format: 67427329167522@lid
-        // AND classic format: 34652029134@s.whatsapp.net
-        // sock.user has both: { id: "number:10@s.whatsapp.net", lid: "lid_number:10@lid" }
-        const myNumber = (sock.user?.id || '').replace(/:.*@/, '@').replace(/@.*/, '');
-        const myLid = (sock.user?.lid || '').replace(/:.*@/, '@').replace(/@.*/, '');
-        const chatNumber = chatId.replace(/@.*/, '');
-        const isSelfChat = (myNumber && chatNumber === myNumber) || (myLid && chatNumber === myLid);
-        if (!isSelfChat) continue;
+        // Self-chat mode: only allow messages in the user's own self-chat (PN or LID JID).
+        if (!isSelfChatDm(chatId, sock)) {
+          if (WHATSAPP_DEBUG) {
+            try {
+              console.log(JSON.stringify({
+                event: 'ignored',
+                reason: 'fromMe_not_self_chat',
+                chatHost: (chatId.split('@')[1] || '').slice(0, 12),
+                hasMyLid: !!sock.user?.lid,
+              }));
+            } catch { /* ignore */ }
+          }
+          continue;
+        }
       }
 
       // Check allowlist for messages from others (resolve LID ↔ phone aliases)
@@ -200,18 +264,14 @@ async function startSocket() {
         continue;
       }
 
-      // Extract message body
-      let body = '';
+      // Extract message body (conversation / extendedText / nested wrappers / captions)
+      let body = extractTextBody(msg.message);
       let hasMedia = false;
       let mediaType = '';
       const mediaUrls = [];
 
-      if (msg.message.conversation) {
-        body = msg.message.conversation;
-      } else if (msg.message.extendedTextMessage?.text) {
-        body = msg.message.extendedTextMessage.text;
-      } else if (msg.message.imageMessage) {
-        body = msg.message.imageMessage.caption || '';
+      if (msg.message.imageMessage) {
+        if (!body) body = msg.message.imageMessage.caption || '';
         hasMedia = true;
         mediaType = 'image';
         try {
@@ -227,7 +287,7 @@ async function startSocket() {
           console.error('[bridge] Failed to download image:', err.message);
         }
       } else if (msg.message.videoMessage) {
-        body = msg.message.videoMessage.caption || '';
+        if (!body) body = msg.message.videoMessage.caption || '';
         hasMedia = true;
         mediaType = 'video';
         try {
@@ -257,7 +317,7 @@ async function startSocket() {
           console.error('[bridge] Failed to download audio:', err.message);
         }
       } else if (msg.message.documentMessage) {
-        body = msg.message.documentMessage.caption || '';
+        if (!body) body = msg.message.documentMessage.caption || '';
         hasMedia = true;
         mediaType = 'document';
         const fileName = msg.message.documentMessage.fileName || 'document';

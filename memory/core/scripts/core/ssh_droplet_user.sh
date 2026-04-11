@@ -8,7 +8,8 @@
 # Sudo is interactive (no sudo -S pipe): you type the sudo password on the remote TTY. Piping
 # the password into sudo -S breaks interactive login shells (stdin EOF closes the session).
 #
-# Requires ~/.env/.env: SSH_PORT, SSH_USER, SSH_TAILSCALE_IP (or SSH_IP)
+# Requires ~/.env/.env: SSH_USER or SSH_USER_DROPLET; SSH_TAILSCALE_IP, SSH_IP, or SSH_TAILSCALE_DNS_DROPLET
+# (or *_DROPLET aliases); optional SSH_PORT (default 40227)
 # Same private key as ssh_droplet.sh. Optional: SSH_LOGIN_USER (default: hermesuser).
 # Optional: HERMES_DROPLET_REPO (default /home/hermesuser/hermes-agent), HERMES_DROPLET_VENV_USER
 # (default hermesuser). Interactive shells and remote commands source that venv when the login
@@ -45,13 +46,41 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
   key="${line%%=*}"
   val="${line#*=}"
+  if [[ "$key" == export* ]]; then
+    key="${key#export}"
+    key="${key##[[:space:]]}"
+    key="${key%%[[:space:]]}"
+  fi
+  if [[ "$val" =~ ^\"(.*)\"$ ]]; then
+    val="${BASH_REMATCH[1]}"
+  fi
   case "$key" in
-    SSH_PORT|SSH_USER|SSH_TAILSCALE_IP|SSH_IP|HERMES_DROPLET_REPO|HERMES_DROPLET_VENV_USER) export "${key}=${val}" ;;
+    SSH_PORT|SSH_USER|SSH_TAILSCALE_IP|SSH_IP|HERMES_DROPLET_REPO|HERMES_DROPLET_VENV_USER|\
+    SSH_PORT_DROPLET|SSH_USER_DROPLET|SSH_TAILSCALE_IP_DROPLET|SSH_IP_DROPLET|SSH_TAILSCALE_DNS_DROPLET)
+      export "${key}=${val}"
+      ;;
     SSH_LOGIN_USER) _LOGIN_USER="${val}" ;;
   esac
 done < "$ENV_FILE"
 
-HOST="${SSH_TAILSCALE_IP:-${SSH_IP:?}}"
+if [[ -z "${SSH_TAILSCALE_IP:-}" && -n "${SSH_TAILSCALE_IP_DROPLET:-}" ]]; then SSH_TAILSCALE_IP="${SSH_TAILSCALE_IP_DROPLET}"; export SSH_TAILSCALE_IP; fi
+if [[ -z "${SSH_IP:-}" && -n "${SSH_IP_DROPLET:-}" ]]; then SSH_IP="${SSH_IP_DROPLET}"; export SSH_IP; fi
+if [[ -z "${SSH_USER:-}" && -n "${SSH_USER_DROPLET:-}" ]]; then SSH_USER="${SSH_USER_DROPLET}"; export SSH_USER; fi
+if [[ -z "${SSH_PORT:-}" && -n "${SSH_PORT_DROPLET:-}" ]]; then SSH_PORT="${SSH_PORT_DROPLET}"; export SSH_PORT; fi
+
+SSH_PORT="${SSH_PORT:-40227}"
+export SSH_PORT
+
+HOST="${SSH_TAILSCALE_IP:-${SSH_IP:-${SSH_TAILSCALE_DNS_DROPLET:-}}}"
+if [[ -z "$HOST" ]]; then
+  echo "ssh_droplet_user.sh: set SSH_TAILSCALE_IP, SSH_IP, or SSH_TAILSCALE_DNS_DROPLET (or *_DROPLET aliases) in ${ENV_FILE}" >&2
+  exit 1
+fi
+if [[ -z "${SSH_USER:-}" ]]; then
+  echo "ssh_droplet_user.sh: set SSH_USER or SSH_USER_DROPLET in ${ENV_FILE}" >&2
+  exit 1
+fi
+
 LOGIN_TARGET="${_LOGIN_USER:-${AGENT_DROPLET_RUNTIME_USER:-hermesuser}}"
 LU=$(printf '%q' "$LOGIN_TARGET")
 
@@ -60,8 +89,8 @@ REMOTE_BASE=(
   -o AddKeysToAgent=no -o ControlMaster=no -o ControlPath=none
   -o StrictHostKeyChecking=accept-new
   -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=4
-  -i "$KEY_FILE" -p "${SSH_PORT:?}"
-  "${SSH_USER:?}@${HOST}"
+  -i "$KEY_FILE" -p "${SSH_PORT}"
+  "${SSH_USER}@${HOST}"
 )
 if [[ "$(uname -s)" == "Darwin" ]]; then
   REMOTE_BASE+=(-o UseKeychain=no)

@@ -71,7 +71,7 @@ class TestParseEnvVar:
     def test_invalid_int_includes_bad_value(self):
         with patch.dict("os.environ", {"TERMINAL_SSH_PORT": "ssh"}):
             with pytest.raises(ValueError, match="ssh"):
-                _parse_env_var("TERMINAL_SSH_PORT", "22")
+                _parse_env_var("TERMINAL_SSH_PORT", "40227")
 
     # -- invalid JSON raises ValueError with env var name --
 

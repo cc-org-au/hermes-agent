@@ -3832,7 +3832,7 @@ class HermesCLI:
         if terminal_env == "ssh":
             ssh_host = os.getenv("TERMINAL_SSH_HOST", "not set")
             ssh_user = os.getenv("TERMINAL_SSH_USER", "not set")
-            ssh_port = os.getenv("TERMINAL_SSH_PORT", "22")
+            ssh_port = os.getenv("TERMINAL_SSH_PORT", "40227")
             print(f"  SSH Target:   {ssh_user}@{ssh_host}:{ssh_port}")
         print(f"  Working Dir:  {terminal_cwd}")
         print(f"  Timeout:      {terminal_timeout}s")

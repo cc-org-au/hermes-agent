@@ -126,7 +126,7 @@ For cloud sandbox backends, persistence is filesystem-oriented. `TERMINAL_LIFETI
 |----------|-------------|
 | `TERMINAL_SSH_HOST` | Remote server hostname |
 | `TERMINAL_SSH_USER` | SSH username |
-| `TERMINAL_SSH_PORT` | SSH port (default: 22) |
+| `TERMINAL_SSH_PORT` | SSH port (default: 40227) |
 | `TERMINAL_SSH_KEY` | Path to private key |
 | `TERMINAL_SSH_PERSISTENT` | Override persistent shell for SSH (default: follows `TERMINAL_PERSISTENT_SHELL`) |
 
