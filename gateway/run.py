@@ -1712,8 +1712,8 @@ class GatewayRunner:
         
         Checks in order:
         1. Per-platform allow-all flag (e.g., DISCORD_ALLOW_ALL_USERS=true)
-        2. Environment variable allowlists (TELEGRAM_ALLOWED_USERS, etc.)
-        3. DM pairing approved list
+        2. DM pairing approved list (WhatsApp tries both ``user_id`` and ``chat_id`` for DMs)
+        3. Environment variable allowlists (TELEGRAM_ALLOWED_USERS, etc.)
         4. Global allow-all (GATEWAY_ALLOW_ALL_USERS=true)
         5. Default: deny
 
@@ -1730,6 +1730,14 @@ class GatewayRunner:
             return True
 
         user_id = source.user_id
+        # WhatsApp DMs: Baileys sometimes omits sender fields; peer is always chat_id.
+        if (
+            source.platform == Platform.WHATSAPP
+            and source.chat_type == "dm"
+            and not user_id
+            and source.chat_id
+        ):
+            user_id = str(source.chat_id)
         if not user_id:
             return False
 
@@ -1769,7 +1777,15 @@ class GatewayRunner:
 
         # Check pairing store (always checked, regardless of allowlists)
         platform_name = source.platform.value if source.platform else ""
-        if self.pairing_store.is_approved(platform_name, user_id):
+        pairing_ids = (user_id,)
+        if (
+            source.platform == Platform.WHATSAPP
+            and source.chat_type == "dm"
+            and source.chat_id
+            and str(source.chat_id) != str(user_id)
+        ):
+            pairing_ids = (user_id, str(source.chat_id))
+        if any(self.pairing_store.is_approved(platform_name, pid) for pid in pairing_ids):
             return self._integration_surface_allowed(source)
 
         # Check platform-specific and global allowlists
@@ -1798,7 +1814,8 @@ class GatewayRunner:
         if "@" in user_id:
             check_ids.add(user_id.split("@")[0])
 
-        # WhatsApp: resolve phone↔LID aliases from bridge session mapping files
+        # WhatsApp: resolve phone↔LID aliases from bridge session mapping files.
+        # Include chat_id (DM peer): self-chat and JID/LID splits can differ from user_id alone.
         if source.platform == Platform.WHATSAPP:
             normalized_allowed_ids = set()
             for allowed_id in allowed_ids:
@@ -1810,6 +1827,13 @@ class GatewayRunner:
             normalized_user_id = _normalize_whatsapp_identifier(user_id)
             if normalized_user_id:
                 check_ids.add(normalized_user_id)
+            if source.chat_id:
+                cid = str(source.chat_id)
+                if cid != user_id:
+                    check_ids.update(_expand_whatsapp_auth_aliases(cid))
+                    nc = _normalize_whatsapp_identifier(cid)
+                    if nc:
+                        check_ids.add(nc)
 
         if not bool(check_ids & allowed_ids):
             return False

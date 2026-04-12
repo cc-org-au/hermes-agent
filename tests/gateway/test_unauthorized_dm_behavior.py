@@ -1,3 +1,5 @@
+import os
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -73,9 +75,8 @@ def _make_runner(platform: Platform, config: GatewayConfig):
 def test_whatsapp_lid_user_matches_phone_allowlist_via_session_mapping(monkeypatch, tmp_path):
     _clear_auth_env(monkeypatch)
     monkeypatch.setenv("WHATSAPP_ALLOWED_USERS", "15550000001")
-    monkeypatch.setattr(gateway_run, "_hermes_home", tmp_path)
 
-    session_dir = tmp_path / "whatsapp" / "session"
+    session_dir = Path(os.environ["HERMES_HOME"]) / "whatsapp" / "session"
     session_dir.mkdir(parents=True)
     (session_dir / "lid-mapping-15550000001.json").write_text('"900000000000001"', encoding="utf-8")
     (session_dir / "lid-mapping-900000000000001_reverse.json").write_text('"15550000001"', encoding="utf-8")
@@ -93,6 +94,30 @@ def test_whatsapp_lid_user_matches_phone_allowlist_via_session_mapping(monkeypat
         chat_type="dm",
     )
 
+    assert runner._is_user_authorized(source) is True
+
+
+def test_whatsapp_allowlist_matches_dm_chat_id_when_user_id_does_not(monkeypatch, tmp_path):
+    """DM peer in chat_id must satisfy WHATSAPP_ALLOWED_USERS (self-chat / JID variance)."""
+    _clear_auth_env(monkeypatch)
+    monkeypatch.setenv("WHATSAPP_ALLOWED_USERS", "15550000001")
+
+    session_dir = Path(os.environ["HERMES_HOME"]) / "whatsapp" / "session"
+    session_dir.mkdir(parents=True)
+    (session_dir / "lid-mapping-15550000001.json").write_text('"900000000000001"', encoding="utf-8")
+
+    runner, _ = _make_runner(
+        Platform.WHATSAPP,
+        GatewayConfig(platforms={Platform.WHATSAPP: PlatformConfig(enabled=True)}),
+    )
+
+    source = SessionSource(
+        platform=Platform.WHATSAPP,
+        user_id="orphan-sender-id",
+        chat_id="15550000001@s.whatsapp.net",
+        user_name="tester",
+        chat_type="dm",
+    )
     assert runner._is_user_authorized(source) is True
 
 
