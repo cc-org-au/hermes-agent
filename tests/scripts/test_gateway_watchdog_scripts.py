@@ -10,6 +10,7 @@ _SCRIPTS = [
     _REPO / "scripts/core/droplet_pull_hermes_home.sh",
     _REPO / "scripts/core/gateway-watchdog.sh",
     _REPO / "scripts/core/install_and_restart_gateway_watchdog.sh",
+    _REPO / "scripts/core/sync_hermes_home_mirrors_to_local.sh",
 ]
 
 
