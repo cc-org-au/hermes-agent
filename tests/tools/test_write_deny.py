@@ -32,8 +32,18 @@ class TestWriteDenyExactPaths:
         path = os.path.join(str(Path.home()), ".netrc")
         assert _is_write_denied(path) is True
 
-    def test_hermes_env(self):
+    def test_hermes_env_allowed_by_default(self):
+        """Profile and default Hermes .env files are writable (operator/messaging agents)."""
         path = os.path.join(str(Path.home()), ".hermes", ".env")
+        assert _is_write_denied(path) is False
+
+    def test_hermes_profile_env_allowed(self):
+        path = os.path.join(str(Path.home()), ".hermes", "profiles", "chief-orchestrator", ".env")
+        assert _is_write_denied(path) is False
+
+    def test_hermes_env_blocked_when_opt_in(self, monkeypatch):
+        monkeypatch.setenv("HERMES_BLOCK_FILE_TOOLS_HERMES_DOTENV", "1")
+        path = os.path.join(str(Path.home()), ".hermes", "profiles", "chief-orchestrator", ".env")
         assert _is_write_denied(path) is True
 
     def test_shell_profiles(self):

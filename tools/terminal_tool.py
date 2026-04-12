@@ -402,6 +402,8 @@ Do NOT use vim/nano/interactive tools without pty=true — they hang without a p
 Important: cloud sandboxes may be cleaned up, idled out, or recreated between turns. Persistent filesystem means files can resume later; it does NOT guarantee a continuously running machine or surviving background processes. Use terminal sandboxes for task work, not durable hosting.
 
 Gateway restarts from messaging (operator/droplet): use the repo venv and profile, e.g. ``cd <hermes-agent> && ./venv/bin/python -m hermes_cli.main -p chief-orchestrator gateway restart`` — deferred restart is automatic under the supervised gateway (no ``--sync``). Do not rely on raw ``gateway run`` to restart in the foreground.
+
+Hermes profile secrets: ``write_file`` / ``patch`` may edit ``~/.hermes/**/.env`` (blocked only if ``HERMES_BLOCK_FILE_TOOLS_HERMES_DOTENV=1``). Slack team allowlist: use ``SLACK_ALLOWED_TEAMS``; ``SLACK_ALLOWED_WORKSPACE_TEAMS`` is accepted as an alias.
 """
 
 # Global state for environment lifecycle management

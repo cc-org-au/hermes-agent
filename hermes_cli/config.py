@@ -795,6 +795,29 @@ OPTIONAL_ENV_VARS = {
         "category": "setting",
         "advanced": True,
     },
+    "HERMES_BLOCK_FILE_TOOLS_HERMES_DOTENV": {
+        "description": (
+            "When 1/true, block write_file/patch to paths under ~/.hermes named .env. "
+            "Default (unset): Hermes profile .env files are writable so gateway/messaging agents can update keys."
+        ),
+        "prompt": "Block file-tool writes to ~/.hermes/**/.env (optional)",
+        "url": None,
+        "password": False,
+        "category": "setting",
+        "advanced": True,
+    },
+    "HERMES_LIST_SESSIONS_ALL_SOURCES": {
+        "description": (
+            "Gateway: when 1/true, `/resume` with no arguments lists recent sessions from **all** linked "
+            "platforms (Slack/Telegram/WhatsApp…), not only the current one. Same effect as "
+            "`messaging.list_sessions_all_sources: true` in gateway config.yaml."
+        ),
+        "prompt": "List all-platform sessions for /resume (optional)",
+        "url": None,
+        "password": False,
+        "category": "messaging",
+        "advanced": True,
+    },
     # ── Workstation ~/.env — Mac mini / operator SSH (scripts; not Hermes runtime) ──
     "MACMINI_SSH_USER": {
         "description": "Remote user for sync_droplet_to_macmini.sh (often operator).",

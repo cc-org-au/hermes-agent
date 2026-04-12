@@ -264,6 +264,14 @@ def _parse_csv_env_allowlist(env_name: str) -> set[str]:
     return {x.strip() for x in raw.split(",") if x.strip()}
 
 
+def _parse_slack_allowed_teams() -> set[str]:
+    """Slack workspace/team IDs: canonical ``SLACK_ALLOWED_TEAMS``, alias ``SLACK_ALLOWED_WORKSPACE_TEAMS``."""
+    raw = (os.getenv("SLACK_ALLOWED_TEAMS") or os.getenv("SLACK_ALLOWED_WORKSPACE_TEAMS") or "").strip()
+    if not raw:
+        return set()
+    return {x.strip() for x in raw.split(",") if x.strip()}
+
+
 logger = logging.getLogger(__name__)
 
 # Sentinel placed into _running_agents immediately when a session starts
@@ -1707,7 +1715,10 @@ class GatewayRunner:
             return True
 
         channels = _parse_csv_env_allowlist(channel_var) if channel_var else set()
-        servers = _parse_csv_env_allowlist(server_var) if server_var else set()
+        if source.platform == Platform.SLACK:
+            servers = _parse_slack_allowed_teams()
+        else:
+            servers = _parse_csv_env_allowlist(server_var) if server_var else set()
         if not channels and not servers:
             return True
 
@@ -4960,20 +4971,46 @@ class GatewayRunner:
         name = event.get_command_args().strip()
 
         if not name:
-            # List recent titled sessions for this user/platform
+            # List recent sessions — optionally all messaging platforms (not only current).
             try:
-                user_source = source.platform.value if source.platform else None
-                sessions = self._session_db.list_sessions_rich(
-                    source=user_source, limit=10
+                m = getattr(self.config, "messaging", None) or {}
+                if not isinstance(m, dict):
+                    m = {}
+                list_all = bool(m.get("list_sessions_all_sources")) or (
+                    (os.getenv("HERMES_LIST_SESSIONS_ALL_SOURCES") or "").strip().lower()
+                    in ("1", "true", "yes", "on")
                 )
+                user_source = None if list_all else (source.platform.value if source.platform else None)
+                sessions = self._session_db.list_sessions_rich(
+                    source=user_source, limit=15 if list_all else 10
+                )
+                if list_all:
+                    if not sessions:
+                        return (
+                            "No sessions in the database yet.\n"
+                            "Send a message on any linked platform, or use `/title` to name a session."
+                        )
+                    lines = ["📋 **Recent sessions (all platforms)**\n"]
+                    for s in sessions[:15]:
+                        title = (s.get("title") or "").strip() or "(untitled)"
+                        src = s.get("source") or "?"
+                        preview = (s.get("preview") or "")[:36]
+                        preview_part = f" — _{preview}_" if preview else ""
+                        lines.append(f"• [{src}] **{title}**{preview_part}")
+                    lines.append("\nUsage: `/resume <session name>` (named sessions only)")
+                    return "\n".join(lines)
+
                 titled = [s for s in sessions if s.get("title")]
                 if not titled:
                     return (
-                        "No named sessions found.\n"
+                        "No named sessions found on this platform.\n"
                         "Use `/title My Session` to name your current session, "
-                        "then `/resume My Session` to return to it later."
+                        "then `/resume My Session` to return to it later.\n"
+                        "To list sessions from **all** linked platforms, set "
+                        "`messaging.list_sessions_all_sources: true` in config.yaml (gateway section) "
+                        "or `HERMES_LIST_SESSIONS_ALL_SOURCES=1` for the gateway process."
                     )
-                lines = ["📋 **Named Sessions**\n"]
+                lines = ["📋 **Named Sessions** (this platform)\n"]
                 for s in titled[:10]:
                     title = s["title"]
                     preview = s.get("preview", "")[:40]

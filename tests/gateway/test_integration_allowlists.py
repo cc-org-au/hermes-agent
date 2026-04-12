@@ -16,6 +16,7 @@ def _clear_surface_env(monkeypatch) -> None:
         "DISCORD_ALLOWED_GUILDS",
         "SLACK_ALLOWED_CHANNELS",
         "SLACK_ALLOWED_TEAMS",
+        "SLACK_ALLOWED_WORKSPACE_TEAMS",
         "WHATSAPP_ALLOWED_CHATS",
     ):
         monkeypatch.delenv(key, raising=False)
@@ -103,3 +104,21 @@ def test_slack_team_only_allowlist(monkeypatch):
     )
     assert runner._is_user_authorized(ok) is True
     assert runner._is_user_authorized(bad) is False
+
+
+def test_slack_workspace_teams_env_alias(monkeypatch):
+    """CHANNEL_ARCHITECTURE uses SLACK_ALLOWED_WORKSPACE_TEAMS — same as SLACK_ALLOWED_TEAMS."""
+    _clear_surface_env(monkeypatch)
+    monkeypatch.setenv("SLACK_ALLOWED_USERS", "U111")
+    monkeypatch.setenv("SLACK_ALLOWED_WORKSPACE_TEAMS", "T09ABCDEF")
+    monkeypatch.delenv("SLACK_ALLOWED_TEAMS", raising=False)
+
+    runner = _make_runner(Platform.SLACK)
+    ok = SessionSource(
+        platform=Platform.SLACK,
+        user_id="U111",
+        chat_id="CZZZZZZ",
+        chat_type="group",
+        server_id="T09ABCDEF",
+    )
+    assert runner._is_user_authorized(ok) is True

@@ -32,7 +32,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
 from pathlib import Path
-from hermes_constants import get_hermes_home
 
 
 # ---------------------------------------------------------------------------
@@ -47,7 +46,6 @@ WRITE_DENIED_PATHS = {
         os.path.join(_HOME, ".ssh", "id_rsa"),
         os.path.join(_HOME, ".ssh", "id_ed25519"),
         os.path.join(_HOME, ".ssh", "config"),
-        str(get_hermes_home() / ".env"),
         os.path.join(_HOME, ".bashrc"),
         os.path.join(_HOME, ".zshrc"),
         os.path.join(_HOME, ".profile"),
@@ -95,9 +93,27 @@ def _get_safe_write_root() -> Optional[str]:
         return None
 
 
+def _hermes_dotenv_write_blocked(resolved: str) -> bool:
+    """When HERMES_BLOCK_FILE_TOOLS_HERMES_DOTENV is set, block writes to ~/.hermes/**/.env."""
+    raw = (os.getenv("HERMES_BLOCK_FILE_TOOLS_HERMES_DOTENV") or "").strip().lower()
+    if raw not in ("1", "true", "yes", "on"):
+        return False
+    try:
+        rp = Path(resolved)
+        if rp.name != ".env":
+            return False
+        hermes_root = Path.home() / ".hermes"
+        return hermes_root in rp.parents or rp.parent == hermes_root
+    except Exception:
+        return False
+
+
 def _is_write_denied(path: str) -> bool:
     """Return True if path is on the write deny list."""
     resolved = os.path.realpath(os.path.expanduser(str(path)))
+
+    if _hermes_dotenv_write_blocked(resolved):
+        return True
 
     # 1) Static deny list
     if resolved in WRITE_DENIED_PATHS:
