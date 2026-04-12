@@ -16,7 +16,7 @@ def test_digest_contains_openai_row_and_hints():
     text = mod.format_routing_catalog_digest()
     assert "gpt-5.4" in text
     assert "cross_provider_routing_hints" in text or "PROVIDER MODEL CATALOG" in text
-    assert "CATALOG USAGE" in text
+    assert "MODEL_LINES_SORTED_CHEAPEST_FIRST" in text or "CHEAPEST-FIRST" in text
 
 
 def test_digest_truncation():

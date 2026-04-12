@@ -115,7 +115,7 @@ def cheapest_opm_native_chat_slug() -> Optional[str]:
         return None
     bare_list = [_canonical_ladder_id(_bare_slug(str(x))) for x in chat]
     lower_map = {m.lower(): m for m in bare_list if m}
-    for pref in ("gpt-5.4-nano", "gpt-5.4-mini", "gpt-5.2"):
+    for pref in ("gpt-5-nano", "gpt-4.1-nano", "gpt-5.4-nano", "gpt-5-mini", "gpt-5.4-mini", "gpt-5.2"):
         pl = pref.lower()
         if pl in lower_map:
             return lower_map[pl]

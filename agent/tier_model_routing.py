@@ -19,16 +19,13 @@ TIER_DYNAMIC_SENTINEL = "tier:dynamic"
 # User YAML overrides these defaults per key; align with
 # ``memory/runtime/tasks/templates/script-templates/hermes_token_governance.runtime.example.yaml``.
 BUILTIN_TIER_MODELS: Dict[str, str] = {
-    # A–C: low-cost Gemini tiers (paid API — NOT free; overridden by governance YAML).
-    "A": "google/gemini-2.5-flash",          # fast, low-cost via Gemini API
-    "B": "google/gemini-2.5-flash-lite",     # lightest Gemini, lowest cost per call
-    "C": "google/gemini-2.5-pro",            # stronger Gemini, medium complexity
-    # D: dominant consultant for most complex tasks — claude-sonnet-4.6 via OpenRouter.
-    "D": "anthropic/claude-sonnet-4-6",
-    # E/F: native api.openai.com consultants (OPENAI_API_KEY_DROPLET or OPENAI_API_KEY).
-    "E": "gpt-5.4",                          # hardest non-coding reasoning
-    "F": "gpt-5.3-codex",                    # coding specialist, preferred for engineering
-    # G: consultant-only; requires deliberation+approval; single-turn scope.
+    # Cheapest-first defaults when governance YAML is missing (override per profile).
+    "A": "openai/gpt-5-nano",
+    "B": "openai/gpt-4.1-mini",
+    "C": "openai/gpt-5.4-mini",
+    "D": "openai/gpt-5.2",
+    "E": "openai/gpt-5.4",
+    "F": "gpt-5.3-codex",
     "G": "anthropic/claude-opus-4.6",
 }
 

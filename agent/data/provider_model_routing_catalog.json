@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "snapshot_date": "2026-04-09",
+  "routing_policy_note": "Digest lists chat models sorted cheapest-first; Hermes tier slugs come from governance YAML.",
   "currency": "USD",
   "disclaimer": "Snapshot for routing assistants. Prices and model availability change frequently. Always confirm on the provider's official pricing and models pages before relying on costs. OpenAI pricing rows use the Standard tier unless noted.",
   "sources": [
@@ -38,12 +39,14 @@
     "reasoning_native": "Model family optimized for extended chain-of-thought / reasoning tokens (often higher latency and cost)."
   },
   "cross_provider_routing_hints": [
-    "Match task difficulty to reasoning_level first, then optimize cost within that band.",
-    "For tool-heavy agent loops, prefer mid-tier fast models (Sonnet, GPT-5.4-mini, Gemini 2.5 Flash, Grok fast) unless a step fails validation.",
-    "Use reasoning_native OpenAI o-series or Grok *-reasoning when explicit multi-step deliberation is required and latency is acceptable.",
-    "For multimodal + massive context, compare Gemini (1M+ context on 2.5 Flash) vs Claude Opus/Sonnet 4.6 (1M) vs Grok 4 (2M) vs GPT-5.4 family per current docs.",
-    "Check deprecation dates (Claude Haiku 3, Gemini 2.0 family) before baking into long-lived routing.",
-    "Provider-specific tool surcharges (xAI web_search, Google grounding) can dominate bill; route tool-light tasks to models without forced grounding."
+    "CHEAPEST-FIRST: start from the lowest-$/MTok chat row that still has adequate reasoning_level for the task; only move up the sorted catalog on failure or clear insufficiency.",
+    "Prefer legacy GPT-4.x / Haiku / Grok fast / Gemini Flash-class rows when they match modality — do not jump to GPT-5.4 or Sonnet/Opus by default.",
+    "Hermes subprocess/cron / emergency fallback baseline: gpt-5.4-nano-class (see config); align tier A/B with that budget band when possible.",
+    "Consultant/frontier tiers (E/F/G intent): expensive; require explicit deliberation/approval for user-visible generation — routing advisors may reference them only to choose *when* to escalate.",
+    "Tool-heavy loops: start with mini/nano/flash-tier rows; escalate one step at a time per Hermes route-up procedures.",
+    "reasoning_native / o-series / Grok *-reasoning: reserve for deliberate multi-step work; not the default for casual chat.",
+    "Multimodal + huge context: compare cheaper Gemini/xAI/Google rows before flagship Opus/Grok-4 unless truly required.",
+    "Provider surcharges (grounding, web_search) can dominate cost — prefer models without mandatory add-ons for tool-light tasks."
   ],
   "providers": {
     "openai": {

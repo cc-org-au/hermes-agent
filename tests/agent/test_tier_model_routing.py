@@ -128,7 +128,7 @@ def test_effective_tier_models_sanitizes_blocklisted_yaml():
     merged = effective_tier_models({"C": "deepseek/deepseek-r1"})
     assert merged["C"] == "openrouter/auto"
     assert merged["E"] == BUILTIN_TIER_MODELS["E"]
-    assert merged["E"] == "gpt-5.4"
+    assert merged["E"] == "openai/gpt-5.4"
 
 
 def test_infer_tier_letter_matches_openai_prefix_vs_bare():

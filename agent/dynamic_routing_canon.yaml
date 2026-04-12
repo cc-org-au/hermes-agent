@@ -1,7 +1,7 @@
 # Default routing / delegation canon (repo). Overlay: ${HERMES_HOME}/routing_canon.yaml
 # Merged with deep-merge; overlay keys override defaults.
 
-version: 5
+version: 6
 
 # Philosophy order (documentation; enforcement is in routing code paths):
 # 1) cost + compatibility  2) speed + efficiency  3) memory + usefulness
@@ -52,7 +52,12 @@ version: 5
 
 openrouter_step_up_escalation:
   enabled: true
+  # Cheap → capable (first hop is lowest cost toward tier ceiling).
   chat_models:
+    - openai/gpt-5-nano
+    - openai/gpt-4.1-nano
+    - openai/gpt-5-mini
+    - openai/gpt-4.1-mini
     - openai/gpt-5.4-nano
     - openai/gpt-5.4-mini
     - openai/gpt-5.2
@@ -105,11 +110,15 @@ opm_native_quota_downgrade:
   enabled: true
   # Bare ``gpt-5.3`` is not a valid api.openai.com model id (400 model_not_found).
   # Ladder uses official GPT-5.4 variants then GPT-5.2 (see platform model docs).
+  # Expensive → cheaper (quota downgrade walks forward in this list).
   chat_models:
     - gpt-5.4
-    - gpt-5.4-mini
-    - gpt-5.4-nano
     - gpt-5.2
+    - gpt-5.4-mini
+    - gpt-5-mini
+    - gpt-5.4-nano
+    - gpt-5-nano
+    - gpt-4.1-nano
   codex_models:
     - gpt-5.3-codex
     - gpt-5.2-codex
@@ -120,11 +129,16 @@ opm_native_quota_downgrade:
 # opm_native_quota_downgrade chat_models / codex_models.
 opm_cross_provider_quota_failover:
   enabled: true
+  # Same cheap→capable order as openrouter_step_up (try budget class on OR after native exhaustion).
   openrouter_chat_models:
-    - openai/gpt-5.4
-    - openai/gpt-5.4-mini
+    - openai/gpt-5-nano
+    - openai/gpt-4.1-nano
+    - openai/gpt-5-mini
+    - openai/gpt-4.1-mini
     - openai/gpt-5.4-nano
+    - openai/gpt-5.4-mini
     - openai/gpt-5.2
+    - openai/gpt-5.4
   openrouter_codex_models:
     - openai/gpt-5.3-codex
     - openai/gpt-5.2-codex

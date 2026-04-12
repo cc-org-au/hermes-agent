@@ -31,16 +31,18 @@ _EXCLUDED_CATEGORIES = frozenset(
 
 _ROUTING_OUTPUT_RULES = """\
 CATALOG USAGE (read-only context):
-- Hermes still maps work to tier letters A–G; concrete model IDs come from \
-governance ``tier_models`` and runtime config — do not output arbitrary model slugs \
-in place of tiers.
-- Use reasoning_level, category, modalities, best_for, and relative_latency to \
-judge task fit and whether to stay on A/B/C vs escalate toward D/E/F/G.
-- OpenAI o-series / ``reasoning_native`` rows imply deliberate chain-of-thought \
-workloads — align with harder tiers (typically E/F) when depth is required; \
-coding-heavy o-work still favors F over E.
-- xAI / Grok and additional Google Gemini rows inform multimodal, latency, and \
-cost tradeoffs even when the live tier slug is OpenRouter-style.
+- Rows below are ordered **cheapest first** (estimated input $/million tokens, then output).
+- **Cheapest-first routing:** pick the **lowest** tier/model class that can plausibly \
+succeed; escalate only on failure, pushback, or explicit need for frontier quality.
+- Hermes maps work to tier letters **A–G**; concrete slugs come from governance \
+``tier_models`` — do not substitute random catalog ids for execution tiers in downstream YAML.
+- **E / F / G (consultant / frontier):** treat as expensive — prefer only when cheaper \
+rows are insufficient; Hermes may require **deliberation / approval** before those models \
+produce user-visible output. This catalog may still inform *which* frontier class fits.
+- Use reasoning_level, category, modalities, best_for, and relative_latency to judge fit; \
+prefer **medium reasoning + low price** over flagship when adequate.
+- Fallback / subprocess / cron baseline in Hermes aligns with **gpt-5.4-nano**-class \
+budget ids unless configured otherwise.
 """
 
 
@@ -101,6 +103,23 @@ def _fmt_hints(data: Dict[str, Any]) -> List[str]:
     return lines
 
 
+def _estimated_input_mtok_usd(m: Dict[str, Any]) -> float:
+    """Sort key: lower = cheaper; missing pricing sorts last."""
+    p = m.get("pricing")
+    if not isinstance(p, dict):
+        return float("inf")
+    u = p.get("usd_per_million_tokens")
+    if not isinstance(u, dict):
+        return float("inf")
+    try:
+        inp = float(u.get("input") or 0)
+        outp = float(u.get("output") or 0)
+        # Rough weight: output often shorter in routing; emphasize input.
+        return inp + 0.15 * outp
+    except (TypeError, ValueError):
+        return float("inf")
+
+
 def _fmt_model_line(provider_key: str, m: Dict[str, Any]) -> str:
     mid = str(m.get("id") or "").strip()
     cat = str(m.get("category") or "").strip()
@@ -140,11 +159,10 @@ def _collect_model_lines(data: Dict[str, Any]) -> List[str]:
     providers = data.get("providers")
     if not isinstance(providers, dict):
         return []
-    # Stable provider order: openai, anthropic, google, xai, then any others sorted.
     pref = ["openai", "anthropic", "google", "xai"]
     keys = [k for k in pref if k in providers]
     keys.extend(sorted(k for k in providers.keys() if k not in pref))
-    out: List[str] = []
+    rows: List[tuple[float, str]] = []
     for pk in keys:
         pv = providers.get(pk)
         if not isinstance(pv, dict):
@@ -152,15 +170,22 @@ def _collect_model_lines(data: Dict[str, Any]) -> List[str]:
         models = pv.get("models")
         if not isinstance(models, list):
             continue
-        out.append(f"[{pk}]")
         for m in models:
             if not isinstance(m, dict):
                 continue
             cat = str(m.get("category") or "").strip()
             if cat in _EXCLUDED_CATEGORIES:
                 continue
-            out.append(_fmt_model_line(pk, m))
-        out.append("")
+            score = _estimated_input_mtok_usd(m)
+            rows.append((score, _fmt_model_line(pk, m)))
+    rows.sort(key=lambda t: (t[0], t[1]))
+    out: List[str] = [
+        "MODEL_LINES_SORTED_CHEAPEST_FIRST (estimated $/MTok — use for tier A/B/C bias):",
+        "",
+    ]
+    for _, line in rows:
+        out.append(line)
+    out.append("")
     return out
 
 

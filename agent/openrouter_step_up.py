@@ -33,6 +33,10 @@ def load_openrouter_step_up_config() -> Dict[str, Any]:
     codex = [str(x).strip() for x in (raw.get("codex_models") or []) if str(x).strip()]
     if not chat:
         chat = [
+            "openai/gpt-5-nano",
+            "openai/gpt-4.1-nano",
+            "openai/gpt-5-mini",
+            "openai/gpt-4.1-mini",
             "openai/gpt-5.4-nano",
             "openai/gpt-5.4-mini",
             "openai/gpt-5.2",

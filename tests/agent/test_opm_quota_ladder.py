@@ -47,7 +47,7 @@ def test_session_budget_next_cheaper_model_preserves_openrouter_prefix():
             base_url="https://openrouter.ai/api/v1",
             api_mode="chat_completions",
         )
-        == "openai/gpt-5.4-mini"
+        == "openai/gpt-5.2"
     )
 
 
@@ -58,7 +58,7 @@ def test_session_budget_next_cheaper_model_native_matches_bare_ladder():
             base_url="https://api.openai.com/v1",
             api_mode="chat_completions",
         )
-        == "gpt-5.4-mini"
+        == "gpt-5.2"
     )
 
 
@@ -70,7 +70,7 @@ def test_next_quota_downgrade_model_chat():
             api_mode="chat_completions",
             cfg=cfg,
         )
-        == "gpt-5.4-mini"
+        == "gpt-5.2"
     )
     assert (
         next_quota_downgrade_model(
@@ -78,22 +78,22 @@ def test_next_quota_downgrade_model_chat():
             api_mode="chat_completions",
             cfg=cfg,
         )
-        == "gpt-5.4-nano"
+        == "gpt-5-mini"
     )
     assert next_quota_downgrade_model(
         current_model="openai/gpt-5.4-nano",
         api_mode="chat_completions",
         cfg=cfg,
-    ) == "gpt-5.2"
-    # Legacy mistaken id in session — alias matches ladder position of gpt-5.4-mini
+    ) == "gpt-5-nano"
+    # Legacy mistaken id in session — alias maps to gpt-5.4-mini; next step is cheaper.
     assert next_quota_downgrade_model(
         current_model="openai/gpt-5.3",
         api_mode="chat_completions",
         cfg=cfg,
-    ) == "gpt-5.4-nano"
+    ) == "gpt-5-mini"
     assert (
         next_quota_downgrade_model(
-            current_model="gpt-5.2",
+            current_model="gpt-4.1-nano",
             api_mode="chat_completions",
             cfg=cfg,
         )
@@ -110,7 +110,7 @@ def test_next_quota_downgrade_gpt54_on_codex_api_stack():
             api_mode="codex_responses",
             cfg=cfg,
         )
-        == "gpt-5.4-mini"
+        == "gpt-5.2"
     )
 
 

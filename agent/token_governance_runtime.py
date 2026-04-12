@@ -543,25 +543,10 @@ def apply_per_turn_tier_model(agent: Any, user_message: str) -> None:
     tier = deterministic_tier
     audit: dict = {}
 
-    # openai_primary_mode: override low-cost deterministic tier with E/F
     _opm_meta = getattr(agent, "_last_opm_meta", None) or {}
-    _trivial_skip_opm_uplift = trivial_message_skips_opm_tier_uplift(user_message)
-    if (
-        opm_effective_for_tier_routing_uplift(agent)
-        and tier in ("A", "B", "C")
-        and not _trivial_skip_opm_uplift
-    ):
-        _is_coding = any(
-            kw in (user_message or "").lower()
-            for kw in ("code", "implement", "debug", "refactor", "function",
-                       "class", "script", "test", "fix", "bug", "error",
-                       "compile", "build", "deploy")
-        )
-        tier = "F" if _is_coding else "E"
-        logger.info(
-            "openai_primary_mode: overriding deterministic tier %s → %s",
-            deterministic_tier, tier,
-        )
+    # Cost policy: do **not** force A/B/C → E/F under OPM. Stay on the deterministic /
+    # consultant tier so route-down (cheap) tiers are actually used; escalate only via
+    # pushback, consultant routing, or explicit [HERMES_ESCALATE] / quota ladders.
 
     # Detect push-back and repeated-failure signals for escalation.
     pushback = is_pushback_message(user_message)
@@ -589,37 +574,7 @@ def apply_per_turn_tier_model(agent: Any, user_message: str) -> None:
             tier = deterministic_tier
             audit = {}
 
-    # Enforce OpenAI-primary mode after consultant routing too, so no later
-    # router step can drop back to low-cost tiers when the flag is on.
-    if (
-        opm_effective_for_tier_routing_uplift(agent)
-        and tier in ("A", "B", "C", "D")
-        and not _trivial_skip_opm_uplift
-    ):
-        _router_rec2 = audit.get("router") if isinstance(audit, dict) else {}
-        _coding_hint = bool(
-            isinstance(_router_rec2, dict) and _router_rec2.get("coding_task", False)
-        )
-        _is_coding = _coding_hint or any(
-            kw in (user_message or "").lower()
-            for kw in (
-                "code",
-                "implement",
-                "debug",
-                "refactor",
-                "function",
-                "class",
-                "script",
-                "test",
-                "fix",
-                "bug",
-                "error",
-                "compile",
-                "build",
-                "deploy",
-            )
-        )
-        tier = "F" if _is_coding else "E"
+    # No post-consultant OPM uplift to E/F — same cheapest-first policy as above.
 
     # Store free_model_brief for injection into user message (low-cost tiers A/B/C only).
     _router_rec = audit.get("router") or {}

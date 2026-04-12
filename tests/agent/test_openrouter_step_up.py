@@ -39,7 +39,7 @@ def test_content_requests_escalation():
 def test_load_config_defaults():
     cfg = load_openrouter_step_up_config()
     assert "chat_models" in cfg
-    assert cfg["chat_models"][0] == "openai/gpt-5.4-nano"
+    assert cfg["chat_models"][0] == "openai/gpt-5-nano"
 
 
 def test_compute_plan_none_when_not_openrouter():
@@ -78,8 +78,8 @@ def test_compute_plan_when_openrouter(tmp_path, monkeypatch):
     invalidate_routing_canon_cache()
     plan = compute_openrouter_step_up_plan(_A())
     assert plan is not None
-    assert plan["ladder"][0] == "openai/gpt-5.4-nano"
-    assert plan["start_model"] == "openai/gpt-5.4-nano"
+    assert plan["ladder"][0] == "openai/gpt-5-nano"
+    assert plan["start_model"] == "openai/gpt-5-nano"
     assert "[HERMES_ESCALATE]" in (plan.get("system_suffix") or "")
 
 
@@ -110,8 +110,8 @@ def test_prepare_swaps_start_model(monkeypatch):
 
     monkeypatch.setattr(AIAgent, "_swap_to_openrouter_hub_model", _swap)
     AIAgent._prepare_openrouter_step_up_for_turn(agent)
-    assert called["mid"] == "openai/gpt-5.4-nano"
-    assert agent._or_stepup_ladder[0] == "openai/gpt-5.4-nano"
+    assert called["mid"] == "openai/gpt-5-nano"
+    assert agent._or_stepup_ladder[0] == "openai/gpt-5-nano"
 
 
 def test_apply_cross_provider_first_hop_starts_at_cheapest():

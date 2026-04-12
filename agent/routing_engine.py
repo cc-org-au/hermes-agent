@@ -1,20 +1,11 @@
-"""Unified routing engine — single GPT-5.4 call per prompt.
+"""Unified routing engine — one cheap LLM JSON decision per prompt.
 
-Replaces the separate ``profile_router`` + ``consultant_router`` LLM calls with
-one authoritative GPT-5.4 decision that covers:
+Chooses tier (A–G), profile, and brief using **cheapest-first** policy: routing calls
+prefer gpt-5-nano / gpt-4.1-nano / gpt-5.4-nano before any flagship. The catalog
+digest is sorted by estimated API cost so advisors see the full model spectrum.
 
-  - **tier** (A–F): model tier matched to genuine prompt complexity
-  - **profile**: most suitable named profile, or ``None`` for chief-orchestrator
-  - **free_model_brief**: concise, machine-readable instruction optimised for
-    free-tier models (tiers A/B/C) so limited models perform well
-  - **coding_task**: hint that tier-F (gpt-5.3-codex) is preferred when escalating
-
-GPT-5.4 is used as the router because it produces genuinely dynamic, non-static
-decisions rather than falling back to the same model every turn. Cheaper OpenAI-class
-models (``gpt-5.4-nano``) or Gemini Flash are fallbacks when native GPT-5.4 is unavailable.
-
-Called by ``agent/consultant_routing.py`` → ``agent/token_governance_runtime.py``
-on every user turn when token-governance is active.
+Called from ``agent/consultant_routing.py`` → ``agent/token_governance_runtime.py``
+when token-governance is active.
 """
 
 from __future__ import annotations
@@ -72,53 +63,43 @@ class UnifiedRouteDecision:
 # ---------------------------------------------------------------------------
 
 _ROUTING_SYSTEM_PROMPT = """\
-You are the Hermes routing advisor. For every user request you make ONE authoritative \
-JSON routing decision that covers model tier selection, profile delegation, and (for \
-low-cost tiers) a condensed task brief.
+You are the Hermes routing advisor. Your job is to pick the **lowest tier** that can \
+plausibly satisfy the user, using the attached catalog (sorted cheapest-first). You only \
+output JSON — you do **not** run the final user-facing reply; execution uses tier_models.
 
-TIER TABLE (ascending capability/cost — ALL tiers cost money via API):
-  A = gpt-5.4-nano (hub) / Gemini Flash — one-liners, trivial ack/lookup (low-cost)
-  B = gpt-5.4-mini / Gemini Flash-Lite  — short/simple tasks, renames, single-file edits
-  C = gpt-5.2 / Gemini Pro             — multi-step reasoning, moderate complexity
-  D = claude-sonnet-4.6  — complex tasks, most consultations, writing, planning, debugging
-  E = gpt-5.4            — hardest non-coding reasoning, ambiguous multi-domain problems
-  F = gpt-5.3-codex      — deep engineering, architecture, refactors, complex codegen
+TIER TABLE (ascending capability/cost — prefer lower letters; ALL tiers may bill):
+  A = ultra-cheap: gpt-5-nano, gpt-4.1-nano, gpt-5.4-nano (routing, classification, pings)
+  B = cheap capable: gpt-5-mini, gpt-4.1-mini, gpt-5.4-mini (drafts, short edits, simple Q&A)
+  C = mid: gpt-5.2, gpt-4.1, Gemini Flash-class (multi-step but not frontier)
+  D = strong generalist: e.g. Sonnet-class / gpt-5.4 only when C is insufficient
+  E = consultant / hardest reasoning (requires deliberation + approval in Hermes — pick rarely)
+  F = deep coding / Codex-class (requires deliberation path for consultant work — pick rarely)
+  G = reserved for chief/consultant ceiling (opus-class) — almost never from this router alone
 
-COST HIERARCHY (cheapest to most expensive):
-  FREE:     self-hosted local inference only
-  LOW-COST: gpt-5.4-nano, Gemini Flash via direct Google API (tiers A/B/C)
-  PAID:     ANY model routed via OpenRouter (even when the same id is cheaper natively)
-  HIGH:     claude-sonnet-4.6, gpt-5.4, gpt-5.3-codex, claude-opus-4.6
+CONSULTANT / FRONTIER RULE:
+- Tiers **E, F, G** are for **routing guidance only** here: choose them only when the task \
+clearly needs frontier reasoning or production-critical codegen **and** a cheaper tier is \
+unlikely to suffice. Hermes may still require explicit deliberation/approval before those \
+models generate user-visible output.
 
-CRITICAL: OpenRouter is ALWAYS paid — even for models that are free via their native API.
-Always prefer the direct API source (Google for Gemini, OpenAI for GPT, Anthropic for \
-Claude) before falling back to OpenRouter. OpenRouter is a last resort when direct APIs fail.
-
-ROUTING RULES:
-1. Match tier strictly to genuine complexity. NEVER default to D unless the task is complex.
-   Use A/B/C for the bulk of routine/menial work — they have the lowest API cost.
-2. Optimize for the lowest cost at the highest performance the task requires.
-   Under-routing cost is always lower than over-routing.
-3. Escalate to D only when depth/quality genuinely warrants it (most complex tasks).
-4. Escalate to E/F only for the hardest tasks or after repeated failures.
-5. coding_task=true when the primary work is software engineering (prefers F for consultant
-   escalation over E). This also hints to use gpt-5.3-codex for any code-heavy background work.
-6. low_cost_brief: REQUIRED when tier is A, B, or C. Write a direct, concise,
-   machine-readable restatement of the task optimised for a capable-but-limited model.
-   Use imperative sentences. Max 3 sentences. Omit pleasantries.
-7. low_cost_brief must be null when tier is D, E, or F.
-8. profile: suggest the most suitable profile by EXACT name, or null for default.
-9. background_task: true if the request explicitly asks to run something in the background,
-   spawn a subprocess, or run a parallel process. Prefer the cheapest feasible model
-   (gpt-5.4-nano tier or local inference). Hermes auto-approves the configured budget
-   nano tier for subprocesses — avoid escalating to flagship models for background work.
+CHEAPEST-FIRST (mandatory):
+1. Default the majority of turns to **A, B, or C**. Use **D** only when the prompt needs \
+substantial reasoning, long context nuance, or multi-file coherence that cheaper tiers lack.
+2. Never “default high” to save thinking — **under-routing saves money**; escalation exists \
+for failures and pushback.
+3. coding_task=true suggests **F** only for heavy engineering; otherwise prefer **C or D** \
+with cheaper models before Codex.
+4. low_cost_brief: REQUIRED when tier is A, B, or C (imperative, ≤3 short sentences).
+5. low_cost_brief null for D–G.
+6. background_task=true → prefer tier **A** and the budget nano class; never jump to E/F \
+for background work.
 
 PROFILES:
 {profiles_desc}
 
 Return ONLY valid JSON — no markdown fences, no prose:
 {{
-  "tier": "A" | "B" | "C" | "D" | "E" | "F",
+  "tier": "A" | "B" | "C" | "D" | "E" | "F" | "G",
   "profile": "<exact_profile_name>" | null,
   "coding_task": true | false,
   "background_task": true | false,
@@ -186,9 +167,9 @@ def _parse_routing_response(raw: str) -> Optional[dict]:
         obj = json.loads(m.group())
     except json.JSONDecodeError:
         return None
-    tier = str(obj.get("tier") or "D").strip().upper()
+    tier = str(obj.get("tier") or "B").strip().upper()
     if tier not in _TIER_LETTERS:
-        tier = "D"
+        tier = "B"
     profile = obj.get("profile") or None
     if isinstance(profile, str):
         profile = profile.strip() or None
@@ -214,7 +195,7 @@ def _parse_routing_response(raw: str) -> Optional[dict]:
 
 
 def _call_routing_llm(system: str, user: str) -> str:
-    """Call GPT-5.4 via native OpenAI, then gpt-5.4-nano, OpenRouter nano, then Gemini."""
+    """Cheapest routing LLM first (classification JSON only); expensive models last."""
     from agent.auxiliary_client import call_llm, extract_content_or_reasoning
     from agent.openai_native_runtime import native_openai_runtime_tuple
 
@@ -223,64 +204,84 @@ def _call_routing_llm(system: str, user: str) -> str:
         {"role": "user", "content": user},
     ]
 
-    # Primary: native OpenAI GPT-5.4 — highest routing quality
     _rt = native_openai_runtime_tuple()
     bt, ak = _rt if _rt else (None, None)
+
+    def _try_native(model_id: str, label: str) -> Optional[str]:
+        if not bt or not ak:
+            return None
+        try:
+            resp = call_llm(
+                task=None,
+                provider="custom",
+                model=model_id,
+                base_url=bt,
+                api_key=ak,
+                messages=msgs,
+                temperature=0.1,
+                max_tokens=320,
+            )
+            result = extract_content_or_reasoning(resp) or ""
+            if result:
+                logger.debug("routing_engine: %s routing OK", label)
+                return result
+        except Exception as exc:
+            logger.debug("routing_engine: %s failed: %s", label, exc)
+        return None
+
+    # Native API: cheapest first (catalog: gpt-5-nano < gpt-4.1-nano < gpt-5.4-nano < …)
+    for mid, lab in (
+        ("gpt-5-nano", "gpt-5-nano"),
+        ("gpt-4.1-nano", "gpt-4.1-nano"),
+        ("gpt-5.4-nano", "gpt-5.4-nano"),
+        ("gpt-5-mini", "gpt-5-mini"),
+    ):
+        out = _try_native(mid, lab)
+        if out:
+            return out
+
+    # OpenRouter hub (same order idea)
+    for or_model, lab in (
+        ("openai/gpt-5-nano", "OR gpt-5-nano"),
+        ("openai/gpt-4.1-nano", "OR gpt-4.1-nano"),
+        ("openai/gpt-5.4-nano", "OR gpt-5.4-nano"),
+        ("openai/gpt-5-mini", "OR gpt-5-mini"),
+    ):
+        try:
+            resp = call_llm(
+                task=None,
+                provider="openrouter",
+                model=or_model,
+                messages=msgs,
+                temperature=0.1,
+                max_tokens=320,
+            )
+            result = extract_content_or_reasoning(resp) or ""
+            if result:
+                logger.debug("routing_engine: %s routing OK", lab)
+                return result
+        except Exception as exc:
+            logger.debug("routing_engine: %s failed: %s", lab, exc)
+
+    # Quality last resort for JSON routing only (still cheaper than running the main agent on 5.4)
     if bt and ak:
         try:
             resp = call_llm(
                 task=None,
                 provider="custom",
-                model="gpt-5.4",
+                model="gpt-5.4-mini",
                 base_url=bt,
                 api_key=ak,
                 messages=msgs,
                 temperature=0.1,
-                max_tokens=300,
+                max_tokens=320,
             )
             result = extract_content_or_reasoning(resp) or ""
             if result:
-                logger.debug("routing_engine: GPT-5.4 routing OK")
+                logger.debug("routing_engine: gpt-5.4-mini routing OK")
                 return result
         except Exception as exc:
-            logger.debug("routing_engine: GPT-5.4 failed, trying fallback: %s", exc)
-
-    # Native gpt-5.4-nano (same key as GPT-5.4 primary)
-    if bt and ak:
-        try:
-            resp = call_llm(
-                task=None,
-                provider="custom",
-                model="gpt-5.4-nano",
-                base_url=bt,
-                api_key=ak,
-                messages=msgs,
-                temperature=0.1,
-                max_tokens=300,
-            )
-            result = extract_content_or_reasoning(resp) or ""
-            if result:
-                logger.debug("routing_engine: gpt-5.4-nano routing OK")
-                return result
-        except Exception as exc:
-            logger.debug("routing_engine: gpt-5.4-nano failed: %s", exc)
-
-    # OpenRouter hub cheapest tier
-    try:
-        resp = call_llm(
-            task=None,
-            provider="openrouter",
-            model="openai/gpt-5.4-nano",
-            messages=msgs,
-            temperature=0.1,
-            max_tokens=300,
-        )
-        result = extract_content_or_reasoning(resp) or ""
-        if result:
-            logger.debug("routing_engine: OpenRouter gpt-5.4-nano routing OK")
-            return result
-    except Exception as exc:
-        logger.debug("routing_engine: OpenRouter nano failed: %s", exc)
+            logger.debug("routing_engine: gpt-5.4-mini failed: %s", exc)
 
     # Last: Gemini Flash (direct API)
     gemini_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
@@ -317,23 +318,18 @@ def route_prompt(
     *,
     available_profiles: Optional[List[str]] = None,
     conversation_messages: Optional[List[dict]] = None,
-    fallback_tier: str = "D",
+    fallback_tier: str = "B",
 ) -> UnifiedRouteDecision:
-    """Make a unified routing decision for a single user prompt.
+    """Make a unified routing decision for a single user prompt (cheapest tier first).
 
-    Uses GPT-5.4 (native OpenAI) as the primary router — it produces genuinely
-    dynamic decisions rather than static fallbacks. Cheaper models (nano) and Gemini
-    are tried before giving up.
-
-    When ``openai_primary_mode`` is enabled, the default tier is E (gpt-5.4)
-    and coding tasks are routed to F (gpt-5.3-codex) unless the router
-    determines a cheaper model is more suitable.
+    Router LLM calls use budget-class models only; OPM does **not** force tier E/F.
+    Fallback when parsing fails is **B** (not D/E).
 
     Returns an ``UnifiedRouteDecision`` with:
-    - tier: A–F matched to prompt complexity
+    - tier: A–G matched to prompt complexity
     - profile: named profile or None
-    - free_model_brief: condensed brief for free-tier models (A/B/C only)
-    - coding_task: hint for tier-F preference when escalating
+    - free_model_brief: condensed brief for A/B/C
+    - coding_task: hint for tier-F when truly needed
     """
     opm_cfg, opm_meta = resolve_openai_primary_mode(None)
     opm = opm_cfg if opm_meta.get("enabled", False) else None
@@ -343,20 +339,16 @@ def route_prompt(
     _cat = format_routing_catalog_digest()
     if _cat:
         system_prompt += (
-            "\n\nMULTI-PROVIDER MODEL CATALOG (official snapshot; use to judge task difficulty, "
-            "modality needs, and latency/cost vs tier letters A–G):\n"
+            "\n\nMULTI-PROVIDER MODEL CATALOG (rows ordered **cheapest first** by estimated "
+            "USD/MTok input; use for fit vs tier A–G):\n"
             + _cat
         )
 
-    # When openai_primary_mode is on, bias the router toward E/F
     if opm:
         system_prompt += (
-            "\n\nOPENAI PRIMARY MODE ACTIVE: Default to tier E (gpt-5.4) for most tasks. "
-            "Route coding/engineering tasks to tier F (gpt-5.3-codex). "
-            "Use A/B/C ONLY for genuinely trivial tasks (greetings, simple lookups, "
-            "single-word pings/ok/thanks). For those, prefer tier A and the lowest-cost "
-            "model class in the catalog digest. "
-            "GPT-5.4 and gpt-5.3-codex are permitted for subprocesses in this mode."
+            "\n\nOPENAI PRIMARY MODE ACTIVE: Still **default low** — prefer tiers A/B/C for "
+            "typical chat and tooling; use D only when needed; reserve E/F/G for clear "
+            "frontier need. Subprocess/cron budget class remains nano-tier unless approved."
         )
 
     context_summary = _summarise_context(conversation_messages)
@@ -390,12 +382,6 @@ def route_prompt(
             tier = "A"
             coding_task = False
 
-        # openai_primary_mode: uplift tiers unless router explicitly chose low-cost
-        if opm and tier in ("D",):
-            tier = "E"
-        if opm and coding_task and tier in ("D", "E"):
-            tier = "F"
-
         decision = UnifiedRouteDecision(
             tier=tier,
             profile=parsed.get("profile"),
@@ -418,8 +404,7 @@ def route_prompt(
         )
         return decision
 
-    # Fallback: when openai_primary_mode is on, default to E not D
-    _fb = "E" if opm else fallback_tier
+    _fb = fallback_tier
     emit_routing_decision_trace(
         stage="main_route_selection",
         chosen_model=f"tier:{_fb}",
@@ -483,25 +468,32 @@ def review_agent_summary(
     )
 
     try:
-        from agent.auxiliary_client import call_llm
+        from agent.auxiliary_client import call_llm, extract_content_or_reasoning
         from agent.openai_primary_mode import opm_enabled, opm_auxiliary_model
 
-        _m = "gemini-2.5-flash"
-        _p = "gemini"
+        _m = "openai/gpt-5.4-nano"
+        _p = "openrouter"
         if opm_enabled(None):
             _m = opm_auxiliary_model(None)
-            _low = _m.lower()
-            if "gpt-" in _low or _low.startswith("gpt"):
-                _p = "openai"
-        raw = call_llm(
-            prompt=user_msg,
-            system=_REVIEW_SYSTEM,
-            model=_m,
+        ml = (_m or "").lower()
+        if "gemini" in ml and "gpt" not in ml:
+            _p = "gemini"
+        elif "/" in ml or ml.startswith("openai/"):
+            _p = "openrouter"
+        else:
+            _p = "custom"
+        resp = call_llm(
+            task=None,
             provider=_p,
+            model=_m,
+            messages=[
+                {"role": "system", "content": _REVIEW_SYSTEM},
+                {"role": "user", "content": user_msg},
+            ],
             max_tokens=60,
             temperature=0.0,
         )
-        text = (raw or "").strip()
+        text = (extract_content_or_reasoning(resp) or "").strip()
         m = re.search(r"\{.*\}", text, re.DOTALL)
         if m:
             obj = json.loads(m.group())

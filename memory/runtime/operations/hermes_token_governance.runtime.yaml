@@ -8,17 +8,16 @@ version: 2
 enabled: true
 max_agent_turns: 50
 dynamic_tier_routing: true
-# Competent default before heuristics narrow to B/C or widen to E/F (see select_tier_for_message).
-default_routing_tier: D
+# Default before heuristics: prefer **C** (mid cheap) — not flagship D.
+default_routing_tier: C
 
-# Per-tier concrete models (A=lowest feasible chat … G=consultant ceiling).
-# Aligns with agent/dynamic_routing_canon.yaml openrouter_step_up_escalation ordering for OpenRouter.
+# Per-tier concrete models (A=cheapest … G=consultant ceiling). Distinct slugs for route-down.
 tier_models:
-  A: openai/gpt-5.4-nano
-  B: openai/gpt-5.4-mini
-  C: openai/gpt-5.2
-  D: openai/gpt-5.4
-  E: gpt-5.4
+  A: openai/gpt-5-nano
+  B: openai/gpt-4.1-mini
+  C: openai/gpt-5.4-mini
+  D: openai/gpt-5.2
+  E: openai/gpt-5.4
   F: gpt-5.3-codex
   G: anthropic/claude-opus-4.6
 
@@ -49,7 +48,7 @@ delegation:
 
 openai_primary_mode:
   enabled: true
-  default_model: gpt-5.4
+  default_model: gpt-5.4-mini
   codex_model: gpt-5.3-codex
   allowed_subprocess_models:
     - gpt-5.4-nano
