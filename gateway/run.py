@@ -6523,14 +6523,22 @@ class GatewayRunner:
                         g = str(approval_data.get("goal") or "")
                         g_preview = g[:200] + ("..." if len(g) > 200 else "")
                         cost_lbl = approval_data.get("cost_label") or "PAID"
+                        tid = str(approval_data.get("task_id") or "").strip()
+                        from tools.approval import pending_approval_count
+
+                        nq = pending_approval_count(_approval_session_key)
+                        tid_line = f"**Task id:** `{tid}`\n" if tid else ""
                         msg = (
                             f"⚠️ **Subprocess model approval required**\n\n"
-                            f"A delegated/background task wants to use **{mid}** "
-                            f"({cost_lbl}).\n"
-                            f"Goal: {g_preview}\n\n"
-                            f"Reply `/approve` to allow this subprocess, or `/deny` to block it.\n"
-                            f"(Same controls as dangerous-command approval: `/approve session`, "
-                            f"`/approve always`, `/deny all`.)"
+                            f"{tid_line}"
+                            f"**Model:** `{mid}` ({cost_lbl})\n"
+                            f"**Goal:** {g_preview}\n\n"
+                            f"**Queued:** {nq} blocking approval(s) in this chat (FIFO — oldest first).\n\n"
+                            f"**Reply with a slash command** (plain “yes” is ignored for safety):\n"
+                            f"• `/approve` — allow **this** subprocess only (once)\n"
+                            f"• `/approve session` — allow **`{mid}`** for subprocess for **this chat session**\n"
+                            f"• `/approve always` — allow **`{mid}`** for subprocess **until revoked** (saved under your Hermes home)\n"
+                            f"• `/deny` / `/deny all` — block (oldest only / all pending)\n"
                         )
                     else:
                         cmd = approval_data.get("command", "")

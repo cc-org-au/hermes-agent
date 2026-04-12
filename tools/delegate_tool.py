@@ -616,6 +616,12 @@ def _run_single_child(
                 f"Only free local models (local inference or local/ slugs) are permitted without approval. "
                 f"Reason: {_gov_reason}"
             )
+            if (os.getenv("HERMES_SESSION_KEY") or "").strip():
+                blocked_msg += (
+                    " In this messaging chat, approve with `/approve` (once), `/approve session` "
+                    f"(remember `{child_model}` for this session), or `/approve always` (persisted), "
+                    "then **retry delegation** if this attempt already finished with blocked."
+                )
             logger.warning("delegate_tool: %s", blocked_msg)
             _emit = getattr(parent_agent, "_emit_status", None) if parent_agent else None
             if callable(_emit):

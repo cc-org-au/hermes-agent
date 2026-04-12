@@ -369,6 +369,7 @@ def request_operator_approval(
     *,
     approval_callback: Optional[Callable[[str], bool]] = None,
     emit_status: Optional[Callable[[str, str], None]] = None,
+    task_id: str = "",
 ) -> bool:
     """Request explicit operator approval to use a paid model for a subprocess.
 
@@ -409,6 +410,7 @@ def request_operator_approval(
                     "kind": "subprocess_model",
                     "model_id": model_id,
                     "goal": goal,
+                    "task_id": task_id,
                     "cost_class": cost_class,
                     "cost_label": cost_label,
                     "description": f"subprocess with paid model {model_id!r}",
@@ -591,6 +593,33 @@ def enforce_subprocess_model_policy(
         )
         return True, "low_cost_allowed"
 
+    # Prior /approve session|always for this messaging session (tools.approval)
+    _gw_sk = (os.getenv("HERMES_SESSION_KEY") or "").strip()
+    if _gw_sk:
+        try:
+            from tools.approval import subprocess_model_precleared_for_gateway
+
+            if subprocess_model_precleared_for_gateway(_gw_sk, model_id):
+                register_subprocess(task_id, model_id, goal, approved=True)
+                logger.info(
+                    "subprocess_governance: gateway preclear allows %r for task %s", model_id, task_id
+                )
+                emit_routing_decision_trace(
+                    stage="subprocess_governance_gate",
+                    chosen_model=str(model_id or ""),
+                    chosen_provider=str(getattr(parent_agent, "provider", "") or ""),
+                    reason_code="gateway_subprocess_model_precleared",
+                    opm_enabled=False,
+                    opm_source="",
+                    tier_source="subprocess_policy",
+                    session_id=str(getattr(parent_agent, "session_id", "") or "")
+                    if parent_agent
+                    else "",
+                )
+                return True, "gateway_subprocess_model_precleared"
+        except Exception as exc:
+            logger.debug("subprocess_governance: preclear check failed: %s", exc)
+
     # Needs approval
     _emit = getattr(parent_agent, "_emit_status", None) if parent_agent else None
     _approval_cb = _get_approval_callback(parent_agent)
@@ -601,6 +630,7 @@ def enforce_subprocess_model_policy(
         cost_class,
         approval_callback=_approval_cb,
         emit_status=_emit,
+        task_id=task_id,
     )
 
     if approved:

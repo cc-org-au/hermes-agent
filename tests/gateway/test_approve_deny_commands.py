@@ -159,6 +159,41 @@ class TestBlockingGatewayApproval:
         assert results == [True]
         unregister_gateway_notify(session_key)
 
+    def test_subprocess_approve_session_preclears_model(self):
+        """`/approve session` persists model id for this gateway session_key."""
+        from tools.approval import (
+            clear_session,
+            register_gateway_notify,
+            resolve_gateway_approval,
+            subprocess_model_precleared_for_gateway,
+            unregister_gateway_notify,
+            wait_gateway_blocking_approval,
+        )
+
+        session_key = "subproc-session-preclear"
+        clear_session(session_key)
+        register_gateway_notify(session_key, lambda d: None)
+        results: list = []
+
+        def waiter():
+            results.append(
+                wait_gateway_blocking_approval(
+                    session_key,
+                    {"kind": "subprocess_model", "model_id": "google/gemini-test-flash"},
+                )
+            )
+
+        t = threading.Thread(target=waiter)
+        t.start()
+        time.sleep(0.15)
+        resolve_gateway_approval(session_key, "session")
+        t.join(timeout=5)
+        assert results == [True]
+        assert subprocess_model_precleared_for_gateway(session_key, "google/gemini-test-flash") is True
+        assert subprocess_model_precleared_for_gateway(session_key, "OTHER/MODEL") is False
+        unregister_gateway_notify(session_key)
+        clear_session(session_key)
+
     def test_resolve_returns_zero_when_no_pending(self):
         from tools.approval import resolve_gateway_approval
         assert resolve_gateway_approval("nonexistent", "once") == 0

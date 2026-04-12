@@ -168,6 +168,103 @@ class _ApprovalEntry:
 _gateway_queues: dict[str, list] = {}        # session_key → [_ApprovalEntry, …]
 _gateway_notify_cbs: dict[str, object] = {}  # session_key → callable(approval_data)
 
+# Subprocess paid-model approvals (gateway /approve scopes) — normalized model id strings
+_subprocess_session_models: dict[str, set[str]] = {}  # session_key → models
+_subprocess_permanent_models: set[str] = set()
+_subprocess_permanent_loaded: bool = False
+
+
+def _normalize_subprocess_model_id(model_id: str) -> str:
+    return (model_id or "").strip().lower()
+
+
+def _subprocess_permanent_path():
+    from pathlib import Path
+
+    from hermes_constants import get_hermes_home
+
+    d = get_hermes_home() / "state"
+    d.mkdir(parents=True, exist_ok=True)
+    return d / "subprocess_paid_model_allowlist.json"
+
+
+def _load_subprocess_permanent_models() -> None:
+    global _subprocess_permanent_loaded, _subprocess_permanent_models
+    if _subprocess_permanent_loaded:
+        return
+    _subprocess_permanent_loaded = True
+    path = _subprocess_permanent_path()
+    if not path.exists():
+        return
+    try:
+        import json
+
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, list):
+            _subprocess_permanent_models = {_normalize_subprocess_model_id(x) for x in data if str(x).strip()}
+        elif isinstance(data, dict) and isinstance(data.get("models"), list):
+            _subprocess_permanent_models = {
+                _normalize_subprocess_model_id(x) for x in data["models"] if str(x).strip()
+            }
+    except Exception as exc:
+        logger.warning("Could not load subprocess paid-model allowlist: %s", exc)
+
+
+def _save_subprocess_permanent_models() -> None:
+    import json
+
+    path = _subprocess_permanent_path()
+    tmp = path.with_suffix(".tmp")
+    models = sorted(_subprocess_permanent_models)
+    tmp.write_text(json.dumps({"models": models}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    tmp.replace(path)
+    try:
+        import os as _os
+
+        _os.chmod(path, 0o600)
+    except OSError:
+        pass
+
+
+def subprocess_model_precleared_for_gateway(session_key: str, model_id: str) -> bool:
+    """True if *model_id* was approved for subprocess use via /approve session or /approve always."""
+    mid = _normalize_subprocess_model_id(model_id)
+    if not mid:
+        return False
+    sk = (session_key or "").strip()
+    if not sk:
+        return False
+    _load_subprocess_permanent_models()
+    with _lock:
+        if mid in _subprocess_permanent_models:
+            return True
+        return mid in _subprocess_session_models.get(sk, set())
+
+
+def _apply_subprocess_model_resolution(session_key: str, entry: _ApprovalEntry, choice: str) -> None:
+    """Record /approve scope for subprocess_model entries (session / always)."""
+    data = entry.data
+    if data.get("kind") != "subprocess_model":
+        return
+    mid = _normalize_subprocess_model_id(str(data.get("model_id") or ""))
+    if not mid:
+        return
+    sk = (session_key or "").strip()
+    if choice == "session":
+        with _lock:
+            _subprocess_session_models.setdefault(sk, set()).add(mid)
+        logger.info(
+            "approval: subprocess model %r session-approved for gateway session %s…",
+            mid,
+            sk[:24],
+        )
+    elif choice == "always":
+        _load_subprocess_permanent_models()
+        with _lock:
+            _subprocess_permanent_models.add(mid)
+        _save_subprocess_permanent_models()
+        logger.info("approval: subprocess model %r permanently approved for paid subprocess use", mid)
+
 
 def register_gateway_notify(session_key: str, cb) -> None:
     """Register a per-session callback for sending approval requests to the user.
@@ -220,6 +317,10 @@ def resolve_gateway_approval(session_key: str, choice: str,
     for entry in targets:
         entry.result = choice
         entry.event.set()
+        try:
+            _apply_subprocess_model_resolution(session_key, entry, choice)
+        except Exception as exc:
+            logger.warning("approval: subprocess resolution bookkeeping failed: %s", exc)
     return len(targets)
 
 
@@ -345,6 +446,7 @@ def clear_session(session_key: str):
     """Clear all approvals and pending requests for a session."""
     with _lock:
         _session_approved.pop(session_key, None)
+        _subprocess_session_models.pop(session_key, None)
         _pending.pop(session_key, None)
         _gateway_notify_cbs.pop(session_key, None)
         # Signal ALL blocked threads so they don't hang forever
