@@ -402,7 +402,7 @@ def resolve_consultant_tier(
         audit["skipped_router"] = "deterministic_tier_in_skip_list"
         return deterministic_tier, audit
 
-    tiers_delib = cr.get("tiers_requiring_deliberation") or ["E", "F", "G"]
+    tiers_delib = cr.get("tiers_requiring_deliberation") or ["D", "E", "F", "G"]
     if isinstance(tiers_delib, str):
         tiers_delib = [tiers_delib]
     tiers_delib_u = {str(x).strip().upper() for x in tiers_delib if x}

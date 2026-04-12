@@ -1,7 +1,7 @@
 # Default routing / delegation canon (repo). Overlay: ${HERMES_HOME}/routing_canon.yaml
 # Merged with deep-merge; overlay keys override defaults.
 
-version: 6
+version: 7
 
 # Philosophy order (documentation; enforcement is in routing code paths):
 # 1) cost + compatibility  2) speed + efficiency  3) memory + usefulness
@@ -78,7 +78,7 @@ openai_primary_mode:
 
 consultant_escalation:
   # Merged into token-governance consultant_routing (overlay wins on leaf keys).
-  tiers_requiring_deliberation: ["E", "F", "G"]
+  tiers_requiring_deliberation: ["D", "E", "F", "G"]
   # Token caps for internal router/challenger/chief (advisory; code may clamp).
   router_max_tokens: 400
   challenger_max_tokens: 350
@@ -92,7 +92,7 @@ openrouter_auto:
 
 operator_gate:
   enabled: true
-  # When Chief denies consultant-class use (merged tier was E/F/G), prompt operator via
+  # When Chief denies consultant-class use (merged tier was D–G when deliberation applies), prompt operator via
   # clarify_callback on the agent. Choices map to routing_canon operator_choice_* below.
   timeout_hint_seconds: 120
   # clarify_callback return substring match (case-insensitive)
