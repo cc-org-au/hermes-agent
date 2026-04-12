@@ -4,13 +4,12 @@ from types import SimpleNamespace
 from cli import HermesCLI
 
 
-def _make_cli(model: str = "anthropic/claude-sonnet-4-20250514", config: dict | None = None):
+def _make_cli(model: str = "anthropic/claude-sonnet-4-20250514"):
     cli_obj = HermesCLI.__new__(HermesCLI)
     cli_obj.model = model
     cli_obj.session_start = datetime.now() - timedelta(minutes=14, seconds=32)
     cli_obj.conversation_history = [{"role": "user", "content": "hi"}]
     cli_obj.agent = None
-    cli_obj.config = config if config is not None else {}
     return cli_obj
 
 
@@ -52,6 +51,16 @@ def _attach_agent(
 
 
 class TestCLIStatusBar:
+    def test_status_bar_instance_label_from_env(self, monkeypatch):
+        monkeypatch.setenv("HERMES_CLI_INSTANCE_LABEL", "droplet")
+        assert HermesCLI._status_bar_instance_label() == "droplet"
+        monkeypatch.delenv("HERMES_CLI_INSTANCE_LABEL", raising=False)
+        monkeypatch.setenv("HERMES_GATEWAY_LOCK_INSTANCE", "operator-mac")
+        assert HermesCLI._status_bar_instance_label() == "operator"
+        monkeypatch.delenv("HERMES_GATEWAY_LOCK_INSTANCE", raising=False)
+        monkeypatch.setenv("HERMES_GATEWAY_LOCK_INSTANCE", "droplet")
+        assert HermesCLI._status_bar_instance_label() == "droplet"
+
     def test_context_style_thresholds(self):
         cli_obj = _make_cli()
 
@@ -138,36 +147,6 @@ class TestCLIStatusBar:
         snap = cli_obj._get_status_bar_snapshot()
         assert snap["model_name"] == "anthropic/claude-sonnet-4-20250514"
         assert "claude-sonnet-4" in snap["model_short"]
-
-    def test_status_bar_instance_label_from_env(self, monkeypatch):
-        monkeypatch.delenv("HERMES_GATEWAY_LOCK_INSTANCE", raising=False)
-        monkeypatch.setenv("HERMES_CLI_INSTANCE_LABEL", "droplet")
-        cli_obj = _attach_agent(
-            _make_cli(),
-            prompt_tokens=1000,
-            completion_tokens=500,
-            total_tokens=1500,
-            api_calls=1,
-            context_tokens=1500,
-            context_length=200_000,
-        )
-        text = cli_obj._build_status_bar_text(width=120)
-        assert text.startswith("droplet │ ")
-
-    def test_status_bar_instance_label_from_config(self, monkeypatch):
-        monkeypatch.delenv("HERMES_CLI_INSTANCE_LABEL", raising=False)
-        monkeypatch.delenv("HERMES_INSTANCE", raising=False)
-        monkeypatch.delenv("HERMES_GATEWAY_LOCK_INSTANCE", raising=False)
-        cli_obj = _attach_agent(
-            _make_cli(config={"cli": {"instance_label": "operator"}}),
-            prompt_tokens=1000,
-            completion_tokens=500,
-            total_tokens=1500,
-            api_calls=1,
-            context_tokens=1500,
-            context_length=200_000,
-        )
-        assert cli_obj._status_bar_instance_label_text() == "operator"
 
 
 class TestCLIUsageReport:

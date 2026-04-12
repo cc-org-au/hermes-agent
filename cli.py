@@ -124,30 +124,6 @@ def _load_prefill_messages(file_path: str) -> List[Dict[str, Any]]:
         return []
 
 
-def _resolve_cli_instance_display_label(cli_config: Optional[Dict[str, Any]] = None) -> str:
-    """Short label for the TUI status bar (``droplet`` / ``operator`` / custom).
-
-    Precedence: ``HERMES_CLI_INSTANCE_LABEL``, ``HERMES_INSTANCE``, ``cli.instance_label``
-    in config, then ``HERMES_GATEWAY_LOCK_INSTANCE`` (normalized).
-    """
-    raw = (os.environ.get("HERMES_CLI_INSTANCE_LABEL") or os.environ.get("HERMES_INSTANCE") or "").strip()
-    if not raw and cli_config:
-        try:
-            raw = str((cli_config.get("cli") or {}).get("instance_label") or "").strip()
-        except Exception:
-            raw = ""
-    if not raw:
-        raw = (os.environ.get("HERMES_GATEWAY_LOCK_INSTANCE") or "").strip()
-    if not raw:
-        return ""
-    low = raw.lower()
-    if low == "droplet":
-        return "droplet"
-    if low in ("operator", "operator-mac", "mac-mini"):
-        return "operator"
-    return raw
-
-
 def _parse_reasoning_config(effort: str) -> dict | None:
     """Parse a reasoning effort level into an OpenRouter reasoning config dict."""
     from hermes_constants import parse_reasoning_effort
@@ -1504,17 +1480,30 @@ class HermesCLI:
             return "class:status-bar-warn"
         return "class:status-bar-good"
 
-    def _status_bar_instance_label_text(self) -> str:
-        return _resolve_cli_instance_display_label(getattr(self, "config", None) or {})
+    @staticmethod
+    def _status_bar_instance_label() -> str:
+        """Short host label for the TUI status bar (green), left of the model name (yellow).
 
-    def _inject_status_bar_instance_fragments(self, frags: list) -> list:
-        label = self._status_bar_instance_label_text()
+        Set ``HERMES_CLI_INSTANCE_LABEL`` (e.g. ``operator`` / ``droplet``), or rely on
+        ``HERMES_GATEWAY_LOCK_INSTANCE`` (``droplet`` → ``droplet``; ``operator`` / ``operator-mac`` / ``mac-mini`` → ``operator``).
+        """
+        v = (os.environ.get("HERMES_CLI_INSTANCE_LABEL") or "").strip()
+        if v:
+            return v
+        lock = (os.environ.get("HERMES_GATEWAY_LOCK_INSTANCE") or "").strip().lower()
+        if lock == "droplet":
+            return "droplet"
+        if lock in ("operator", "operator-mac", "mac-mini"):
+            return "operator"
+        return ""
+
+    def _status_bar_instance_fragments(self) -> list:
+        label = self._status_bar_instance_label()
         if not label:
-            return frags
+            return []
         return [
             ("class:status-bar-instance", label),
-            ("class:status-bar-dim", " │ "),
-            *frags,
+            ("class:status-bar-dim", " · "),
         ]
 
     def _build_context_bar(self, percent_used: Optional[int], width: int = 10) -> str:
@@ -1545,6 +1534,7 @@ class HermesCLI:
 
         elapsed_seconds = max(0.0, (datetime.now() - self.session_start).total_seconds())
         snapshot = {
+            "instance_label": self._status_bar_instance_label(),
             "model_name": model_name,
             "model_short": model_short,
             "duration": format_duration_compact(elapsed_seconds),
@@ -1641,14 +1631,14 @@ class HermesCLI:
             percent = snapshot["context_percent"]
             percent_label = f"{percent}%" if percent is not None else "--"
             duration_label = snapshot["duration"]
-            inst = self._status_bar_instance_label_text()
-            pfx = f"{inst} │ " if inst else ""
+            _il = (snapshot.get("instance_label") or "").strip()
+            _pfx = f"⚕ {_il} · " if _il else "⚕ "
 
             if width < 52:
-                text = f"{pfx}⚕ {snapshot['model_short']} · {duration_label}"
+                text = f"{_pfx}{snapshot['model_short']} · {duration_label}"
                 return self._trim_status_bar_text(text, width)
             if width < 76:
-                parts = [f"{pfx}⚕ {snapshot['model_short']}", percent_label]
+                parts = [f"{_pfx}{snapshot['model_short']}", percent_label]
                 parts.append(duration_label)
                 return self._trim_status_bar_text(" · ".join(parts), width)
 
@@ -1659,13 +1649,11 @@ class HermesCLI:
             else:
                 context_label = "ctx --"
 
-            parts = [f"{pfx}⚕ {snapshot['model_short']}", context_label, percent_label]
+            parts = [f"{_pfx}{snapshot['model_short']}", context_label, percent_label]
             parts.append(duration_label)
             return self._trim_status_bar_text(" │ ".join(parts), width)
         except Exception:
-            inst = self._status_bar_instance_label_text()
-            pfx = f"{inst} │ " if inst else ""
-            return f"{pfx}⚕ {self.model if getattr(self, 'model', None) else 'Hermes'}"
+            return f"⚕ {self.model if getattr(self, 'model', None) else 'Hermes'}"
 
     def _get_status_bar_fragments(self):
         if not self._status_bar_visible:
@@ -1683,32 +1671,31 @@ class HermesCLI:
             except Exception:
                 width = shutil.get_terminal_size((80, 24)).columns
             duration_label = snapshot["duration"]
+            inst_fr = self._status_bar_instance_fragments()
 
             if width < 52:
-                frags = self._inject_status_bar_instance_fragments(
-                    [
-                        ("class:status-bar", " ⚕ "),
-                        ("class:status-bar-strong", snapshot["model_short"]),
-                        ("class:status-bar-dim", " · "),
-                        ("class:status-bar-dim", duration_label),
-                        ("class:status-bar", " "),
-                    ]
-                )
+                frags = [
+                    ("class:status-bar", " ⚕ "),
+                    *inst_fr,
+                    ("class:status-bar-strong", snapshot["model_short"]),
+                    ("class:status-bar-dim", " · "),
+                    ("class:status-bar-dim", duration_label),
+                    ("class:status-bar", " "),
+                ]
             else:
                 percent = snapshot["context_percent"]
                 percent_label = f"{percent}%" if percent is not None else "--"
                 if width < 76:
-                    frags = self._inject_status_bar_instance_fragments(
-                        [
-                            ("class:status-bar", " ⚕ "),
-                            ("class:status-bar-strong", snapshot["model_short"]),
-                            ("class:status-bar-dim", " · "),
-                            (self._status_bar_context_style(percent), percent_label),
-                            ("class:status-bar-dim", " · "),
-                            ("class:status-bar-dim", duration_label),
-                            ("class:status-bar", " "),
-                        ]
-                    )
+                    frags = [
+                        ("class:status-bar", " ⚕ "),
+                        *inst_fr,
+                        ("class:status-bar-strong", snapshot["model_short"]),
+                        ("class:status-bar-dim", " · "),
+                        (self._status_bar_context_style(percent), percent_label),
+                        ("class:status-bar-dim", " · "),
+                        ("class:status-bar-dim", duration_label),
+                        ("class:status-bar", " "),
+                    ]
                 else:
                     if snapshot["context_length"]:
                         ctx_total = _format_context_length(snapshot["context_length"])
@@ -1718,21 +1705,20 @@ class HermesCLI:
                         context_label = "ctx --"
 
                     bar_style = self._status_bar_context_style(percent)
-                    frags = self._inject_status_bar_instance_fragments(
-                        [
-                            ("class:status-bar", " ⚕ "),
-                            ("class:status-bar-strong", snapshot["model_short"]),
-                            ("class:status-bar-dim", " │ "),
-                            ("class:status-bar-dim", context_label),
-                            ("class:status-bar-dim", " │ "),
-                            (bar_style, self._build_context_bar(percent)),
-                            ("class:status-bar-dim", " "),
-                            (bar_style, percent_label),
-                            ("class:status-bar-dim", " │ "),
-                            ("class:status-bar-dim", duration_label),
-                            ("class:status-bar", " "),
-                        ]
-                    )
+                    frags = [
+                        ("class:status-bar", " ⚕ "),
+                        *inst_fr,
+                        ("class:status-bar-strong", snapshot["model_short"]),
+                        ("class:status-bar-dim", " │ "),
+                        ("class:status-bar-dim", context_label),
+                        ("class:status-bar-dim", " │ "),
+                        (bar_style, self._build_context_bar(percent)),
+                        ("class:status-bar-dim", " "),
+                        (bar_style, percent_label),
+                        ("class:status-bar-dim", " │ "),
+                        ("class:status-bar-dim", duration_label),
+                        ("class:status-bar", " "),
+                    ]
 
             total_width = sum(self._status_bar_display_width(text) for _, text in frags)
             if total_width > width:
@@ -8773,7 +8759,7 @@ class HermesCLI:
             'prompt-working': '#888888 italic',
             'hint': '#555555 italic',
             'status-bar': 'bg:#1a1a2e #C0C0C0',
-            'status-bar-instance': 'bg:#1a1a2e #00FF7F bold',
+            'status-bar-instance': 'bg:#1a1a2e #2ECC71 bold',
             'status-bar-strong': 'bg:#1a1a2e #FFD700 bold',
             'status-bar-dim': 'bg:#1a1a2e #8B8682',
             'status-bar-good': 'bg:#1a1a2e #8FBC8F bold',

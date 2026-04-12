@@ -39,7 +39,6 @@ _EXTRA_ENV_KEYS = frozenset({
     "FEISHU_APP_ID", "FEISHU_APP_SECRET", "FEISHU_ENCRYPT_KEY", "FEISHU_VERIFICATION_TOKEN",
     "WECOM_BOT_ID", "WECOM_SECRET",
     "TERMINAL_ENV", "TERMINAL_SSH_KEY", "TERMINAL_SSH_PORT",
-    "HERMES_CLI_INSTANCE_LABEL", "HERMES_INSTANCE",
     "WHATSAPP_MODE", "WHATSAPP_ENABLED", "WHATSAPP_ALLOWED_CHATS",
     "TELEGRAM_ALLOWED_CHATS",
     "DISCORD_ALLOWED_CHANNELS", "DISCORD_ALLOWED_GUILDS",
@@ -789,8 +788,8 @@ OPTIONAL_ENV_VARS = {
         "advanced": True,
     },
     "HERMES_CLI_INSTANCE_LABEL": {
-        "description": "Short label shown in green on the interactive CLI status bar before the model name (e.g. droplet, operator). If unset, falls back to HERMES_INSTANCE or HERMES_GATEWAY_LOCK_INSTANCE (operator-mac → operator).",
-        "prompt": "CLI status bar instance label (optional)",
+        "description": "Short label shown in the CLI TUI status bar (green), left of the model name (e.g. operator, droplet). If unset, derived from HERMES_GATEWAY_LOCK_INSTANCE when it is droplet or operator/mac-mini.",
+        "prompt": "CLI instance badge (optional, e.g. droplet)",
         "url": None,
         "password": False,
         "category": "setting",
