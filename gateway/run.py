@@ -6551,17 +6551,27 @@ class GatewayRunner:
                             f"Reply `/approve` to execute, `/approve session` to approve this pattern "
                             f"for the session, `/approve always` to approve permanently, or `/deny` to cancel."
                         )
+                    # Fire-and-forget: do **not** block this thread on `.result(timeout=…)`.
+                    # A 15s wait caused `TimeoutError` → `wait_gateway_blocking_approval` treated
+                    # notify as failed, dequeueing the approval so `/approve` saw nothing pending.
+                    def _log_approval_send(fut):
+                        try:
+                            fut.result()
+                        except Exception as exc:
+                            logger.error("Failed to send approval request: %s", exc)
+
                     try:
-                        asyncio.run_coroutine_threadsafe(
+                        _fut = asyncio.run_coroutine_threadsafe(
                             _status_adapter.send(
                                 _status_chat_id,
                                 msg,
                                 metadata=_status_thread_metadata,
                             ),
                             _loop_for_step,
-                        ).result(timeout=15)
+                        )
+                        _fut.add_done_callback(_log_approval_send)
                     except Exception as _e:
-                        logger.error("Failed to send approval request: %s", _e)
+                        logger.error("Could not schedule approval request send: %s", _e)
     
                 _approval_session_key = session_key or ""
                 register_gateway_notify(_approval_session_key, _approval_notify_sync)

@@ -364,14 +364,11 @@ def wait_gateway_blocking_approval(session_key: str, approval_data: dict) -> Opt
     try:
         notify_cb(approval_data)
     except Exception as exc:
-        logger.warning("Gateway blocking approval notify failed: %s", exc)
-        with _lock:
-            queue = _gateway_queues.get(session_key, [])
-            if entry in queue:
-                queue.remove(entry)
-            if not queue:
-                _gateway_queues.pop(session_key, None)
-        return False
+        # Do not dequeue or return early: a failed DM must not cancel the FIFO slot —
+        # the user may still use `/approve` (tool output often repeats the hint).
+        logger.warning(
+            "Gateway blocking approval notify raised (still waiting for /approve): %s", exc
+        )
 
     timeout = _get_approval_config().get("gateway_timeout", 300)
     try:
