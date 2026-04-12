@@ -92,7 +92,39 @@ class PairingStore:
     def is_approved(self, platform: str, user_id: str) -> bool:
         """Check if a user is approved (paired) on a platform."""
         approved = self._load_json(self._approved_path(platform))
-        return user_id in approved
+        if platform != "whatsapp":
+            return user_id in approved
+        return self._is_approved_whatsapp(approved, user_id)
+
+    def _is_approved_whatsapp(self, approved: dict, user_id: str) -> bool:
+        """
+        WhatsApp pairing must match the bridge's senderId, which may differ from
+        the id stored at approve time (bare digits vs ``@s.whatsapp.net``, or
+        phone vs LID). Mirror allowlist logic: normalize + lid-mapping aliases.
+        """
+        if user_id in approved:
+            return True
+        if not approved:
+            return False
+
+        from gateway.whatsapp_auth import (
+            expand_whatsapp_auth_aliases,
+            normalize_whatsapp_identifier,
+        )
+
+        incoming: set[str] = set(expand_whatsapp_auth_aliases(user_id))
+        nu = normalize_whatsapp_identifier(user_id)
+        if nu:
+            incoming.add(nu)
+
+        for key in approved:
+            keys: set[str] = set(expand_whatsapp_auth_aliases(key))
+            nk = normalize_whatsapp_identifier(key)
+            if nk:
+                keys.add(nk)
+            if incoming & keys:
+                return True
+        return False
 
     def list_approved(self, platform: str = None) -> list:
         """List approved users, optionally filtered by platform."""

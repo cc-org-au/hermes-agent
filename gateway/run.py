@@ -235,63 +235,10 @@ from gateway.session import (
 )
 from gateway.delivery import DeliveryRouter
 from gateway.platforms.base import BasePlatformAdapter, MessageEvent, MessageType
-
-
-def _normalize_whatsapp_identifier(value: str) -> str:
-    """Strip WhatsApp JID/LID syntax down to its stable numeric identifier."""
-    return (
-        str(value or "")
-        .strip()
-        .replace("+", "", 1)
-        .split(":", 1)[0]
-        .split("@", 1)[0]
-    )
-
-
-def _whatsapp_bridge_session_dirs() -> list:
-    """Directories where Baileys may write lid-mapping-*.json (profile layout vs legacy)."""
-    out: list = []
-    for p in (
-        _hermes_home / "platforms" / "whatsapp" / "session",
-        _hermes_home / "whatsapp" / "session",
-    ):
-        if p.is_dir() and p not in out:
-            out.append(p)
-    return out
-
-
-def _expand_whatsapp_auth_aliases(identifier: str) -> set:
-    """Resolve WhatsApp phone/LID aliases using bridge session mapping files."""
-    normalized = _normalize_whatsapp_identifier(identifier)
-    if not normalized:
-        return set()
-
-    resolved = set()
-    queue = [normalized]
-
-    while queue:
-        current = queue.pop(0)
-        if not current or current in resolved:
-            continue
-
-        resolved.add(current)
-        for suffix in ("", "_reverse"):
-            mapped: str | None = None
-            for session_dir in _whatsapp_bridge_session_dirs():
-                mapping_path = session_dir / f"lid-mapping-{current}{suffix}.json"
-                if not mapping_path.exists():
-                    continue
-                try:
-                    mapped = _normalize_whatsapp_identifier(
-                        json.loads(mapping_path.read_text(encoding="utf-8"))
-                    )
-                    break
-                except Exception:
-                    continue
-            if mapped and mapped not in resolved:
-                queue.append(mapped)
-
-    return resolved
+from gateway.whatsapp_auth import (
+    expand_whatsapp_auth_aliases as _expand_whatsapp_auth_aliases,
+    normalize_whatsapp_identifier as _normalize_whatsapp_identifier,
+)
 
 
 def _pairing_approve_cli_line(platform_name: str, code: str) -> str:

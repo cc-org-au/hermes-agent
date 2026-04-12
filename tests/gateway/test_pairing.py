@@ -312,6 +312,40 @@ class TestRevoke:
 
 
 # ---------------------------------------------------------------------------
+# WhatsApp pairing — JID / LID variants must match approved keys
+# ---------------------------------------------------------------------------
+
+
+class TestWhatsAppPairingAliases:
+    def test_jid_matches_bare_digits_in_approved(self, tmp_path, monkeypatch):
+        fake_home = tmp_path / ".hermes"
+        fake_home.mkdir()
+        monkeypatch.setenv("HERMES_HOME", str(fake_home))
+        pairing_dir = tmp_path / "pairing"
+        pairing_dir.mkdir()
+        with patch("gateway.pairing.PAIRING_DIR", pairing_dir):
+            store = PairingStore()
+            store._approve_user("whatsapp", "61419933874", "Owner")
+            assert store.is_approved("whatsapp", "61419933874@s.whatsapp.net") is True
+            assert store.is_approved("whatsapp", "+61419933874@s.whatsapp.net") is True
+
+    def test_lid_matches_phone_via_session_mapping(self, tmp_path, monkeypatch):
+        fake_home = tmp_path / ".hermes"
+        sess = fake_home / "platforms" / "whatsapp" / "session"
+        sess.mkdir(parents=True)
+        monkeypatch.setenv("HERMES_HOME", str(fake_home))
+        phone = "61419933874"
+        lid = "999888777666555"
+        (sess / f"lid-mapping-{lid}.json").write_text(json.dumps(phone))
+        pairing_dir = tmp_path / "pairing"
+        pairing_dir.mkdir()
+        with patch("gateway.pairing.PAIRING_DIR", pairing_dir):
+            store = PairingStore()
+            store._approve_user("whatsapp", phone, "Owner")
+            assert store.is_approved("whatsapp", f"{lid}@lid") is True
+
+
+# ---------------------------------------------------------------------------
 # List & clear
 # ---------------------------------------------------------------------------
 
