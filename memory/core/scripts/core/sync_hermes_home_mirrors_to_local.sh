@@ -65,7 +65,8 @@ _sync_droplet() {
     key="${line%%=*}"
     val="${line#*=}"
     case "$key" in
-      SSH_PORT|SSH_USER|SSH_TAILSCALE_IP|SSH_IP|SSH_SUDO_PASSWORD) export "${key}=${val}" ;;
+      SSH_PORT|SSH_PORT_DROPLET|SSH_USER|SSH_USER_DROPLET|SSH_TAILSCALE_IP|SSH_TAILSCALE_IP_DROPLET|\
+SSH_IP|SSH_IP_DROPLET|SSH_TAILSCALE_DNS_DROPLET|SSH_SUDO_PASSWORD) export "${key}=${val}" ;;
       HERMES_DROPLET_ALLOW_ENV_PASSPHRASE)
         case "$val" in 1|true|TRUE|True|yes|YES) _ALLOW_ENV_PASS_FROM_FILE=1 ;; esac
         ;;
@@ -73,7 +74,13 @@ _sync_droplet() {
     esac
   done <"$envf"
 
-  HOST="${SSH_TAILSCALE_IP:-${SSH_IP:-}}"
+  # Same *_DROPLET fallbacks as ssh_droplet.sh / droplet_pull_hermes_home.sh
+  if [[ -z "${SSH_TAILSCALE_IP:-}" && -n "${SSH_TAILSCALE_IP_DROPLET:-}" ]]; then export SSH_TAILSCALE_IP="${SSH_TAILSCALE_IP_DROPLET}"; fi
+  if [[ -z "${SSH_IP:-}" && -n "${SSH_IP_DROPLET:-}" ]]; then export SSH_IP="${SSH_IP_DROPLET}"; fi
+  if [[ -z "${SSH_USER:-}" && -n "${SSH_USER_DROPLET:-}" ]]; then export SSH_USER="${SSH_USER_DROPLET}"; fi
+  if [[ -z "${SSH_PORT:-}" && -n "${SSH_PORT_DROPLET:-}" ]]; then export SSH_PORT="${SSH_PORT_DROPLET}"; fi
+
+  HOST="${SSH_TAILSCALE_IP:-${SSH_IP:-${SSH_TAILSCALE_DNS_DROPLET:-}}}"
   REMOTE_USER="${SSH_USER:-}"
   if [[ -z "$HOST" || -z "$REMOTE_USER" ]]; then
     echo "sync: skipping droplet (SSH_TAILSCALE_IP/SSH_IP or SSH_USER missing in ${envf})" >&2
