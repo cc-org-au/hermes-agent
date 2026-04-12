@@ -1,10 +1,38 @@
 # Default routing / delegation canon (repo). Overlay: ${HERMES_HOME}/routing_canon.yaml
 # Merged with deep-merge; overlay keys override defaults.
 
-version: 4
+version: 5
 
 # Philosophy order (documentation; enforcement is in routing code paths):
 # 1) cost + compatibility  2) speed + efficiency  3) memory + usefulness
+#
+# -----------------------------------------------------------------------------
+# Route UP (escalation — one step toward a more capable model)
+# -----------------------------------------------------------------------------
+# - OpenRouter hub (openai/…): advance exactly ONE rung per escalation along
+#   ``openrouter_step_up_escalation.chat_models`` / ``codex_models`` toward the
+#   tier ceiling (see ``build_ladder_to_ceiling`` + ``_or_stepup_idx`` in run_agent).
+#   Triggers: quota-class API errors when ``escalate_on_quota_errors``, or an
+#   assistant reply that is ONLY ``escalate_marker`` when ``escalate_on_escalate_marker``.
+#   Do not skip rungs; ``max_escalations_per_turn`` caps loops.
+# - Native OpenAI (OPM): ``opm_native_quota_downgrade`` steps one model id at a time
+#   on quota (expensive→cheaper is the *downgrade* ladder; escalation across providers
+#   follows ``opm_cross_provider_quota_failover``).
+# - Consultant tiers (E/F/G): ``consultant_routing`` + ``operator_gate`` — deliberate
+#   escalation; hard jump to E only on pushback / repeated failure (see consultant_routing).
+#
+# -----------------------------------------------------------------------------
+# Route DOWN (cheaper / simpler — lowest feasible first, then climb if inadequate)
+# -----------------------------------------------------------------------------
+# - ``tier_models`` in ``workspace/operations/hermes_token_governance.runtime.yaml`` MUST
+#   map A→…→G to DISTINCT models (cheap→capable). If A–E all point at the same slug,
+#   per-tier downshifts are ineffective.
+# - Default competent tier: ``default_routing_tier`` (typically D) before heuristics.
+# - Heuristics: ``tier_model_routing.select_tier_for_message`` narrows to B/C for short/simple
+#   prompts; OPM may uplift low tiers to E/F for coding/reasoning (token_governance_runtime).
+# - ``smart_model_routing`` optional cheap route for very short non-complex messages (config).
+# - If a down-tier answer is insufficient: user pushback / retries → ``resolve_consultant_tier``;
+#   on OpenRouter, ``[HERMES_ESCALATE]`` requests exactly one step up the hub ladder.
 #
 # Quota / rate-limit failover order (OPM on, single run_conversation turn):
 #   1) Native api.openai.com model ladder (opm_native_quota_downgrade)

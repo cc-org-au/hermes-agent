@@ -1,16 +1,26 @@
+# Token governance runtime (template). Materialize/copy to:
+#   ${HERMES_HOME}/workspace/operations/hermes_token_governance.runtime.yaml
+#
+# Route-down requires DISTINCT tier_models (cheap → capable). A prior edit forced
+# gpt-5.4 for A–E, which disabled meaningful per-tier downshifts — restored ladder below.
+
 version: 2
 enabled: true
 max_agent_turns: 50
 dynamic_tier_routing: true
-default_routing_tier: E
+# Competent default before heuristics narrow to B/C or widen to E/F (see select_tier_for_message).
+default_routing_tier: D
 
+# Per-tier concrete models (A=lowest feasible chat … G=consultant ceiling).
+# Aligns with agent/dynamic_routing_canon.yaml openrouter_step_up_escalation ordering for OpenRouter.
 tier_models:
-  A: gpt-5.4
-  B: gpt-5.4
-  C: gpt-5.4
-  D: gpt-5.4
+  A: openai/gpt-5.4-nano
+  B: openai/gpt-5.4-mini
+  C: openai/gpt-5.2
+  D: openai/gpt-5.4
   E: gpt-5.4
   F: gpt-5.3-codex
+  G: anthropic/claude-opus-4.6
 
 cost_governance:
   daily_budget_usd: 10.0
