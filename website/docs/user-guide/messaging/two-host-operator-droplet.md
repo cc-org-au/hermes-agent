@@ -60,7 +60,7 @@ WHATSAPP_MODE=bot
 WHATSAPP_ALLOWED_USERS=61483757391
 ```
 
-Pair with the **personal** WhatsApp (not Business). Hermes sees the DM thread where **business** sends messages to **personal**; replies go back on that thread. No feedback loop with the droplet because the droplet is logged in as a **different** account.
+Pair with the **personal** WhatsApp (not Business). Hermes sees the DM thread with your business contact: messages **from** business (incoming) and messages **you send** from personal to business (your prompts are delivered to the gateway). Replies go back on that thread. No feedback loop with the droplet because the droplet is logged in as a **different** account.
 
 If you ever see echoes, keep the default reply prefix (or raise `MIN_PREFIX_ECHO_LEN` in the bridge) so agent replies are ignored as echoes.
 

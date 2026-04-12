@@ -250,23 +250,25 @@ async function startSocket() {
         if (isGroup || chatId.includes('status')) continue;
 
         if (WHATSAPP_MODE === 'bot') {
-          // Bot mode: separate number. ALL fromMe are echo-backs of our own replies — skip.
-          continue;
-        }
-
-        // Self-chat mode: only allow messages in the user's own self-chat (PN or LID JID).
-        if (!isSelfChatDm(chatId, sock)) {
-          if (WHATSAPP_DEBUG) {
-            try {
-              console.log(JSON.stringify({
-                event: 'ignored',
-                reason: 'fromMe_not_self_chat',
-                chatHost: (chatId.split('@')[1] || '').slice(0, 12),
-                hasMyLid: !!sock.user?.lid,
-              }));
-            } catch { /* ignore */ }
+          // Dedicated bot number: outbound traffic is usually Hermes (filtered below via
+          // sent message ids + reply prefix). Personal-account "bot" pairing (two-host
+          // operator setup): user messages to another contact (e.g. business) are also
+          // fromMe — those must be delivered; do not skip here.
+        } else {
+          // Self-chat mode: only allow messages in the user's own self-chat (PN or LID JID).
+          if (!isSelfChatDm(chatId, sock)) {
+            if (WHATSAPP_DEBUG) {
+              try {
+                console.log(JSON.stringify({
+                  event: 'ignored',
+                  reason: 'fromMe_not_self_chat',
+                  chatHost: (chatId.split('@')[1] || '').slice(0, 12),
+                  hasMyLid: !!sock.user?.lid,
+                }));
+              } catch { /* ignore */ }
+            }
+            continue;
           }
-          continue;
         }
       }
 
@@ -349,7 +351,7 @@ async function startSocket() {
         body = `[${mediaType} received]`;
       }
 
-      // Ignore Hermes' own reply messages in self-chat mode to avoid loops.
+      // Ignore Hermes' own replies (prefix + recently sent ids) to avoid loops.
       if (msg.key.fromMe && isLikelyAgentEchoBody(body, msg.key.id)) {
         if (WHATSAPP_DEBUG) {
           try { console.log(JSON.stringify({ event: 'ignored', reason: 'agent_echo', chatId, messageId: msg.key.id })); } catch {}
