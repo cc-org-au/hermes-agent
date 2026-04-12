@@ -114,13 +114,7 @@ fi
 ln -sf "$PERSONA/soul.md" "$WS/SOUL.md"
 ln -sf "$WS/SOUL.md" "$PROFILE/SOUL.md"
 
-# --- 4) Policies from git checkout (run git pull separately if needed)
-if [[ -d "$HERMES_REPO/policies" ]]; then
-  mkdir -p "$PROFILE/policies"
-  rsync -av --delete "$HERMES_REPO/policies/" "$PROFILE/policies/"
-fi
-
-# --- 5) Canonical paths doc for agents
+# --- 4) Canonical paths doc for agents (before policies rsync so layout is recorded even if rsync fails)
 mkdir -p "$MK/core"
 cat > "$MK/core/CANONICAL_PATHS_AND_SOURCES.md" << EOF
 # Canonical paths (chief-orchestrator, ${HERMES_CANONICAL_HOST_LABEL})
@@ -147,5 +141,14 @@ cat > "$MK/core/CANONICAL_PATHS_AND_SOURCES.md" << EOF
 
 **Mem0:** Continue to follow the durable policy text in \`knowledge/references/memory.md\` for sync/deletion rules.
 EOF
+
+# --- 5) Policies from git checkout (run git pull separately if needed)
+if [[ -d "$HERMES_REPO/policies" ]]; then
+  mkdir -p "$PROFILE/policies"
+  if ! rsync -av --delete "$HERMES_REPO/policies/" "$PROFILE/policies/"; then
+    echo "chief_memory_canonicalize: WARNING — policies rsync failed (often ownership on the profile policies dir). On the droplet try: sudo chown -R hermesuser:hermesuser $PROFILE/policies && rsync -av --delete $HERMES_REPO/policies/ $PROFILE/policies/" >&2
+    [[ "${HERMES_CANONICALIZE_ALLOW_POLICIES_RSYNC_FAIL:-}" == "1" ]] || exit 23
+  fi
+fi
 
 echo "chief_memory_canonicalize: host=${HERMES_CANONICAL_HOST_LABEL} PROFILE=$PROFILE"
