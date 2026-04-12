@@ -3,6 +3,7 @@
 import json
 import os
 import signal
+from pathlib import Path
 
 from gateway import status
 
@@ -235,6 +236,24 @@ class TestRuntimeWatchdogHealthy:
 
 
 class TestGatewaySingletonDedupe:
+    def test_homes_for_gateway_kill_scope_profile_includes_legacy_default(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        prof = tmp_path / ".hermes" / "profiles" / "chief-orchestrator"
+        prof.mkdir(parents=True)
+        homes = status._homes_for_gateway_kill_scope(prof)
+        assert len(homes) == 2
+        assert prof.resolve() in homes
+        assert (tmp_path / ".hermes").resolve() in homes
+
+    def test_homes_for_gateway_kill_scope_default_only(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        d = tmp_path / ".hermes"
+        d.mkdir()
+        homes = status._homes_for_gateway_kill_scope(d)
+        assert homes == [d.resolve()]
+
     def test_dedupe_sends_sigterm_to_older_stray(self, tmp_path, monkeypatch):
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         killed = []

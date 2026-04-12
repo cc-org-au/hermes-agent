@@ -355,6 +355,44 @@ def _gateway_profile_cli_token() -> Optional[str]:
     return None
 
 
+def _homes_for_gateway_kill_scope(home: Path) -> list[Path]:
+    """Return ``home`` plus top-level ``~/.hermes`` when ``home`` is ``profiles/<name>``.
+
+    A stray ``gateway run`` may set only ``HERMES_HOME=~/.hermes`` while the supervised
+    profile uses ``~/.hermes/profiles/<name>``. They compete for the same messaging
+    tokens; kill/dedupe must consider both paths as one fleet.
+    """
+    try:
+        h = home.resolve()
+    except OSError:
+        return [home]
+    out: list[Path] = [h]
+    if h.parent.name == "profiles":
+        try:
+            legacy = h.parent.parent.resolve()
+            if legacy != h:
+                out.append(legacy)
+        except OSError:
+            pass
+    return out
+
+
+def _collect_gateway_pids_for_homes(raw: Sequence[int], homes: list[Path]) -> list[int]:
+    """Filter ``find_gateway_pids`` to long-running gateways matching any of ``homes``."""
+    out: list[int] = []
+    seen: set[int] = set()
+    for pid in raw:
+        if not _looks_like_long_running_gateway_process(pid):
+            continue
+        for hm in homes:
+            if _pid_belongs_to_this_hermes_home(pid, hm):
+                if pid not in seen:
+                    seen.add(pid)
+                    out.append(pid)
+                break
+    return out
+
+
 def _pid_belongs_to_this_hermes_home(pid: int, home: Path) -> bool:
     """True when ``pid`` is a gateway process for ``home`` (env or ``-p`` argv)."""
     resolved = home.resolve()
@@ -426,12 +464,9 @@ def dedupe_gateway_processes_for_current_home() -> Tuple[int, str]:
         return 0, "skip_import"
 
     home = get_hermes_home()
+    homes = _homes_for_gateway_kill_scope(home)
     raw = find_gateway_pids()
-    candidates = [
-        p
-        for p in raw
-        if _looks_like_long_running_gateway_process(p) and _pid_belongs_to_this_hermes_home(p, home)
-    ]
+    candidates = _collect_gateway_pids_for_homes(raw, homes)
     if len(candidates) <= 1:
         return 0, "singleton"
 
@@ -482,12 +517,9 @@ def kill_all_gateway_processes_for_current_home(force: bool = False) -> Tuple[in
         return 0, "skip_import"
 
     home = get_hermes_home()
+    homes = _homes_for_gateway_kill_scope(home)
     raw = find_gateway_pids()
-    candidates = [
-        p
-        for p in raw
-        if _looks_like_long_running_gateway_process(p) and _pid_belongs_to_this_hermes_home(p, home)
-    ]
+    candidates = _collect_gateway_pids_for_homes(raw, homes)
     if not candidates:
         return 0, "none"
 
