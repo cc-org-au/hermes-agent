@@ -59,23 +59,30 @@ const REPLY_PREFIX = process.env.WHATSAPP_REPLY_PREFIX === undefined
   ? DEFAULT_REPLY_PREFIX
   : process.env.WHATSAPP_REPLY_PREFIX.replace(/\\n/g, '\n');
 
+/** Invisible marker on bot-mode outbound text so upserts can distinguish Hermes vs user (loop-safe). */
+const BOT_OUTBOUND_SENTINEL = '\u200C\u200C\u200C';
+
 /** Min length for prefix-based echo detection (avoids `''.startsWith('')` / tiny-prefix false positives). */
 const MIN_PREFIX_ECHO_LEN = 8;
 
 function isLikelyAgentEchoBody(body, messageId) {
+  const bn = (body || '').replace(/\r\n/g, '\n');
+  if (WHATSAPP_MODE === 'bot' && bn.startsWith(BOT_OUTBOUND_SENTINEL)) return true;
   if (recentlySentIds.has(messageId)) return true;
   const rp = (REPLY_PREFIX || '').replace(/\r\n/g, '\n');
   if (rp.length < MIN_PREFIX_ECHO_LEN) return false;
-  const bn = (body || '').replace(/\r\n/g, '\n');
   return bn.startsWith(rp);
 }
 
 function formatOutgoingMessage(message) {
-  // In bot mode, messages come from a different number so the prefix is
-  // redundant — the sender identity is already clear.  Only prepend in
-  // self-chat mode where bot and user share the same number.
-  if (WHATSAPP_MODE !== 'self-chat') return message;
-  return REPLY_PREFIX ? `${REPLY_PREFIX}${message}` : message;
+  const raw = String(message ?? '');
+  if (WHATSAPP_MODE === 'self-chat') {
+    return REPLY_PREFIX ? `${REPLY_PREFIX}${raw}` : raw;
+  }
+  if (WHATSAPP_MODE === 'bot') {
+    return `${BOT_OUTBOUND_SENTINEL}${raw}`;
+  }
+  return raw;
 }
 
 mkdirSync(SESSION_DIR, { recursive: true });
@@ -272,8 +279,9 @@ async function startSocket() {
         }
       }
 
-      // Check allowlist for messages from others (resolve LID ↔ phone aliases)
-      if (!msg.key.fromMe && !matchesAllowedUser(senderId, ALLOWED_USERS, SESSION_DIR)) {
+      // Allowlist: inbound uses remote sender; fromMe uses remote chat JID (peer you are messaging).
+      const peerForAllowlist = msg.key.fromMe ? chatId : senderId;
+      if (!matchesAllowedUser(peerForAllowlist, ALLOWED_USERS, SESSION_DIR)) {
         continue;
       }
 
@@ -371,10 +379,13 @@ async function startSocket() {
         continue;
       }
 
+      // Gateway allowlist uses user_id = senderId; for fromMe DMs the peer is remoteJid (chatId).
+      const effectiveSenderId = msg.key.fromMe && !isGroup ? chatId : senderId;
+
       const event = {
         messageId: msg.key.id,
         chatId,
-        senderId,
+        senderId: effectiveSenderId,
         senderName: msg.pushName || senderNumber,
         chatName: isGroup ? (chatId.split('@')[0]) : (msg.pushName || senderNumber),
         isGroup,
@@ -493,10 +504,18 @@ app.post('/send-media', async (req, res) => {
 
     switch (type) {
       case 'image':
-        msgPayload = { image: buffer, caption: caption || undefined, mimetype: MIME_MAP[ext] || 'image/jpeg' };
+        msgPayload = {
+          image: buffer,
+          caption: caption ? formatOutgoingMessage(caption) : undefined,
+          mimetype: MIME_MAP[ext] || 'image/jpeg',
+        };
         break;
       case 'video':
-        msgPayload = { video: buffer, caption: caption || undefined, mimetype: MIME_MAP[ext] || 'video/mp4' };
+        msgPayload = {
+          video: buffer,
+          caption: caption ? formatOutgoingMessage(caption) : undefined,
+          mimetype: MIME_MAP[ext] || 'video/mp4',
+        };
         break;
       case 'audio': {
         const audioMime = (ext === 'ogg' || ext === 'opus') ? 'audio/ogg; codecs=opus' : 'audio/mpeg';
@@ -508,7 +527,7 @@ app.post('/send-media', async (req, res) => {
         msgPayload = {
           document: buffer,
           fileName: fileName || path.basename(filePath),
-          caption: caption || undefined,
+          caption: caption ? formatOutgoingMessage(caption) : undefined,
           mimetype: MIME_MAP[ext] || 'application/octet-stream',
         };
         break;

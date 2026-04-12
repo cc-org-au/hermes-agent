@@ -62,7 +62,7 @@ WHATSAPP_ALLOWED_USERS=61483757391
 
 Pair with the **personal** WhatsApp (not Business). Hermes sees the DM thread with your business contact: messages **from** business (incoming) and messages **you send** from personal to business (your prompts are delivered to the gateway). Replies go back on that thread. No feedback loop with the droplet because the droplet is logged in as a **different** account.
 
-If you ever see echoes, keep the default reply prefix (or raise `MIN_PREFIX_ECHO_LEN` in the bridge) so agent replies are ignored as echoes.
+The bridge tags **bot-mode** outbound text with an invisible sentinel so your own Hermes replies are not mistaken for new user prompts (loop-safe), in addition to message-id tracking. If you ever see echoes in self-chat, keep the default reply prefix (or raise `MIN_PREFIX_ECHO_LEN` in the bridge).
 
 ## Lock instance + service install (both hosts)
 
