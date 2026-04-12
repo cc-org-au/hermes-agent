@@ -48,7 +48,7 @@ budget ids unless configured otherwise.
 
 @lru_cache(maxsize=1)
 def _catalog_path() -> Path:
-    return Path(__file__).resolve().parent / "data" / _CATALOG_FILENAME
+    return Path(__file__).resolve().parent / _CATALOG_FILENAME
 
 
 @lru_cache(maxsize=1)

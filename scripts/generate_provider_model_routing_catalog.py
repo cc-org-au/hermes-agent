@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Emit agent/data/provider_model_routing_catalog.json (routing-oriented model catalog).
+"""Emit agent/provider_model_routing_catalog.json (routing-oriented model catalog).
 
 Data is sourced from official provider docs as of the embedded snapshot date.
 Re-run this script after pricing/model lineup changes; verify against:
@@ -16,7 +16,7 @@ from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "agent" / "data" / "provider_model_routing_catalog.json"
+OUT = ROOT / "agent" / "provider_model_routing_catalog.json"
 
 SNAPSHOT_DATE = "2026-04-09"
 
