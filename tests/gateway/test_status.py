@@ -114,6 +114,20 @@ class TestGatewayRuntimeStatus:
         assert payload["platforms"]["telegram"]["error_code"] == "telegram_polling_conflict"
         assert payload["platforms"]["telegram"]["error_message"] == "another poller is active"
 
+    def test_write_runtime_status_connected_clears_platform_errors(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+        status.write_runtime_status(
+            platform="telegram",
+            platform_state="fatal",
+            error_code="telegram_token_lock",
+            error_message="duplicate",
+        )
+        status.write_runtime_status(platform="telegram", platform_state="connected")
+        payload = status.read_runtime_status()
+        assert payload["platforms"]["telegram"]["state"] == "connected"
+        assert "error_code" not in payload["platforms"]["telegram"]
+        assert "error_message" not in payload["platforms"]["telegram"]
+
 
 class TestScopedLocks:
     def test_lock_dir_uses_gateway_lock_instance_subdir(self, tmp_path, monkeypatch):
