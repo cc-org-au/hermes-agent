@@ -137,6 +137,14 @@ class TestGatewayConfigRoundtrip:
         assert restored.platforms[Platform.WHATSAPP].extra["unauthorized_dm_behavior"] == "pair"
 
 
+def test_whatsapp_unauthorized_dm_defaults_to_ignore_without_platform_override():
+    cfg = GatewayConfig(
+        unauthorized_dm_behavior="pair",
+        platforms={Platform.WHATSAPP: PlatformConfig(enabled=True)},
+    )
+    assert cfg.get_unauthorized_dm_behavior(Platform.WHATSAPP) == "ignore"
+
+
 class TestLoadGatewayConfig:
     def test_bridges_quick_commands_from_config_yaml(self, tmp_path, monkeypatch):
         hermes_home = tmp_path / ".hermes"

@@ -208,12 +208,16 @@ phone numbers (including country code, without the `+`), use `*` to allow everyo
 messages** as a safety measure.
 :::
 
-By default, unauthorized DMs still receive a pairing code reply. If you want a private WhatsApp number to stay completely silent to strangers, set:
+**Strangers not on the allowlist:** Hermes does **not** send replies (including pairing codes) by default on WhatsApp — the gateway uses **`ignore`** for unauthorized DMs unless you override it. Incoming chats still appear **normally on your phone** like any other WhatsApp message; only the Hermes bridge/gateway stays silent.
+
+To send pairing codes to unknown numbers again:
 
 ```yaml
 whatsapp:
-  unauthorized_dm_behavior: ignore
+  unauthorized_dm_behavior: pair
 ```
+
+For other platforms, the global default remains pairing unless you set top-level `unauthorized_dm_behavior: ignore` or the platform-specific key.
 
 - The `~/.hermes/whatsapp/session` directory contains full session credentials — protect it like a password
 - Set file permissions: `chmod 700 ~/.hermes/whatsapp/session`

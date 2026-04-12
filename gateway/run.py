@@ -1864,7 +1864,9 @@ class GatewayRunner:
         # Check if user is authorized
         if not self._is_user_authorized(source):
             logger.warning("Unauthorized user: %s (%s) on %s", source.user_id, source.user_name, source.platform.value)
-            # In DMs: offer pairing code. In groups: silently ignore.
+            # In DMs: offer pairing code when behavior is "pair" (WhatsApp defaults to
+            # "ignore" so strangers get no bot reply — see GatewayConfig.get_unauthorized_dm_behavior).
+            # In groups: silently ignore.
             if source.chat_type == "dm" and self._get_unauthorized_dm_behavior(source.platform) == "pair":
                 platform_name = source.platform.value if source.platform else "unknown"
                 # Rate-limit ALL pairing responses (code or rejection) to

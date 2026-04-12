@@ -177,6 +177,7 @@ For cloud sandbox backends, persistence is filesystem-oriented. `TERMINAL_LIFETI
 | `WHATSAPP_MODE` | `bot` (separate number / open DMs per allowlist) or `self-chat` (only the “message yourself” thread, unless `WHATSAPP_ALLOW_NON_SELF_DM`) |
 | `WHATSAPP_ALLOWED_USERS` | Comma-separated phone numbers (with country code, no `+`), or `*` to allow all senders |
 | `WHATSAPP_ALLOW_NON_SELF_DM` | When `WHATSAPP_MODE=self-chat`: set `true`/`1`/`yes`/`on` to allow 1:1 chats that are **not** self-chat. Default off — bridge ignores other DMs |
+| *(config)* `whatsapp.unauthorized_dm_behavior` | In `config.yaml`: `ignore` (default for WhatsApp in gateway — no pairing/bot reply to strangers) or `pair`. Strangers still appear on your phone as normal WhatsApp; Hermes stays silent unless allowlisted or `pair` |
 | `WHATSAPP_ALLOW_ALL_USERS` | Allow all WhatsApp senders without an allowlist (`true`/`false`) |
 | `WHATSAPP_DEBUG` | Log raw message events in the bridge for troubleshooting (`true`/`false`) |
 | `HERMES_GATEWAY_LOCK_INSTANCE` | Short label (e.g. `droplet`, `operator-mac`) embedded in **generated** `hermes gateway install` and `hermes gateway watchdog-install` service files so token lock paths under `$XDG_STATE_HOME/hermes/gateway-locks/` differ per machine. Export **before** `gateway install --force`. Does **not** replace distinct Telegram/Slack tokens or separate WhatsApp logins — see [Two isolated gateways](/docs/user-guide/messaging/two-host-operator-droplet). |

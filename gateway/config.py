@@ -414,6 +414,11 @@ class GatewayConfig:
                     platform_cfg.extra.get("unauthorized_dm_behavior"),
                     self.unauthorized_dm_behavior,
                 )
+            # WhatsApp: default to ignore so unknown numbers never get Hermes/pairing
+            # replies. They still receive normal WhatsApp delivery on the owner's devices;
+            # only the linked bridge/gateway stays silent. Opt in: whatsapp.unauthorized_dm_behavior: pair
+            if platform == Platform.WHATSAPP:
+                return _normalize_unauthorized_dm_behavior(None, "ignore")
         return self.unauthorized_dm_behavior
 
 

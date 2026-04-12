@@ -228,9 +228,10 @@ whatsapp:
   unauthorized_dm_behavior: ignore
 ```
 
-- `pair` is the default. Unauthorized DMs get a pairing code reply.
-- `ignore` silently drops unauthorized DMs.
-- Platform sections override the global default, so you can keep pairing on Telegram while keeping WhatsApp silent.
+- Globally, `pair` is the default for most platforms: unauthorized DMs get a pairing code reply.
+- **WhatsApp** defaults to **`ignore`** in the gateway when you do not set `whatsapp.unauthorized_dm_behavior`: strangers not on `WHATSAPP_ALLOWED_USERS` get **no** Hermes or pairing reply (they still see normal WhatsApp delivery on your phone).
+- `ignore` means the gateway does not run the agent or send pairing text for that sender.
+- Platform sections override the global default — e.g. keep pairing on Telegram while WhatsApp stays silent.
 
 **Security features** (based on OWASP + NIST SP 800-63-4 guidance):
 

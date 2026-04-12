@@ -12,6 +12,8 @@ Hermes deployments that use the built-in **Baileys** WhatsApp bridge (`scripts/w
 
 3. **Inbound scope:** With **`WHATSAPP_MODE=self-chat`** and **`WHATSAPP_ALLOW_NON_SELF_DM`** unset or false, the bridge **does not** deliver **groups**, **status**, or **non-self** 1:1 chats to the gateway. Outbound from Hermes should match the same intent (self-chat thread only) unless configuration is deliberately widened.
 
+4. **Strangers / allowlist:** The gateway defaults **`get_unauthorized_dm_behavior`** to **`ignore`** for WhatsApp when not overridden in config, so numbers **not** on **`WHATSAPP_ALLOWED_USERS`** do **not** receive Hermes or pairing replies. Native WhatsApp delivery to the owner’s phone is unchanged.
+
 4. **Widening access:** Additional numbers, groups, or non-self DMs require an explicit operator decision: set **`WHATSAPP_ALLOW_NON_SELF_DM=true`** and adjust **`WHATSAPP_ALLOWED_USERS`** / **`WHATSAPP_ALLOWED_CHATS`** as documented in the user guide.
 
 ## References
