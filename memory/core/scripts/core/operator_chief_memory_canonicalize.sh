@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
-# One-off / repeatable: canonicalize chief-orchestrator memory + policies layout on the **operator** Mac.
-# Run **on the operator** (or via: ssh_operator.sh 'bash -s' < operator_chief_memory_canonicalize.sh).
+# One-off / repeatable: canonicalize chief-orchestrator memory + policies layout (operator Mac or droplet VPS).
+# Examples:
+#   ./operator_chief_memory_canonicalize.sh
+#   HERMES_CANONICAL_HOST_LABEL=droplet ./operator_chief_memory_canonicalize.sh
+#   ./droplet_chief_memory_canonicalize.sh
 #
 # Does not print secret contents. Idempotent-ish: safe to re-run (merges with rsync backups).
 set -euo pipefail
+
+HERMES_CANONICAL_HOST_LABEL="${HERMES_CANONICAL_HOST_LABEL:-operator}"
 
 PROFILE="${HERMES_PROFILE_HOME:-$HOME/.hermes/profiles/chief-orchestrator}"
 WS="$PROFILE/workspace"
@@ -51,20 +56,20 @@ fi
 # Build merged reference memory (from archived Mem0 policy text)
 if [[ -f "$ARCH/MEMORY.md" ]]; then
   {
-    echo "# Consolidated durable memory policy (operator)"
+    echo "# Consolidated durable memory policy (${HERMES_CANONICAL_HOST_LABEL})"
     echo ""
     echo "> Migrated from \`profiles/chief-orchestrator/memories/MEMORY.md\` on ${ts}."
     echo ""
     cat "$ARCH/MEMORY.md"
   } > "$REF/memory.md"
 elif [[ ! -f "$REF/memory.md" ]]; then
-  echo "# memory.md — operator durable notes (no legacy MEMORY.md to merge)." > "$REF/memory.md"
+  echo "# memory.md — ${HERMES_CANONICAL_HOST_LABEL} durable notes (no legacy MEMORY.md to merge)." > "$REF/memory.md"
 fi
 
 # Merge USER into persona user.md
 if [[ -f "$ARCH/USER.md" ]]; then
   {
-    echo "# User profile (operator)"
+    echo "# User profile (${HERMES_CANONICAL_HOST_LABEL})"
     echo ""
     echo "> Consolidated from \`profiles/chief-orchestrator/memories/USER.md\` + template on ${ts}."
     echo ""
@@ -117,28 +122,30 @@ fi
 
 # --- 5) Canonical paths doc for agents
 mkdir -p "$MK/core"
-cat > "$MK/core/CANONICAL_PATHS_AND_SOURCES.md" << 'EOF'
-# Canonical paths (chief-orchestrator, operator)
+cat > "$MK/core/CANONICAL_PATHS_AND_SOURCES.md" << EOF
+# Canonical paths (chief-orchestrator, ${HERMES_CANONICAL_HOST_LABEL})
+
+**Host label:** \`${HERMES_CANONICAL_HOST_LABEL}\` — use \`~\` as the runtime user’s home (\`hermesuser\` on the droplet, \`operator\` on the Mac mini).
 
 **Highest priority — use these only for new content:**
 
 | Purpose | Path |
 |--------|------|
-| Workspace memory root | `~/.hermes/profiles/chief-orchestrator/workspace/memory/` |
-| Project knowledge (e.g. agentic-company) | `~/.hermes/profiles/chief-orchestrator/workspace/memory/knowledge/projects/` |
-| Durable reference notes (incl. former memories/MEMORY.md) | `~/.hermes/profiles/chief-orchestrator/workspace/memory/knowledge/references/memory.md` |
-| User preferences / persona | `~/.hermes/profiles/chief-orchestrator/workspace/memory/actors/persona/user.md` |
-| Soul / voice | `~/.hermes/profiles/chief-orchestrator/workspace/memory/actors/persona/soul.md` |
-| Repo policies (synced copy) | `~/.hermes/profiles/chief-orchestrator/policies/` ← mirrors `hermes-agent/policies/` |
+| Workspace memory root | \`~/.hermes/profiles/chief-orchestrator/workspace/memory/\` |
+| Project knowledge (e.g. agentic-company) | \`~/.hermes/profiles/chief-orchestrator/workspace/memory/knowledge/projects/\` |
+| Durable reference notes (incl. former memories/MEMORY.md) | \`~/.hermes/profiles/chief-orchestrator/workspace/memory/knowledge/references/memory.md\` |
+| User preferences / persona | \`~/.hermes/profiles/chief-orchestrator/workspace/memory/actors/persona/user.md\` |
+| Soul / voice | \`~/.hermes/profiles/chief-orchestrator/workspace/memory/actors/persona/soul.md\` |
+| Repo policies (synced copy) | \`~/.hermes/profiles/chief-orchestrator/policies/\` ← mirrors \`hermes-agent/policies/\` |
 
 **Do not use for new files:**
 
-- `profiles/chief-orchestrator/memory/` (except README redirect)
-- `profiles/chief-orchestrator/memories/` (deprecated; see README there)
+- \`profiles/chief-orchestrator/memory/\` (except README redirect)
+- \`profiles/chief-orchestrator/memories/\` (deprecated; see README there)
 
-**Policies:** Treat `~/hermes-agent/policies/` on disk (and the profile copy above) as the canonical policy tree for Hermes; prefer it over ad-hoc policy docs elsewhere.
+**Policies:** Treat \`~/hermes-agent/policies/\` on disk (and the profile copy above) as the canonical policy tree for Hermes; prefer it over ad-hoc policy docs elsewhere.
 
-**Mem0:** Continue to follow the durable policy text in `knowledge/references/memory.md` for sync/deletion rules.
+**Mem0:** Continue to follow the durable policy text in \`knowledge/references/memory.md\` for sync/deletion rules.
 EOF
 
-echo "operator_chief_memory_canonicalize: done. PROFILE=$PROFILE"
+echo "chief_memory_canonicalize: host=${HERMES_CANONICAL_HOST_LABEL} PROFILE=$PROFILE"
