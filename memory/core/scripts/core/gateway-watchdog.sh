@@ -19,6 +19,8 @@
 #   WATCHDOG_MAX_BACKOFF_SECONDS (default 600), WATCHDOG_JITTER_MAX_SECONDS (default 20)
 #   HERMES_GATEWAY_WATCHDOG_ENFORCE_SINGLE — passed through to watchdog-check (default on in Python)
 #   WATCHDOG_DEDUPE_EACH_TICK (default 1) — run Python singleton dedupe every loop (before health check)
+#   WATCHDOG_REQUIRE_ALL_PLATFORMS — default 1: export HERMES_GATEWAY_WATCHDOG_REQUIRE_ALL_PLATFORMS=1
+#     unless that var is already set (strict: every configured platform must be connected). Set 0 for ≥1-connected.
 
 set -euo pipefail
 
@@ -43,6 +45,20 @@ export HERMES_HOME
 
 HERMES_HOME="$(readlink -f "$HERMES_HOME" 2>/dev/null || echo "$HERMES_HOME")"
 export HERMES_HOME
+
+# Strict watchdog health: every configured messaging platform must be `connected`, so a
+# dropped WhatsApp/Telegram/Slack adapter fails `watchdog-check` and triggers recovery.
+# The stock shell watchdog defaults to strict. Set WATCHDOG_REQUIRE_ALL_PLATFORMS=0 for
+# the legacy ≥1-connected mode, or set HERMES_GATEWAY_WATCHDOG_REQUIRE_ALL_PLATFORMS
+# yourself (this block does not override an already-exported HERMES_* value).
+if [[ -z "${HERMES_GATEWAY_WATCHDOG_REQUIRE_ALL_PLATFORMS+x}" ]]; then
+  : "${WATCHDOG_REQUIRE_ALL_PLATFORMS:=1}"
+  if [[ "$WATCHDOG_REQUIRE_ALL_PLATFORMS" == "1" ]]; then
+    export HERMES_GATEWAY_WATCHDOG_REQUIRE_ALL_PLATFORMS=1
+  elif [[ "$WATCHDOG_REQUIRE_ALL_PLATFORMS" == "0" ]]; then
+    export HERMES_GATEWAY_WATCHDOG_REQUIRE_ALL_PLATFORMS=0
+  fi
+fi
 
 LOG_DIR="${HERMES_HOME}/logs"
 mkdir -p "$LOG_DIR"

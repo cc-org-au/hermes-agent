@@ -22,6 +22,8 @@ The messaging gateway is a long-lived process that should stay up and keep messa
 
 Under `platforms`, **at least one** adapter has `state: connected`. Hermes does **not** require every platform to be connected in this mode. For example, Slack can be healthy while WhatsApp is `reconnecting` or `fatal`; the check still passes so a flaky bridge does not force restarts that tear down healthy adapters.
 
+**CLI note:** `hermes gateway watchdog-check` uses this lenient rule **unless** you enable strict mode (below). **`scripts/core/gateway-watchdog.sh`** instead defaults to **strict** (`WATCHDOG_REQUIRE_ALL_PLATFORMS=1` → `HERMES_GATEWAY_WATCHDOG_REQUIRE_ALL_PLATFORMS=1`) so the supervisor restarts the gateway when **any** configured platform is not `connected`. Set `WATCHDOG_REQUIRE_ALL_PLATFORMS=0` in the watchdog environment to match the lenient CLI behavior.
+
 ### Strict mode (all configured platforms connected)
 
 When **`messaging.watchdog_require_all_platforms: true`** is set in merged gateway config (`config.yaml` / `gateway.json`), or when **`HERMES_GATEWAY_WATCHDOG_REQUIRE_ALL_PLATFORMS=1`** is set in the environment (env overrides config when set to a truthy/falsey string), **every** messaging platform that Hermes considers **configured and enabled** for connection (`GatewayConfig.get_connected_platforms()`) must have `state: connected` in `gateway_state.json`. If **no** such platforms are configured, the check passes (nothing to enforce).
@@ -68,6 +70,7 @@ All variables are optional; defaults are in the script header.
 - **`HERMES_PROFILE_BASE`** — Directory that contains `profiles/` (default `~/.hermes`).
 - **`HERMES_WATCHDOG_PROFILE`** — Named profile under `profiles/<name>` when `HERMES_HOME` is not set.
 - **`HERMES_GATEWAY_WATCHDOG_REQUIRE_ALL_PLATFORMS`** — `1` / `0` / `true` / `false` forces strict or default messaging health for `watchdog-check`. When **unset**, uses **`messaging.watchdog_require_all_platforms`** from Hermes gateway config.
+- **`WATCHDOG_REQUIRE_ALL_PLATFORMS`** — shorthand read by **`gateway-watchdog.sh`** only: default **`1`** (strict) unless **`HERMES_GATEWAY_WATCHDOG_REQUIRE_ALL_PLATFORMS`** is already exported. Set **`0`** for lenient (≥1 connected) checks inside this loop.
 - **`WATCHDOG_PREFER_SYSTEMD`** — `1` (default) to try `systemctl --user restart` when `~/.config/systemd/user/hermes-gateway-*.service` exists for that profile; set `0` to always use `gateway run --replace`.
 - **`HERMES_AGENT_DIR`** — Path to the `hermes-agent` checkout containing `venv` (default `~/hermes-agent`).
 - **`WATCHDOG_INTERVAL_SECONDS`** — Seconds between checks when healthy (default `60`).
