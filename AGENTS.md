@@ -462,7 +462,11 @@ If the venv path is missing, the wrapper prints an error and exits **`127`**. En
 
 ### Org roles and `delegate_task(hermes_profile=…)`
 
-For **per-role tool and config isolation**, create named profiles from **`scripts/core/org_agent_profiles_manifest.yaml`** via **`./venv/bin/python scripts/core/bootstrap_org_agent_profiles.py`** (source profile defaults to **`chief-orchestrator`**). The chief (or any parent with the **delegation** toolset) can run a subagent under that profile using **`delegate_task`** with **`hermes_profile`** set to the profile name — **single-task only** (not combined with a multi-item **`tasks`** array). See **`scripts/templates/rem_operations/CHIEF_ORCHESTRATION_PLAYBOOK.md`** when materialized into **`HERMES_HOME/workspace/operations/`**.
+For **per-role tool and config isolation**, create named profiles from **`scripts/core/org_agent_profiles_manifest.yaml`** via **`./venv/bin/python scripts/core/bootstrap_org_agent_profiles.py`** (source profile defaults to **`chief-orchestrator`**). The chief (or any parent with the **delegation** toolset) can run a subagent under that profile using **`delegate_task`** with **`hermes_profile`** set to the profile name — **single-task only** (not combined with a multi-item **`tasks`** array). See **`memory/core/scripts/templates/rem_operations/CHIEF_ORCHESTRATION_PLAYBOOK.md`** when materialized into **`HERMES_HOME/workspace/operations/`**.
+
+**Single messaging gateway:** Delegate profiles are **not** separate long-lived `gateway run` instances. Platform traffic and **`gateway watchdog-check`** use the **orchestrator** profile that holds bot tokens (**typically `hermes -p chief-orchestrator gateway watchdog-check`**). Do not expect **`gateway_state.json`** under delegate-only profiles.
+
+**Policy paths:** Canonical org policies for delegates live under **`${HERMES_HOME}/policies/`** (often symlinked to **`~/.hermes/profiles/chief-orchestrator/policies`**). Treat **`workspace/policies/`** as an optional pipeline mirror only — not the primary canon when **`HERMES_HOME/policies`** is present.
 
 ### Rules for profile-safe code
 

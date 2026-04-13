@@ -11,8 +11,9 @@ Use this with the **chief-orchestrator** profile as the primary interactive + ga
 
 ## 2. Messaging (Slack and other surfaces)
 
-- **One gateway process** uses **one bot token** per Hermes profile. The chief profile gateway can serve **multiple channels** where the app is invited, constrained by **`SLACK_ALLOWED_CHANNELS`** / **`SLACK_ALLOWED_WORKSPACE_TEAMS`** (and analogous vars for other platforms) per policy.
-- **Directors and specialists** are normally **delegated subagents** under the chief, not separate long-lived OS processes. If a role must have its **own** bot identity, create a **separate profile + gateway** (separate token) and document the token lock / allowlist split.
+- **One `gateway run` per machine** for the **orchestrator** profile that owns platform tokens (**`chief-orchestrator`** here). That process can serve **multiple channels** where the app is invited, constrained by **`SLACK_ALLOWED_CHANNELS`** / **`SLACK_ALLOWED_WORKSPACE_TEAMS`** (and analogous vars for other platforms) per policy.
+- **Directors and specialists** are **delegated subagents** (`delegate_task` with `hermes_profile`) — they do **not** get their own gateway, `gateway_state.json`, or `hermes -p <role> gateway watchdog-check`. Use **`hermes -p chief-orchestrator gateway watchdog-check`** for health.
+- **Rare exception:** Only if a role truly needs a **separate bot identity** (distinct token), add another profile **and** another gateway — expect token-lock and ops complexity; this is **not** required for normal org delegation.
 - Materialize workspace registers: `./scripts/core/materialize_rem_operations.sh` with `HERMES_HOME` set to the chief (or target) profile.
 
 ## 3. Pipeline activation

@@ -1811,7 +1811,10 @@ DELEGATE_TASK_SCHEMA = {
         "slack_channel_admin, telegram_forum_topic, execute_code.\n"
         "- Each subagent gets its own terminal session (separate working directory and state).\n"
         "- Optional hermes_profile: run the subagent under that named Hermes profile's "
-        "HERMES_HOME (toolsets, keys, gateway state isolated). Single-task only; "
+        "HERMES_HOME (config, toolsets, keys, sessions — isolated from the parent). "
+        "This does **not** start a second messaging gateway: the live "
+        "`gateway run` on this host stays the orchestrator profile (e.g. chief-orchestrator); "
+        "delegates are in-process subagents. Single-task only; "
         "create profiles with scripts/core/bootstrap_org_agent_profiles.py.\n"
         "- Prefer ``hand_off_to_profile`` when explicitly handing off to another role profile "
         "(same mechanics as hermes_profile delegation).\n"
@@ -1881,7 +1884,8 @@ DELEGATE_TASK_SCHEMA = {
                 "description": (
                     "Named Hermes profile (under ~/.hermes/profiles/<name>) whose HERMES_HOME "
                     "the subagent uses for config, tool availability, and filesystem scope. "
-                    "Must be omitted when using batch tasks[] with more than one item."
+                    "Does not spawn a separate gateway — messaging stays on the host's single "
+                    "orchestrator gateway. Must be omitted when using batch tasks[] with more than one item."
                 ),
             },
         },

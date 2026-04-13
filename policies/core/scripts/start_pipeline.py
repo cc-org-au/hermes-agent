@@ -279,7 +279,15 @@ def main() -> int:
         if args.write_governance_md is not None:
             tpl = args.governance_template
             if tpl is None:
-                tpl = REPO_ROOT / "scripts" / "templates" / "hermes_home_governance.md"
+                tpl = (
+                    REPO_ROOT
+                    / "memory"
+                    / "runtime"
+                    / "tasks"
+                    / "templates"
+                    / "script-templates"
+                    / "hermes_home_governance.md"
+                )
             else:
                 tpl = tpl.expanduser().resolve()
             if not tpl.is_file():
