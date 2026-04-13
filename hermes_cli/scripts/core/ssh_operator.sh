@@ -16,10 +16,11 @@
 # Sudo: this script does **not** run **sudo** (no **sudo -S** / env password, unlike ssh_droplet). Optional
 # **HERMES_OPERATOR_SSH_NO_TTY=1** uses **ssh -T** for automation that must not allocate a PTY.
 #
-# When **MACMINI_SSH_LAN_IP** is set (two targets): default try order is Tailscale (**MACMINI_SSH_HOST**) then LAN.
-# Set **MACMINI_SSH_TRY_LAN_FIRST=1** to try LAN first (skips a slow timeout when **MACMINI_SSH_HOST** is a stale 100.x
-# and you are on the same LAN). Non-final hops use **HERMES_OPERATOR_SSH_PRIMARY_CONNECT_TIMEOUT** (default **8**);
-# last hop uses **HERMES_OPERATOR_SSH_CONNECT_TIMEOUT** (default **30**). **HERMES_OPERATOR_SSH_VERBOSE_TRY=1** prints every target.
+# When **MACMINI_SSH_LAN_IP** is set (two targets) and **MACMINI_SSH_TRY_LAN_FIRST** is not set in the env file or the
+# shell, the script **defaults to LAN first** so a broken workstation Tailscale path does not wait out **ConnectTimeout**
+# on **100.x** before every session. Set **MACMINI_SSH_TRY_LAN_FIRST=0** in **~/.env/.env** (or export it) to keep
+# Tailscale-first. Non-final hops use **HERMES_OPERATOR_SSH_PRIMARY_CONNECT_TIMEOUT** (default **8**); last hop uses
+# **HERMES_OPERATOR_SSH_CONNECT_TIMEOUT** (default **30**). **HERMES_OPERATOR_SSH_VERBOSE_TRY=1** prints every target.
 #
 # Usage:
 #   ./ssh_operator.sh
@@ -37,7 +38,9 @@ MACMINI_USER=""
 MACMINI_HOST=""
 MACMINI_PORT="52822"
 MACMINI_SSH_LAN_IP="${MACMINI_SSH_LAN_IP:-}"
-MACMINI_SSH_TRY_LAN_FIRST="${MACMINI_SSH_TRY_LAN_FIRST:-0}"
+_TRY_LAN_FIRST_FROM_FILE=0
+_OP_TRY_LAN_WAS_SET=0
+[[ -n "${MACMINI_SSH_TRY_LAN_FIRST+x}" ]] && _OP_TRY_LAN_WAS_SET=1
 HERMES_OPERATOR_REPO_REMOTE=""
 _ALLOW_ENV_PASS_FROM_FILE=0
 _RAW_SSH_PASSPHRASE=""
@@ -59,7 +62,10 @@ while IFS= read -r line || [[ -n "$line" ]]; do
       ;;
     MACMINI_SSH_PORT) MACMINI_PORT="${val}" ;;
     MACMINI_SSH_LAN_IP) MACMINI_SSH_LAN_IP="${val}" ;;
-    MACMINI_SSH_TRY_LAN_FIRST) MACMINI_SSH_TRY_LAN_FIRST="${val}" ;;
+    MACMINI_SSH_TRY_LAN_FIRST)
+      MACMINI_SSH_TRY_LAN_FIRST="${val}"
+      _TRY_LAN_FIRST_FROM_FILE=1
+      ;;
     MACMINI_SSH_KEY) KEY_FILE="${val}" ;;
     HERMES_OPERATOR_REPO) HERMES_OPERATOR_REPO_REMOTE="${val}" ;;
     HERMES_OPERATOR_ALLOW_ENV_PASSPHRASE)
@@ -72,6 +78,16 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     SSH_PASSPHRASE) _RAW_SSH_PASSPHRASE="${val}" ;;
   esac
 done <"$ENV_FILE"
+
+if [[ "${_TRY_LAN_FIRST_FROM_FILE}" -eq 0 && "${_OP_TRY_LAN_WAS_SET}" -eq 0 ]]; then
+  if [[ -n "${MACMINI_SSH_LAN_IP}" && "${MACMINI_SSH_LAN_IP}" != "${MACMINI_HOST}" ]]; then
+    MACMINI_SSH_TRY_LAN_FIRST=1
+  else
+    MACMINI_SSH_TRY_LAN_FIRST="${MACMINI_SSH_TRY_LAN_FIRST:-0}"
+  fi
+else
+  MACMINI_SSH_TRY_LAN_FIRST="${MACMINI_SSH_TRY_LAN_FIRST:-0}"
+fi
 
 MACMINI_USER="${MACMINI_USER:-operator}"
 [[ -n "$MACMINI_HOST" ]] || {

@@ -5,8 +5,9 @@
 # plus optional MACMINI_SSH_LAN_IP for same-LAN fallback when Tailscale is wedged after a
 # Wi‑Fi change (Screen Sharing still works via 192.168.x.x but TS SSH times out).
 #
-# Try order (deduped): Tailscale host (MACMINI_SSH_HOST), then MACMINI_SSH_LAN_IP — unless **MACMINI_SSH_TRY_LAN_FIRST=1**
-# in ~/.env/.env (then LAN first; use at home when 100.x is stale).
+# Try order (deduped): when **MACMINI_SSH_LAN_IP** is set and **MACMINI_SSH_TRY_LAN_FIRST** is unset (env + file),
+# **LAN first** (same default as **ssh_operator.sh**). Otherwise Tailscale (**MACMINI_SSH_HOST**) then LAN unless
+# **MACMINI_SSH_TRY_LAN_FIRST=1** is set explicitly. Set **MACMINI_SSH_TRY_LAN_FIRST=0** in **~/.env/.env** for Tailscale-first.
 # With two targets: first hop uses **HERMES_OPERATOR_SSH_PRIMARY_CONNECT_TIMEOUT** (default **8**);
 # last hop uses **HERMES_OPERATOR_SSH_CONNECT_TIMEOUT** (default **20** here). **HERMES_OPERATOR_SSH_VERBOSE_TRY=1**
 # prints every attempt (default: only fallback).
@@ -30,6 +31,7 @@ _ef_port=""
 _ef_user=""
 _ef_lan=""
 _ef_try_lan_first=""
+_try_lan_key_seen_in_file=0
 if [[ -f "$ENV_FILE" ]]; then
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
@@ -51,7 +53,10 @@ if [[ -f "$ENV_FILE" ]]; then
       MACMINI_SSH_PORT) _ef_port="${val}" ;;
       MACMINI_SSH_USER) _ef_user="${val}" ;;
       MACMINI_SSH_LAN_IP) _ef_lan="${val}" ;;
-      MACMINI_SSH_TRY_LAN_FIRST) _ef_try_lan_first="${val}" ;;
+      MACMINI_SSH_TRY_LAN_FIRST)
+        _ef_try_lan_first="${val}"
+        _try_lan_key_seen_in_file=1
+        ;;
     esac
   done <"$ENV_FILE"
 fi
@@ -60,6 +65,10 @@ HOST="${OPERATOR_TAILSCALE_HOST:-${MACMINI_SSH_HOST:-${_ef_host:-100.67.17.9}}}"
 PORT="${OPERATOR_SSH_PORT:-${MACMINI_SSH_PORT:-${_ef_port:-52822}}}"
 USER_NAME="${OPERATOR_SSH_USER:-${MACMINI_SSH_USER:-${_ef_user:-operator}}}"
 LAN_IP="${MACMINI_SSH_LAN_IP:-${_ef_lan:-}}"
+
+if [[ -n "${LAN_IP}" && "${LAN_IP}" != "${HOST}" && "${_try_lan_key_seen_in_file}" -eq 0 && -z "${MACMINI_SSH_TRY_LAN_FIRST+x}" ]]; then
+  MACMINI_SSH_TRY_LAN_FIRST=1
+fi
 
 _resolve_breakglass_key() {
   local f
