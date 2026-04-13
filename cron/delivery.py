@@ -136,6 +136,7 @@ _COT_LINE_PREFIXES = (
     "overall effective state",
     "appropriate action is",
     "nothing new to report",
+    "the current gateway state",
 )
 
 _RE_SILENT_BRACKET = re.compile(
@@ -308,12 +309,76 @@ def _suppress_meta_fluff(body: str) -> bool:
 
 
 def _silent_stand_in_prose(low: str) -> bool:
-    """[Silently …], (silently …), etc. — treat as no delivery, not content."""
+    """[Silently …], (silently …), bare 'Silently no change…]', etc."""
     if _RE_SILENTLY_BRACKET.search(low):
         return True
     if re.search(r"\bsilently\s+no\s+(change|update|alert)\b", low):
         return True
+    # Missing '[' (model typo): "Silently no change and no alert sent]"
+    if re.search(r"^\s*silently\s+no\s+change\b", low, re.M):
+        return True
+    if re.search(r"\bsilently\b[^\n\[]{0,120}\]", low):
+        return True
     return False
+
+
+_CRON_STRUCTURED_EVIDENCE_MARKERS = (
+    "all_connected",
+    "watchdog-check",
+    "watchdog:",
+    "watchdog ",
+    "gateway_state",
+    "gateway.pid",
+    "connected:",
+    "ok all_connected",
+    "start-limit",
+    "start limit",
+)
+
+
+def _cron_response_has_structured_evidence(low: str) -> bool:
+    """Watchdog-style lines worth delivering; prose like 'WhatsApp is down' alone is not."""
+    if any(m in low for m in _CRON_STRUCTURED_EVIDENCE_MARKERS):
+        return True
+    if re.search(r"\b(sev\s*[012]|sev\d)\b", low):
+        return True
+    if re.search(r"\b(telegram|slack|whatsapp)\s*[=:]", low):
+        return True
+    if re.search(r"[:]\s*(fatal|down|up|ok|connected|disconnected)\b", low):
+        return True
+    return False
+
+
+def _cron_narrative_no_evidence_suppresses(low: str) -> bool:
+    """
+    Same-state / 'silent' / web-search essay without tool output — never message this.
+    Droplet cron jobs were burning tokens delivering this repeatedly.
+    """
+    fluff_markers = (
+        "remains silent",
+        "system remains silent",
+        "as per the rules",
+        "no transition",
+        "not resended",
+        "not been resended",
+        "unchanged state",
+        "consistent with the previous",
+        "state has not transitioned",
+        "have not changed",
+        "no alert has been",
+        "web search",
+        "support documentation",
+        "i will not resend",
+        "will not resend",
+        "last sent message",
+        "message hash",
+        "availability resources",
+    )
+    if not any(m in low for m in fluff_markers):
+        return False
+    if _cron_response_has_structured_evidence(low):
+        return False
+    return True
 
 
 def _line_exempt_from_cot_strip(line: str) -> bool:
@@ -374,6 +439,8 @@ def _response_means_silent(text: str) -> bool:
     s = _normalize_silent_brackets(str(text).strip())
     low = s.lower()
     if _silent_stand_in_prose(low):
+        return True
+    if _cron_narrative_no_evidence_suppresses(low):
         return True
     if _announces_remain_silent(low):
         return True
@@ -445,7 +512,10 @@ def _pick_delivery_paragraph(body: str, max_chars: int) -> str:
         joined = "\n".join(tail)
     if len(joined) > max_chars:
         joined = joined[: max_chars - 1].rstrip() + "…"
-    return joined.strip()
+    joined = joined.strip()
+    if _cron_narrative_no_evidence_suppresses(joined.lower()):
+        return ""
+    return joined
 
 
 def sanitize_cron_deliver_content(
@@ -499,6 +569,8 @@ def sanitize_cron_deliver_content(
             return "", True
         if _suppress_meta_fluff(out):
             return "", True
+        if _cron_narrative_no_evidence_suppresses(out.lower()):
+            return "", True
         return out, False
 
     out = _pick_delivery_paragraph(body, max_chars)
@@ -509,6 +581,8 @@ def sanitize_cron_deliver_content(
     if _vague_operational_claim_only(out):
         return "", True
     if _suppress_meta_fluff(out):
+        return "", True
+    if _cron_narrative_no_evidence_suppresses(out.lower()):
         return "", True
     return out, False
 

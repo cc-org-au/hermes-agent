@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from typing import Optional, Tuple
 
@@ -117,6 +118,15 @@ def try_parse_cron_delivery_envelope(
 
 
 def cron_strict_delivery_envelope() -> bool:
+    """
+    When true, messaging requires a valid ###HERMES_CRON_DELIVERY_JSON block.
+
+    Set HERMES_CRON_STRICT_DELIVERY_ENVELOPE=1 in the profile .env (e.g. droplet) so only
+    deterministic JSON lines are delivered, without editing config.yaml.
+    """
+    ev = (os.environ.get("HERMES_CRON_STRICT_DELIVERY_ENVELOPE") or "").strip().lower()
+    if ev in ("1", "true", "yes", "on"):
+        return True
     try:
         cfg = load_config()
         return bool(cfg.get("cron", {}).get("strict_delivery_envelope", False))

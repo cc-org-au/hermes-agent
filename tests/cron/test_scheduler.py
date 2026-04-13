@@ -987,6 +987,52 @@ class TestSanitizeCronDeliverContent:
         _body, skip = sanitize_cron_deliver_content(raw, 600, strict_delivery_envelope=True)
         assert skip is True
 
+    def test_bare_silently_no_change_bracket_typo_suppresses(self):
+        raw = "Silently no change and no alert sent]"
+        _body, skip = sanitize_cron_deliver_content(raw, 600)
+        assert skip is True
+
+    def test_web_search_essay_remains_silent_no_evidence_suppresses(self):
+        raw = (
+            "The current state indicates that the WhatsApp gateway is down, with no active "
+            "platform connections, and a recent hash for the last sent message. Web search "
+            "and availability resources confirm ongoing issues.\n\n"
+            "Given the unchanged state, I will not resend a message. "
+            "I will respond with [SILENT]."
+        )
+        _body, skip = sanitize_cron_deliver_content(raw, 600)
+        assert skip is True
+
+    def test_gateway_state_remains_silent_no_watchdog_suppresses(self):
+        raw = (
+            "The current gateway state indicates that WhatsApp is down, with no active "
+            "platform connections, consistent with the previous state. "
+            "No alert has been resended since there is no transition. "
+            "The system remains silent as per the rules."
+        )
+        _body, skip = sanitize_cron_deliver_content(raw, 600)
+        assert skip is True
+
+    def test_web_search_with_real_watchdog_still_delivers(self):
+        raw = (
+            "Web search says outages happen.\n"
+            "watchdog-check: ok all_connected=whatsapp,telegram\n"
+            "The system remains silent otherwise."
+        )
+        body, skip = sanitize_cron_deliver_content(raw, 600)
+        assert skip is False
+        assert "all_connected" in body
+
+    def test_strict_envelope_env_overrides_config(self, monkeypatch):
+        monkeypatch.setenv("HERMES_CRON_STRICT_DELIVERY_ENVELOPE", "1")
+        with patch(
+            "cron.delivery_envelope.load_config",
+            return_value={"cron": {"strict_delivery_envelope": False}},
+        ):
+            from cron.delivery_envelope import cron_strict_delivery_envelope
+
+            assert cron_strict_delivery_envelope() is True
+
 
 class TestBuildJobPromptSilentHint:
     """Verify _build_job_prompt always injects deterministic JSON envelope guidance."""
