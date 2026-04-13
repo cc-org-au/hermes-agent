@@ -725,10 +725,9 @@ DEFAULT_CONFIG = {
         # HERMES_INFERENCE_PROVIDER.
         #
         # OpenRouter's API accepts ``openrouter/free`` (Free Models Router — same URL as docs).
-        # Main-agent path passes that string through by default (``api_use_native_free_router`` in
-        # routing canon) so OpenRouter applies account data-policy filtering server-side. Cron here
-        # still defaults to a **concrete** ``…:free`` slug for predictable, catalog-listed ids in job logs.
-        "default_model": "meta-llama/llama-3.3-70b-instruct:free",
+        # Cron jobs now default to that router directly so all scheduled work consistently starts
+        # on the free-tier OpenRouter path unless a job explicitly overrides it.
+        "default_model": "openrouter/free",
         "default_provider": "openrouter",
         # Wrap delivered cron responses with a header (task name) and footer
         # ("The agent cannot see this message").  Set to false for clean output.
@@ -743,7 +742,7 @@ DEFAULT_CONFIG = {
         # When true, cron messaging requires a valid ###HERMES_CRON_DELIVERY_JSON block;
         # missing/invalid JSON suppresses delivery (deterministic policy). Per-job override:
         # job["strict_delivery_envelope"] in jobs.json.
-        "strict_delivery_envelope": False,
+        "strict_delivery_envelope": True,
     },
 
     # Optional paths to cloned third-party repos for /paperclip and /autoresearch helpers.
@@ -754,7 +753,7 @@ DEFAULT_CONFIG = {
     },
 
     # Config schema version - bump this when adding new required fields
-    "_config_version": 40,
+    "_config_version": 42,
 }
 
 # =============================================================================
@@ -764,6 +763,7 @@ DEFAULT_CONFIG = {
 # Track which env vars were introduced in each config version.
 # Migration only mentions vars new since the user's previous version.
 ENV_VARS_BY_VERSION: Dict[int, List[str]] = {
+    42: [],
     32: [],
     31: [],
     30: [],
@@ -913,7 +913,7 @@ OPTIONAL_ENV_VARS = {
         "advanced": True,
     },
     "MACMINI_SSH_LAN_IP": {
-        "description": "Mac mini LAN IPv4 (e.g. 192.168.1.61) for ssh-operator-breakglass / ssh_operator fallback when Tailscale is wedged after Wi‑Fi change; mini must ListenAddress this IP (see operator_mini_add_lan_listenaddress_sshd.sh).",
+        "description": "Mac mini LAN IPv4 (e.g. 192.168.1.25) for ssh_operator / ssh-operator-breakglass when Tailscale times out on LAN; mini must listen on this address (operator_mini_install_ssh_lan_resilience.sh).",
         "prompt": "Mac mini LAN IP for SSH fallback (optional)",
         "url": None,
         "password": False,
@@ -921,7 +921,7 @@ OPTIONAL_ENV_VARS = {
         "advanced": True,
     },
     "MACMINI_SSH_TRY_LAN_FIRST": {
-        "description": "If 1/true, ssh_operator / ssh-operator-breakglass try MACMINI_SSH_LAN_IP before MACMINI_SSH_HOST when both are set (avoids Tailscale connect timeout when the 100.x address is stale but you are on LAN). Leave unset when connecting from outside the LAN so Tailscale is tried first.",
+        "description": "If 1/true, ssh_operator / ssh-operator-breakglass try MACMINI_SSH_LAN_IP before MACMINI_SSH_HOST when both are set. When **unset** in ~/.env/.env but LAN_IP differs from HOST, ssh_operator defaults to **LAN first** (same as breakglass). Set **0** for Tailscale-first when you are usually remote.",
         "prompt": "Try LAN before Tailscale for operator SSH (optional, 0/1)",
         "url": None,
         "password": False,
@@ -3152,6 +3152,63 @@ def migrate_config(interactive: bool = True, quiet: bool = False) -> Dict[str, A
                 print(f"  ⚠ v40 migration skipped: {e}")
             results["warnings"].append(f"v40 migration: {e}")
             merge_user_config_yaml({"_config_version": 40})
+
+    # ── Version 40 → 41: rewrite stale paid cron default to the free cron model ──
+    if current_ver < 41:
+        try:
+            cfg_now = load_config()
+            cron = cfg_now.get("cron") or {}
+            cm = str(cron.get("default_model") or "").strip().lower()
+            payload: dict = {"_config_version": 41}
+            if cm in {"gpt-4o-mini", "openai/gpt-4o-mini"}:
+                payload["cron"] = {
+                    **(cron if isinstance(cron, dict) else {}),
+                    "default_model": DEFAULT_CONFIG["cron"]["default_model"],
+                    "default_provider": str(
+                        cron.get("default_provider") or DEFAULT_CONFIG["cron"]["default_provider"]
+                    ).strip()
+                    or DEFAULT_CONFIG["cron"]["default_provider"],
+                }
+            merge_user_config_yaml(payload)
+            if not quiet:
+                if cm in {"gpt-4o-mini", "openai/gpt-4o-mini"}:
+                    print(
+                        "  ✓ v41: cron.default_model openai/gpt-4o-mini → "
+                        f"{DEFAULT_CONFIG['cron']['default_model']}"
+                    )
+                else:
+                    print("  ✓ v41: config version bump")
+        except Exception as e:
+            if not quiet:
+                print(f"  ⚠ v41 migration skipped: {e}")
+            results["warnings"].append(f"v41 migration: {e}")
+            merge_user_config_yaml({"_config_version": 41})
+
+    # ── Version 41 → 42: force cron onto openrouter/free + strict envelope ──
+    if current_ver < 42:
+        try:
+            cfg_now = load_config()
+            cron = cfg_now.get("cron") or {}
+            payload = {
+                "_config_version": 42,
+                "cron": {
+                    **(cron if isinstance(cron, dict) else {}),
+                    "default_model": DEFAULT_CONFIG["cron"]["default_model"],
+                    "default_provider": DEFAULT_CONFIG["cron"]["default_provider"],
+                    "strict_delivery_envelope": True,
+                },
+            }
+            merge_user_config_yaml(payload)
+            if not quiet:
+                print(
+                    "  ✓ v42: cron.default_model -> openrouter/free; "
+                    "cron.strict_delivery_envelope -> true"
+                )
+        except Exception as e:
+            if not quiet:
+                print(f"  ⚠ v42 migration skipped: {e}")
+            results["warnings"].append(f"v42 migration: {e}")
+            merge_user_config_yaml({"_config_version": 42})
 
     if current_ver < latest_ver and not quiet:
         print(f"Config version: {current_ver} → {latest_ver}")

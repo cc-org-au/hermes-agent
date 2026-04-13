@@ -3,9 +3,10 @@
 #
 # Credentials: HERMES_OPERATOR_ENV or ~/.env/.env (same file as droplet is fine):
 #   MACMINI_SSH_USER (default operator), MACMINI_SSH_HOST, MACMINI_SSH_PORT (default 52822),
-#   optional MACMINI_SSH_LAN_IP — second try when Tailscale path fails (mini must ListenAddress it;
-#     see operator_mini_add_lan_listenaddress_sshd.sh),
 #   optional MACMINI_SSH_KEY in the env file (else SSH_KEY_FILE or ~/.env/.ssh_key)
+#   optional MACMINI_SSH_LAN_IP — when set (and differs from MACMINI_SSH_HOST), try LAN first by default
+#     with HERMES_OPERATOR_SSH_PRIMARY_CONNECT_TIMEOUT (default 8s), then Tailscale with
+#     HERMES_OPERATOR_SSH_CONNECT_TIMEOUT (default 30s). Set MACMINI_SSH_TRY_LAN_FIRST=0 for TS-first.
 #   optional HERMES_OPERATOR_REPO — absolute path on the mini (e.g. /Users/operator/hermes-agent)
 #   optional HERMES_OPERATOR_ALLOW_ENV_PASSPHRASE or HERMES_DROPLET_ALLOW_ENV_PASSPHRASE + SSH_PASSPHRASE
 #   for encrypted keys without TTY (shared ~/.env)
@@ -14,13 +15,7 @@
 # ASKPASS — type the key passphrase at the prompt (same pattern as ssh_droplet.sh).
 #
 # Sudo: this script does **not** run **sudo** (no **sudo -S** / env password, unlike ssh_droplet). Optional
-# **HERMES_OPERATOR_SSH_NO_TTY=1** uses **ssh -T** for automation that must not allocate a PTY.
-#
-# When **MACMINI_SSH_LAN_IP** is set (two targets) and **MACMINI_SSH_TRY_LAN_FIRST** is not set in the env file or the
-# shell, the script **defaults to LAN first** so a broken workstation Tailscale path does not wait out **ConnectTimeout**
-# on **100.x** before every session. Set **MACMINI_SSH_TRY_LAN_FIRST=0** in **~/.env/.env** (or export it) to keep
-# Tailscale-first. Non-final hops use **HERMES_OPERATOR_SSH_PRIMARY_CONNECT_TIMEOUT** (default **8**); last hop uses
-# **HERMES_OPERATOR_SSH_CONNECT_TIMEOUT** (default **30**). **HERMES_OPERATOR_SSH_VERBOSE_TRY=1** prints every target.
+# **HERMES_OPERATOR_SSH_NO_TTY=1** uses **ssh -T** (no PTY).
 #
 # Usage:
 #   ./ssh_operator.sh
@@ -37,13 +32,12 @@ KEY_FILE="${MACMINI_SSH_KEY:-${SSH_KEY_FILE:-${HOME}/.env/.ssh_key}}"
 MACMINI_USER=""
 MACMINI_HOST=""
 MACMINI_PORT="52822"
-MACMINI_SSH_LAN_IP="${MACMINI_SSH_LAN_IP:-}"
-_TRY_LAN_FIRST_FROM_FILE=0
-_OP_TRY_LAN_WAS_SET=0
-[[ -n "${MACMINI_SSH_TRY_LAN_FIRST+x}" ]] && _OP_TRY_LAN_WAS_SET=1
 HERMES_OPERATOR_REPO_REMOTE=""
 _ALLOW_ENV_PASS_FROM_FILE=0
 _RAW_SSH_PASSPHRASE=""
+_MACMINI_LAN_IP_READ=""
+_TRY_LAN_FIRST_READ=""
+_TRY_LAN_FIRST_IN_FILE=0
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "ssh_operator.sh: missing env file ${ENV_FILE} (set HERMES_OPERATOR_ENV)" >&2
@@ -61,12 +55,12 @@ while IFS= read -r line || [[ -n "$line" ]]; do
       [[ "$val" != *"@"* ]] && MACMINI_HOST="${val}"
       ;;
     MACMINI_SSH_PORT) MACMINI_PORT="${val}" ;;
-    MACMINI_SSH_LAN_IP) MACMINI_SSH_LAN_IP="${val}" ;;
-    MACMINI_SSH_TRY_LAN_FIRST)
-      MACMINI_SSH_TRY_LAN_FIRST="${val}"
-      _TRY_LAN_FIRST_FROM_FILE=1
-      ;;
     MACMINI_SSH_KEY) KEY_FILE="${val}" ;;
+    MACMINI_SSH_LAN_IP) _MACMINI_LAN_IP_READ="${val}" ;;
+    MACMINI_SSH_TRY_LAN_FIRST)
+      _TRY_LAN_FIRST_READ="${val}"
+      _TRY_LAN_FIRST_IN_FILE=1
+      ;;
     HERMES_OPERATOR_REPO) HERMES_OPERATOR_REPO_REMOTE="${val}" ;;
     HERMES_OPERATOR_ALLOW_ENV_PASSPHRASE)
       case "$val" in 1|true|TRUE|True|yes|YES) _ALLOW_ENV_PASS_FROM_FILE=1 ;; esac
@@ -79,16 +73,6 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   esac
 done <"$ENV_FILE"
 
-if [[ "${_TRY_LAN_FIRST_FROM_FILE}" -eq 0 && "${_OP_TRY_LAN_WAS_SET}" -eq 0 ]]; then
-  if [[ -n "${MACMINI_SSH_LAN_IP}" && "${MACMINI_SSH_LAN_IP}" != "${MACMINI_HOST}" ]]; then
-    MACMINI_SSH_TRY_LAN_FIRST=1
-  else
-    MACMINI_SSH_TRY_LAN_FIRST="${MACMINI_SSH_TRY_LAN_FIRST:-0}"
-  fi
-else
-  MACMINI_SSH_TRY_LAN_FIRST="${MACMINI_SSH_TRY_LAN_FIRST:-0}"
-fi
-
 MACMINI_USER="${MACMINI_USER:-operator}"
 [[ -n "$MACMINI_HOST" ]] || {
   echo "ssh_operator.sh: set MACMINI_SSH_HOST (or SSH_IP_OPERATOR) in ${ENV_FILE}" >&2
@@ -97,6 +81,12 @@ MACMINI_USER="${MACMINI_USER:-operator}"
 if [[ ! -f "$KEY_FILE" ]]; then
   echo "ssh_operator.sh: missing key ${KEY_FILE} (set MACMINI_SSH_KEY in ${ENV_FILE} or export MACMINI_SSH_KEY / SSH_KEY_FILE)" >&2
   exit 1
+fi
+
+# Shell env wins over file (same pattern as ssh-operator-breakglass.sh).
+MACMINI_SSH_LAN_IP="${MACMINI_SSH_LAN_IP:-${_MACMINI_LAN_IP_READ:-}}"
+if [[ -n "${MACMINI_SSH_LAN_IP}" && "${MACMINI_SSH_LAN_IP}" != "${MACMINI_HOST}" && "${_TRY_LAN_FIRST_IN_FILE}" -eq 0 && -z "${MACMINI_SSH_TRY_LAN_FIRST+x}" ]]; then
+  MACMINI_SSH_TRY_LAN_FIRST=1
 fi
 
 if [[ "${HERMES_OPERATOR_WORKSTATION_CLI:-0}" == "1" ]]; then
@@ -126,88 +116,70 @@ fi
 
 unset SSH_PASSPHRASE 2>/dev/null || true
 
-# Default: force a PTY (**ssh -tt**) for interactive shells; use **HERMES_OPERATOR_SSH_NO_TTY=1** for plain **ssh -T**.
 _USE_TT=1
 if [[ "${HERMES_OPERATOR_SSH_NO_TTY:-0}" == "1" ]]; then
   _USE_TT=0
 fi
 
-_operator_build_ssh_flags() {
-  local _cto="$1"
-  _SSH_FLAGS=(
-    -o BatchMode=no
-    -o IdentitiesOnly=yes
-    -o IdentityAgent=none
-    -o AddKeysToAgent=no
-    -o ControlMaster=no
-    -o ControlPath=none
-    -o StrictHostKeyChecking=accept-new
-    -o ConnectTimeout="${_cto}"
-    -o ServerAliveInterval=10
-    -o ServerAliveCountMax=30
-    -o TCPKeepAlive=yes
-    -i "$KEY_FILE"
-    -p "${MACMINI_PORT:?}"
-  )
-  if [[ "$(uname -s)" == "Darwin" ]]; then
-    _SSH_FLAGS+=(-o UseKeychain=no)
-  fi
-  if [[ "$_USE_TT" == "1" ]]; then
-    _SSH_FLAGS+=(-o RequestTTY=force)
-  fi
-}
+CTO_FINAL="${HERMES_OPERATOR_SSH_CONNECT_TIMEOUT:-30}"
+CTO_QUICK="${HERMES_OPERATOR_SSH_PRIMARY_CONNECT_TIMEOUT:-8}"
 
-_set_ssh_base_host() {
-  local h="$1"
+_SSH_FLAGS_COMMON=(
+  -4
+  -o BatchMode=no
+  -o IdentitiesOnly=yes
+  -o IdentityAgent=none
+  -o AddKeysToAgent=no
+  -o ControlMaster=no
+  -o ControlPath=none
+  -o StrictHostKeyChecking=accept-new
+  -o ServerAliveInterval=10
+  -o ServerAliveCountMax=30
+  -o TCPKeepAlive=yes
+  -i "$KEY_FILE"
+  -p "${MACMINI_PORT:?}"
+)
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  _SSH_FLAGS_COMMON+=(-o UseKeychain=no)
+fi
+
+_op_build_ssh_base() {
+  local target_host="$1"
+  local cto="$2"
+  local ssh_cmd=(ssh)
   if [[ "$_USE_TT" == "1" ]]; then
-    _SSH_BASE=(ssh -tt "${_SSH_FLAGS[@]}" "${MACMINI_USER}@${h}")
+    ssh_cmd+=(-tt)
   else
-    _SSH_BASE=(ssh -T "${_SSH_FLAGS[@]}" "${MACMINI_USER}@${h}")
+    ssh_cmd+=(-T)
   fi
+  ssh_cmd+=("${_SSH_FLAGS_COMMON[@]}" -o "ConnectTimeout=${cto}" "${MACMINI_USER}@${target_host}")
+  _SSH_BASE=("${ssh_cmd[@]}")
 }
 
-_run_remote() {
+_candidate_hosts=()
+_op_add_candidate() {
+  local cand="$1"
+  [[ -z "$cand" ]] && return
+  local x
+  for x in "${_candidate_hosts[@]:-}"; do
+    [[ "$x" == "$cand" ]] && return
+  done
+  _candidate_hosts+=("$cand")
+}
+
+_try_lan_first=0
+case "${MACMINI_SSH_TRY_LAN_FIRST:-${_TRY_LAN_FIRST_READ:-0}}" in 1|true|TRUE|True|yes|YES) _try_lan_first=1 ;; esac
+if [[ "$_try_lan_first" == "1" ]]; then
+  _op_add_candidate "${MACMINI_SSH_LAN_IP:-}"
+  _op_add_candidate "${MACMINI_HOST}"
+else
+  _op_add_candidate "${MACMINI_HOST}"
+  _op_add_candidate "${MACMINI_SSH_LAN_IP:-}"
+fi
+
+_run_remote_with_base() {
   local remote_bash_cmd="$1"
   "${_SSH_ENV[@]}" "${_SSH_BASE[@]}" "bash -lc $(printf '%q' "$remote_bash_cmd")"
-}
-
-_operator_try_hosts() {
-  local remote_bash_cmd="$1"
-  local h _hosts _last=255 _n _i
-  local _cto_final="${HERMES_OPERATOR_SSH_CONNECT_TIMEOUT:-30}"
-  local _cto_quick="${HERMES_OPERATOR_SSH_PRIMARY_CONNECT_TIMEOUT:-8}"
-  local _lan="${MACMINI_SSH_LAN_IP:-}"
-  local _lan_first=0
-  case "${MACMINI_SSH_TRY_LAN_FIRST:-0}" in 1|true|TRUE|True|yes|YES) _lan_first=1 ;; esac
-  if [[ -n "$_lan" && "$_lan" != "$MACMINI_HOST" ]]; then
-    if [[ "$_lan_first" == "1" ]]; then
-      _hosts=("$_lan" "$MACMINI_HOST")
-    else
-      _hosts=("$MACMINI_HOST" "$_lan")
-    fi
-  else
-    _hosts=("$MACMINI_HOST")
-  fi
-  _n="${#_hosts[@]}"
-  for ((_i = 0; _i < _n; _i++)); do
-    h="${_hosts[$_i]}"
-    if [[ "$_n" -gt 1 && "$_i" -lt $((_n - 1)) ]]; then
-      _operator_build_ssh_flags "$_cto_quick"
-    else
-      _operator_build_ssh_flags "$_cto_final"
-    fi
-    if [[ "$_i" -gt 0 ]]; then
-      echo "[ssh_operator] fallback: trying ${MACMINI_USER}@${h}:${MACMINI_PORT} ..." >&2
-    elif [[ "${HERMES_OPERATOR_SSH_VERBOSE_TRY:-0}" == "1" ]]; then
-      echo "[ssh_operator] trying ${MACMINI_USER}@${h}:${MACMINI_PORT} ..." >&2
-    fi
-    _set_ssh_base_host "$h"
-    if _run_remote "$remote_bash_cmd"; then
-      return 0
-    fi
-    _last=$?
-  done
-  return "$_last"
 }
 
 _REPO_EXPORT=""
@@ -218,10 +190,46 @@ fi
 
 if [[ $# -eq 0 ]]; then
   _INNER="${_REPO_EXPORT}$(_operator_interactive_shell_cmd)"
-  _operator_try_hosts "$_INNER"
+else
+  _INNER="${_REPO_EXPORT}$(_operator_wrap_cmd_with_venv "$*")"
+fi
+
+_n="${#_candidate_hosts[@]}"
+if [[ "$_n" -eq 0 ]]; then
+  echo "ssh_operator.sh: no SSH target hosts (internal error)." >&2
+  exit 1
+fi
+
+if [[ "$_n" -eq 1 ]]; then
+  export HERMES_OPERATOR_SSH_DST="${MACMINI_USER}@${_candidate_hosts[0]}:${MACMINI_PORT}"
+  _op_build_ssh_base "${_candidate_hosts[0]}" "$CTO_FINAL"
+  _run_remote_with_base "$_INNER"
   exit $?
 fi
 
-_USER_CMD="$*"
-_USER_CMD="${_REPO_EXPORT}$(_operator_wrap_cmd_with_venv "$_USER_CMD")"
-_operator_try_hosts "$_USER_CMD"
+last=255
+for ((_i = 0; _i < _n; _i++)); do
+  h="${_candidate_hosts[$_i]}"
+  if [[ "$_n" -gt 1 && "$_i" -lt $((_n - 1)) ]]; then
+    _cto="$CTO_QUICK"
+  else
+    _cto="$CTO_FINAL"
+  fi
+  if [[ "$_i" -gt 0 ]]; then
+    echo "[ssh_operator] fallback: trying ${MACMINI_USER}@${h} port ${MACMINI_PORT} (ConnectTimeout=${_cto}s) ..." >&2
+  elif [[ "${HERMES_OPERATOR_SSH_VERBOSE_TRY:-0}" == "1" ]]; then
+    echo "[ssh_operator] trying ${MACMINI_USER}@${h} port ${MACMINI_PORT} (ConnectTimeout=${_cto}s) ..." >&2
+  fi
+  export HERMES_OPERATOR_SSH_DST="${MACMINI_USER}@${h}:${MACMINI_PORT}"
+  _op_build_ssh_base "$h" "$_cto"
+  if _run_remote_with_base "$_INNER"; then
+    exit 0
+  fi
+  last=$?
+done
+
+echo "[ssh_operator] all targets failed (last exit ${last})." >&2
+echo "  Laptop: tailscale status; tailscale ping <mini-ts-ip>" >&2
+echo "  ~/.env/.env: set MACMINI_SSH_LAN_IP=<mini-LAN-IPv4> when home Wi‑Fi works but TS does not" >&2
+echo "  Mini (Screen Sharing): sudo bash ~/hermes-agent/memory/core/scripts/core/operator_mini_install_ssh_lan_resilience.sh" >&2
+exit "$last"
