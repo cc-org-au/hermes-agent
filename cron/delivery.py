@@ -137,6 +137,8 @@ _RE_SILENT_BRACKET = re.compile(
     r"[\[〔【［]\s*\.?\s*silent\s*[\]〕】］]",
     re.I,
 )
+# Models invent "[Silently no change…]" instead of the literal token [SILENT].
+_RE_SILENTLY_BRACKET = re.compile(r"[\[〔【（(]\s*silently\b", re.I)
 
 _HALLUCINATION_SNIPPETS = (
     "alert audio",
@@ -300,6 +302,30 @@ def _suppress_meta_fluff(body: str) -> bool:
     return False
 
 
+def _silent_stand_in_prose(low: str) -> bool:
+    """[Silently …], (silently …), etc. — treat as no delivery, not content."""
+    if _RE_SILENTLY_BRACKET.search(low):
+        return True
+    if re.search(r"\bsilently\s+no\s+(change|update|alert)\b", low):
+        return True
+    return False
+
+
+def _line_exempt_from_cot_strip(line: str) -> bool:
+    """Do not drop lines that carry [SILENT] / silent compliance (often start with 'I will ')."""
+    ln = _normalize_silent_brackets(line.strip())
+    low = ln.lower()
+    if _RE_SILENT_BRACKET.search(low):
+        return True
+    if _RE_SILENTLY_BRACKET.search(low):
+        return True
+    if _silent_stand_in_prose(low):
+        return True
+    if _response_means_silent(ln):
+        return True
+    return False
+
+
 def _prose_announces_silent(low: str) -> bool:
     if not _RE_SILENT_BRACKET.search(low):
         return False
@@ -342,6 +368,8 @@ def _response_means_silent(text: str) -> bool:
         return True
     s = _normalize_silent_brackets(str(text).strip())
     low = s.lower()
+    if _silent_stand_in_prose(low):
+        return True
     if _announces_remain_silent(low):
         return True
     if _prose_announces_silent(low):
@@ -380,6 +408,8 @@ def _response_means_silent(text: str) -> bool:
 
 
 def _is_cot_line(line: str) -> bool:
+    if _line_exempt_from_cot_strip(line):
+        return False
     low = line.lower().strip()
     if len(low) < 30:
         return False
@@ -388,6 +418,10 @@ def _is_cot_line(line: str) -> bool:
 
 def _pick_delivery_paragraph(body: str, max_chars: int) -> str:
     chunks = [p.strip() for p in re.split(r"\n\s*\n", body) if p.strip()]
+    # Model often ends with "… I will respond with [SILENT]." in the last paragraph.
+    # Never prefer an earlier alert-looking paragraph over that conclusion.
+    if len(chunks) >= 2 and _response_means_silent(chunks[-1]):
+        return ""
     candidate = ""
     for chunk in reversed(chunks):
         if _ALERT_HINTS.search(chunk):
@@ -442,6 +476,8 @@ def sanitize_cron_deliver_content(raw: str, max_chars: int) -> tuple[str, bool]:
 
     body = "\n".join(kept).strip()
     if not body:
+        return "", True
+    if _response_means_silent(body):
         return "", True
 
     if len(body) <= 220 and body.count("\n") <= 2:

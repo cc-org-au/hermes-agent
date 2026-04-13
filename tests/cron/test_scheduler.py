@@ -928,6 +928,22 @@ class TestSanitizeCronDeliverContent:
         assert skip is False
         assert "degraded" in body.lower()
 
+    def test_silently_bracket_stand_in_suppresses(self):
+        raw = "[Silently no change and no alert sent]"
+        _body, skip = sanitize_cron_deliver_content(raw, 600)
+        assert skip is True
+
+    def test_slop_then_respond_with_silent_suppresses_entirely(self):
+        raw = (
+            "The current state indicates that the WhatsApp gateway is down, with no active "
+            "platform connections. Web search confirms ongoing issues.\n\n"
+            "Given the unchanged state and the previous alert about the down status, "
+            "I will not resend a message. The state has not transitioned, so "
+            "I will respond with [SILENT]."
+        )
+        _body, skip = sanitize_cron_deliver_content(raw, 600)
+        assert skip is True
+
 
 class TestBuildJobPromptSilentHint:
     """Verify _build_job_prompt always injects [SILENT] guidance."""
