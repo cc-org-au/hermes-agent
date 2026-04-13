@@ -76,6 +76,17 @@ def _first_channel_id(by_name: dict[str, str], names: tuple[str, ...]) -> str | 
 
 
 def main() -> int:
+    import argparse
+
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument(
+        "--skip-burst",
+        action="store_true",
+        help="After sync/filter, do not run run_slack_cron_burst_now (use when chaining "
+        "sync --refresh-prompts / --policy-checkin and archived channels would make the smoke burst exit 1).",
+    )
+    args = ap.parse_args()
+
     hh = (os.environ.get("HERMES_HOME") or "").strip()
     if not hh:
         print("Set HERMES_HOME to the chief-orchestrator profile directory.", file=sys.stderr)
@@ -235,6 +246,8 @@ role_routing:
     r = subprocess.run([str(py), str(filt)], cwd=str(repo), env=env)
     if r.returncode != 0:
         print("filter_role_routing_slack_by_env failed (non-fatal if allowlist already superset)", file=sys.stderr)
+    if args.skip_burst:
+        return 0
     env["HERMES_CRON_DELIVERY_DEDUPE"] = "0"
     r = subprocess.run([str(py), str(burst), "--ping-job-prompt"], cwd=str(repo), env=env)
     if r.returncode != 0:
