@@ -50,11 +50,12 @@ PL
 chmod 644 "$PLIST"
 
 cat >"$ANCHOR" <<'AN'
-# org.hermes — Screen Sharing (VNC) from tailnet; block inbound SSH on :22; mgmt SSH uses 52822.
-# Tailscale IPv4 uses 100.64.0.0/10 (RFC 6598). Port 5900 = macOS Screen Sharing. (ARD also uses
-# 3283 — add another pass line if you rely on it.) For LAN-only VNC without Tailscale, add a pass
-# for your RFC1918 CIDRs; do not use 0.0.0.0/0 here.
+# org.hermes — Screen Sharing (VNC) from tailnet + LAN; block inbound SSH on :22; mgmt SSH 52822.
+# Tailscale IPv4: 100.64.0.0/10 (RFC 6598). LAN: operator Screen Sharing at vnc://192.168.1.198/
+# (allow clients from 192.168.1.0/24 — change CIDR if your subnet differs). Port 5900 = VNC.
+# ARD may use 3283 — add a pass line if needed. Do not use 0.0.0.0/0 for VNC here.
 pass in quick inet proto tcp from 100.64.0.0/10 to any port 5900 flags S/SA keep state
+pass in quick inet proto tcp from 192.168.1.0/24 to any port 5900 flags S/SA keep state
 block drop in quick inet proto tcp to any port 22
 block drop in quick inet6 proto tcp to any port 22
 AN
