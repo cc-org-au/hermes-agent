@@ -83,18 +83,26 @@ if [[ $# -gt 2 ]]; then
   exit 1
 fi
 
-echo "Paste the FULL public key line (starts with ssh-ed25519 …), then Enter:"
+echo "Paste the collaborator line (full from=\"…\" ssh-ed25519 … if they sent one line), or pubkey only, then Enter:"
 read -r PUB
-echo "Paste from= CIDR only (e.g. 100.109.37.89/32) or Enter for no from= restriction:"
-read -r FROM
-
 PUB="${PUB#"${PUB%%[![:space:]]*}"}"
 PUB="${PUB%"${PUB##*[![:space:]]}"}"
+
+if [[ "$PUB" =~ ^from= ]]; then
+  _append_line "$PUB"
+  exit 0
+fi
+
+echo "Paste from= CIDR only (e.g. 100.109.37.89/32) or Enter for no from= restriction:"
+read -r FROM
 
 if ! _key_type_ok "$PUB"; then
   echo "Error: line does not look like an OpenSSH public key." >&2
   exit 1
 fi
+
+FROM="${FROM#"${FROM%%[![:space:]]*}"}"
+FROM="${FROM%"${FROM##*[![:space:]]}"}"
 
 if [[ -n "$FROM" ]]; then
   if [[ "$FROM" =~ [\ \"] ]]; then
