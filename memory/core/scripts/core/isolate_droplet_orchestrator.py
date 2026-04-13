@@ -86,9 +86,15 @@ def _patch_config(home: Path) -> None:
         msg = {}
         cfg["messaging"] = msg
     msg["slack_role_cron_leader"] = False
+    # Strict “all platforms connected” is unrealistic when this host intentionally
+    # disables Slack and may share Telegram/WhatsApp tokens with the operator gateway.
+    msg["watchdog_require_all_platforms"] = False
 
     _save_yaml(cfg_path, cfg)
-    print(f"patched {cfg_path} (platforms.slack.enabled=false, messaging.slack_role_cron_leader=false)")
+    print(
+        f"patched {cfg_path} (platforms.slack.enabled=false, "
+        "messaging.slack_role_cron_leader=false, messaging.watchdog_require_all_platforms=false)"
+    )
 
 
 _ENV_LINES = [
