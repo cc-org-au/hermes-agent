@@ -234,6 +234,8 @@ def run_job(job: dict) -> tuple[bool, str, str, Optional[str]]:
                     "skills",
                     "tts",
                     "homeassistant",
+                    "hermes_core",
+                    "todo",
                 ]
             )
 

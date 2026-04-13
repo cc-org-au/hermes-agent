@@ -439,6 +439,8 @@ class TestRunJobSessionPersistence:
             "memory",
             "session_search",
             "skills",
+            "hermes_core",
+            "todo",
         ):
             assert toolset in disabled
 
