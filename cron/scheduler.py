@@ -108,10 +108,12 @@ _RE_BRACKET_CONTEXT = re.compile(r"\[CONTEXT\s*:[^\]]*\]", re.I | re.DOTALL)
 _RE_BRACKET_CONCLUSION = re.compile(r"\[CONCLUSION\s*:[^\]]*\]", re.I | re.DOTALL)
 _RE_SHOWN_RESPONSE = re.compile(r"\[SHOWN RESPONSE\]\s*", re.I)
 
+# Require "alert:" (or similar) so prose like "no alert is necessary" is not an alert signal.
 _ALERT_HINTS = re.compile(
-    r"\b(gateway|whatsapp|telegram|slack|alert|sev\s*[012]|sev\d|down|recovered|reconnected|"
+    r"\b(gateway|whatsapp|telegram|slack|sev\s*[012]|sev\d|down|recovered|reconnected|"
     r"connected|bridge|systemd|resolved|outstanding|intervention|fatal|error|"
-    r"ok\s+all_connected|start-limit|degraded|watchdog|cron|platforms?)\b",
+    r"ok\s+all_connected|start-limit|degraded|watchdog|cron|platforms?)\b"
+    r"|\balert\s*[:\-]",
     re.I,
 )
 
@@ -160,7 +162,11 @@ _COT_LINE_PREFIXES = (
 )
 
 
-_RE_SILENT_BRACKET = re.compile(r"\[\s*\.?\s*silent\s*\]", re.I)
+# ASCII and common fullwidth / CJK brackets around SILENT.
+_RE_SILENT_BRACKET = re.compile(
+    r"[\[〔【［]\s*\.?\s*silent\s*[\]〕】］]",
+    re.I,
+)
 
 _HALLUCINATION_SNIPPETS = (
     "alert audio",
@@ -173,8 +179,22 @@ _HALLUCINATION_SNIPPETS = (
 
 
 def _normalize_silent_brackets(text: str) -> str:
-    """Fullwidth brackets from some models break [SILENT] detection."""
-    return text.replace("\u3010", "[").replace("\u3011", "]").replace("［", "[").replace("］", "]")
+    """Fullwidth / alternate brackets from some models break [SILENT] detection."""
+    t = text
+    for a, b in (
+        ("\u3010", "["),
+        ("\u3011", "]"),
+        ("［", "["),
+        ("］", "]"),
+        ("\uff3b", "["),
+        ("\uff3d", "]"),
+        ("〔", "["),
+        ("〕", "]"),
+        ("【", "["),
+        ("】", "]"),
+    ):
+        t = t.replace(a, b)
+    return t
 
 
 def _strip_hallucination_sentences(text: str) -> str:
@@ -201,6 +221,7 @@ def _cron_vague_operational_claim_only(body: str) -> bool:
     low = body.lower()
     if not any(w in low for w in ("recovered", "restored", "reconnected", "operational", "is now up")):
         return False
+    # Do not treat prose lists ("whatsapp, telegram") as tool output — require structural cues.
     evidence = (
         "watchdog",
         "all_connected",
@@ -208,11 +229,8 @@ def _cron_vague_operational_claim_only(body: str) -> bool:
         "gateway.pid",
         "connected:",
         "platforms:",
-        "telegram",
-        "slack",
         "systemctl",
         "start-limit",
-        "json",
         "`",
     )
     if any(sig in low for sig in evidence):
@@ -247,6 +265,9 @@ _CRON_META_FLUFF_RES = (
     re.compile(r"\bhope\s+this\s+(helps|message)\b", re.I),
     re.compile(r"\bsaying\s+nothing\s+has\s+changed\b", re.I),
     re.compile(r"\bmessage\s+(to\s+)?(tell|say)\s+you\b", re.I),
+    re.compile(r"\bno\s+alert\s+is\s+necessary\b", re.I),
+    re.compile(r"\bno\s+change\s+in\s+(the\s+)?(state|status)\b", re.I),
+    re.compile(r"\bwith\s+no\s+change\s+in\s+(the\s+)?(state|status)\b", re.I),
 )
 
 # Concrete artefacts operators expect (any hit raises “informative” score).
@@ -277,6 +298,27 @@ def _cron_meta_fluff_hits(body: str) -> int:
 
 def _cron_informative_signal_hits(body: str) -> int:
     return sum(1 for rx in _CRON_INFO_SIGNAL_RES if rx.search(body))
+
+
+def _cron_announces_remain_silent(low: str) -> bool:
+    """
+    Models say 'the system remains silent' instead of output-only [SILENT].
+    Suppress when that is clearly no-news prose, not a degraded/failure report.
+    """
+    if not re.search(
+        r"\b(will\s+remain\s+silent|remains?\s+silent|staying\s+silent|stay\s+silent|"
+        r"remain\s+silent|the\s+system\s+remains\s+silent|i\s+will\s+remain\s+silent|"
+        r"i\s+am\s+remaining\s+silent|i\s+will\s+stay\s+silent)\b",
+        low,
+    ):
+        return False
+    if re.search(
+        r"\b(degraded|fatal|disconnected|unstable|traceback|exception:|errno\s+|http\s*5\d\d)\b",
+        low,
+        re.I,
+    ):
+        return False
+    return _cron_informative_signal_hits(low) <= 1
 
 
 def _cron_suppress_meta_fluff(body: str) -> bool:
@@ -317,6 +359,9 @@ def _cron_prose_announces_silent(low: str) -> bool:
             "will respond",
             "respond with",
             "return exactly",
+            "i will return",
+            "will return exactly",
+            "will return ",
             "output exactly",
             "comply with",
             "comply to",
@@ -349,6 +394,8 @@ def _cron_response_means_silent(text: str) -> bool:
         return True
     s = _normalize_silent_brackets(str(text).strip())
     low = s.lower()
+    if _cron_announces_remain_silent(low):
+        return True
     if _cron_prose_announces_silent(low):
         return True
     first = s.lstrip()
@@ -766,7 +813,10 @@ def _build_job_prompt(job: dict) -> str:
         "with exactly \"[SILENT]\" (nothing else) when there is genuinely "
         "nothing new to report. [SILENT] suppresses delivery to the user. "
         "Never combine [SILENT] with content — either report your "
-        "findings normally, or say [SILENT] and nothing more.]\n\n"
+        "findings normally, or say [SILENT] and nothing more. Do not write "
+        "“I will remain silent”, “the system remains silent”, or "
+        "“I will return exactly [SILENT]” — those still notify the user; "
+        "use the token [SILENT] alone instead.]\n\n"
         "[SYSTEM — OUTPUT FORMAT (mandatory): Reply with ONLY the factual "
         "information this job is supposed to surface (numbers, states, file "
         "paths, command output, watchdog lines). Do not narrate, explain your "

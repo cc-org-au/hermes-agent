@@ -901,6 +901,33 @@ class TestSanitizeCronDeliverContent:
         _body, skip = sanitize_cron_deliver_content(raw, 600)
         assert skip is True
 
+    def test_return_exactly_silent_suppresses(self):
+        raw = (
+            "The current state indicates no change in escalation status since the last run. "
+            "Therefore, I will return exactly [SILENT]."
+        )
+        _body, skip = sanitize_cron_deliver_content(raw, 600)
+        assert skip is True
+
+    def test_system_remains_silent_prose_suppresses(self):
+        raw = (
+            "The gateway platforms are all connected (whatsapp, telegram, slack) with "
+            "no change in state since the last check. No alert is necessary, "
+            "and the system remains silent."
+        )
+        _body, skip = sanitize_cron_deliver_content(raw, 600)
+        assert skip is True
+
+    def test_degraded_bullet_alert_delivers(self):
+        raw = (
+            "• The current state indicates the WhatsApp gateway is degraded — disconnected.\n"
+            "• A transition event has been detected.\n"
+            "• Alert: WhatsApp gateway: Degraded — unstable."
+        )
+        body, skip = sanitize_cron_deliver_content(raw, 600)
+        assert skip is False
+        assert "degraded" in body.lower()
+
 
 class TestBuildJobPromptSilentHint:
     """Verify _build_job_prompt always injects [SILENT] guidance."""
