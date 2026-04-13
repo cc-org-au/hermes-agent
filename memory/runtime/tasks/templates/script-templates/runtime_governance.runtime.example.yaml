@@ -1,4 +1,4 @@
-# Copy to: HERMES_HOME/workspace/operations/runtime_governance.runtime.yaml
+# Copy to: HERMES_HOME/workspace/memory/runtime/operations/runtime_governance.runtime.yaml
 # Install: hermes workspace governance init
 #
 # Concise runtime directives injected into every new agent (CLI + gateway).

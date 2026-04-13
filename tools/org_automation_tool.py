@@ -45,7 +45,7 @@ registry.register(
         "name": "sync_org_automation",
         "description": (
             "Apply org_agent_profiles_manifest: refresh auto-sync blocks in "
-            "HERMES_HOME/workspace/operations/ORG_REGISTRY.md and ORG_CHART.md, "
+            "HERMES_HOME/workspace/memory/runtime/operations/ORG_REGISTRY.md and ORG_CHART.md, "
             "then run scripts/core/bootstrap_org_agent_profiles.py (creates/updates role profiles). "
             "Requires agent.org_automation.enabled: true in config (or ORG_AUTOMATION_ALLOW_AGENT=1). "
             "Prefer hermes workspace org-automation apply for cron/operator runs."

@@ -17,7 +17,7 @@ from typing import Any, Dict, List
 
 import yaml
 
-from hermes_constants import get_hermes_home
+from hermes_constants import get_hermes_home, get_workspace_operations_dir
 
 _SYNC_BEGIN = "<!-- HERMES_ORG_MANIFEST_SYNC:BEGIN -->"
 _SYNC_END = "<!-- HERMES_ORG_MANIFEST_SYNC:END -->"
@@ -28,7 +28,7 @@ def _repo_root() -> Path:
 
 
 def _ops_dir() -> Path:
-    return get_hermes_home() / "workspace" / "operations"
+    return get_workspace_operations_dir()
 
 
 def _load_manifest(path: Path) -> Dict[str, Any]:
@@ -100,7 +100,7 @@ def sync_org_markdown_files(
     manifest_path: Path,
     dry_run: bool,
 ) -> List[str]:
-    """Refresh auto blocks in ORG_REGISTRY.md and ORG_CHART.md under workspace/operations."""
+    """Refresh auto blocks in ORG_REGISTRY.md and ORG_CHART.md under workspace/memory/runtime/operations."""
     ops = _ops_dir()
     log: List[str] = []
     block = _render_sync_block(manifest, manifest_path)

@@ -141,6 +141,44 @@ def get_hermes_dir(new_subpath: str, old_name: str) -> Path:
     return home / new_subpath
 
 
+def get_top_level_hermes_policies_dir() -> Path:
+    """Top-level policy tree: ``~/.hermes/policies`` (outside any profile).
+
+    Distinct from :func:`get_hermes_home` / ``HERMES_HOME/policies`` when using a
+    named profile — operators may symlink this directory to the chief bundle.
+    """
+    return Path.home() / ".hermes" / "policies"
+
+
+def resolve_workspace_operations_dir(base_home: Path) -> Path:
+    """Resolve the operations directory for an explicit Hermes home (profile root).
+
+    Path: ``<base_home>/workspace/memory/runtime/operations/``.
+
+    Legacy layout ``<base_home>/workspace/operations/`` is still used when it exists
+    on disk and the new path does not (migration: run
+    ``scripts/core/migrate_workspace_operations_to_memory_runtime.sh``).
+    """
+    new_p = base_home / "workspace" / "memory" / "runtime" / "operations"
+    old_p = base_home / "workspace" / "operations"
+    if new_p.exists() or not old_p.exists():
+        return new_p
+    return old_p
+
+
+def get_workspace_operations_dir() -> Path:
+    """Canonical operational registers and governance YAML under the active profile.
+
+    Same as :func:`resolve_workspace_operations_dir` with :func:`get_hermes_home`.
+    """
+    return resolve_workspace_operations_dir(get_hermes_home())
+
+
+def get_workspace_knowledge_projects_dir() -> Path:
+    """Canonical project knowledge tree: ``HERMES_HOME/workspace/memory/knowledge/projects/``."""
+    return get_hermes_home() / "workspace" / "memory" / "knowledge" / "projects"
+
+
 def display_hermes_home() -> str:
     """Return a user-friendly display string for the current HERMES_HOME.
 

@@ -6,7 +6,7 @@ consultant-class use and ``routing_canon`` operator gate is enabled, the runtime
 may prompt the operator via :attr:`run_agent.AIAgent.clarify_callback` (CLI TUI).
 Manual ``/models`` (``_defer_opm_primary_coercion``) skips the operator gate.
 
-Deliberation is logged to ``workspace/operations/consultant_deliberations.jsonl``.
+Deliberation is logged to ``workspace/memory/runtime/operations/consultant_deliberations.jsonl``.
 
 Merged policy: repo ``agent/dynamic_routing_canon.yaml`` + ``${HERMES_HOME}/routing_canon.yaml``.
 
@@ -91,7 +91,9 @@ def consultant_routing_enabled(gov: Optional[Dict[str, Any]]) -> bool:
 def _deliberations_log_path() -> Any:
     from hermes_constants import get_hermes_home
 
-    p = get_hermes_home() / "workspace" / "operations" / "consultant_deliberations.jsonl"
+    from hermes_constants import get_workspace_operations_dir
+
+    p = get_workspace_operations_dir() / "consultant_deliberations.jsonl"
     p.parent.mkdir(parents=True, exist_ok=True)
     return p
 

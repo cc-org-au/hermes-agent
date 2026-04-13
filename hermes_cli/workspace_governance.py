@@ -1,4 +1,4 @@
-"""CLI helpers for workspace/operations governance files."""
+"""CLI helpers for workspace/memory/runtime/operations governance files."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 
 import yaml
 
-from hermes_constants import display_hermes_home, get_hermes_home
+from hermes_constants import display_hermes_home, get_workspace_operations_dir
 
 
 def _repo_root() -> Path:
@@ -17,7 +17,7 @@ def _repo_root() -> Path:
 
 
 def _ops_dir() -> Path:
-    return get_hermes_home() / "workspace" / "operations"
+    return get_workspace_operations_dir()
 
 
 def _templates() -> tuple[Path, Path, Path]:
@@ -47,12 +47,12 @@ def cmd_workspace_governance_init(_args) -> None:
             sys.exit(1)
         shutil.copyfile(src, dest)
         print(f"Created {dest}")
-    print(f"\nOperations directory: {display_hermes_home()}/workspace/operations/")
+    print(f"\nOperations directory: {display_hermes_home()}/workspace/memory/runtime/operations/")
     print("Edit the .yaml files, then restart gateway / open a new CLI session.")
 
 
 def cmd_workspace_governance_show(_args) -> None:
-    path = get_hermes_home() / "workspace" / "operations" / "runtime_governance.runtime.yaml"
+    path = get_workspace_operations_dir() / "runtime_governance.runtime.yaml"
     if not path.is_file():
         print(f"No file at {path} — run: hermes workspace governance init")
         return
@@ -74,11 +74,11 @@ def cmd_workspace_governance_show(_args) -> None:
 
 
 def cmd_workspace_governance_paths(_args) -> None:
-    home = get_hermes_home()
-    print(f"runtime_governance:       {home / 'workspace' / 'operations' / 'runtime_governance.runtime.yaml'}")
-    print(f"role_assignments:         {home / 'workspace' / 'operations' / 'role_assignments.yaml'}")
-    print(f"messaging_channel_role_map: {home / 'workspace' / 'operations' / 'messaging_channel_role_map.yaml'}")
-    print(f"messaging_role_routing:     {home / 'workspace' / 'operations' / 'messaging_role_routing.yaml'}")
+    ops = get_workspace_operations_dir()
+    print(f"runtime_governance:       {ops / 'runtime_governance.runtime.yaml'}")
+    print(f"role_assignments:         {ops / 'role_assignments.yaml'}")
+    print(f"messaging_channel_role_map: {ops / 'messaging_channel_role_map.yaml'}")
+    print(f"messaging_role_routing:     {ops / 'messaging_role_routing.yaml'}")
 
 
 def cmd_workspace_governance_sync_messaging(_args) -> None:

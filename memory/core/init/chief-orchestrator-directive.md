@@ -259,7 +259,7 @@ For each project:
 - allow the Project Lead to spawn narrowly scoped Workers on demand
 - add Supervisors only if project complexity justifies them
 
-Hermes operator note (separate runtimes): When “spawn” means a **new Hermes instance** (separate `HERMES_HOME`, secrets, or gateway), implement it with **`hermes profile create <slug>`** under `~/.hermes/profiles/<slug>/`. Names are flat slugs — encode org level in the slug (e.g. `project-acme-lead`, `director-engineering`). Register slug ↔ role in `workspace/operations/ORG_REGISTRY.md` and `AGENT_LIFECYCLE_REGISTER.md`. Subordinate **logical** agents inside one runtime may remain delegate-tool or markdown roles without a new profile unless isolation is required.
+Hermes operator note (separate runtimes): When “spawn” means a **new Hermes instance** (separate `HERMES_HOME`, secrets, or gateway), implement it with **`hermes profile create <slug>`** under `~/.hermes/profiles/<slug>/`. Names are flat slugs — encode org level in the slug (e.g. `project-acme-lead`, `director-engineering`). Register slug ↔ role in `workspace/memory/runtime/operations/ORG_REGISTRY.md` and `AGENT_LIFECYCLE_REGISTER.md`. Subordinate **logical** agents inside one runtime may remain delegate-tool or markdown roles without a new profile unless isolation is required.
 
 PHASE 3 — GOVERNANCE AND MEMORY
 Define:

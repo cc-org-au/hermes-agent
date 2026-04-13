@@ -25,7 +25,7 @@ Read **top to bottom** within `core/`: siblings at the same depth are ordered by
 | **Governance** | [`core/governance/`](core/governance/artifacts-and-archival-memory.md) | Standards, role-prompts, generated markdown, artifacts/archival rules for `operations/`. |
 | **Tooling** | [`core/scripts/`](core/scripts/README.md) | Verify, index, pipeline — not policy prose. |
 
-For runtime deployments, `operations/` should live under `AGENT_HOME/workspace/operations/` (see [`core/governance/artifacts-and-archival-memory.md`](core/governance/artifacts-and-archival-memory.md)). A repository-root `operations/` tree is acceptable only for local development or source-controlled bootstrapping.
+For runtime deployments, `operations/` should live under `AGENT_HOME/workspace/memory/runtime/operations/` (see [`core/governance/artifacts-and-archival-memory.md`](core/governance/artifacts-and-archival-memory.md)). A repository-root `operations/` tree is acceptable only for local development or source-controlled bootstrapping.
 
 ---
 

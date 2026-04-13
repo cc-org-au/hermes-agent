@@ -8,7 +8,7 @@ Define where policy/runtime files live and how materialized workspace paths are 
 
 - Runtime entry context is anchored by `../references/anchors/.hermes.md`.
 - Workspace operating files include `../references/anchors/bootstrap.md`, `../references/anchors/agents.md`, and this memory tree.
-- `workspace/operations/` remains the registry and operations payload area after materialization.
+- `workspace/memory/runtime/operations/` remains the registry and operations payload area after materialization.
 - Canonical policy source remains repository policy files; workspace copies are applied runtime artifacts.
 
 ## Runtime Scripts

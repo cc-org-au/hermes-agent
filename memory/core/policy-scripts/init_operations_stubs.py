@@ -10,7 +10,7 @@ REPO = Path(__file__).resolve().parents[3]
 
 
 def _resolve_workspace_root() -> Path:
-    """Resolve where operations/ should be created."""
+    """Resolve where memory/runtime/operations/ should be created."""
     explicit = os.environ.get("AGENT_WORKSPACE_ROOT")
     if explicit:
         return Path(explicit).expanduser().resolve()
@@ -39,10 +39,11 @@ HEADER = """# {title}
 
 def main() -> int:
     workspace_root = _resolve_workspace_root()
-    ops = workspace_root / "operations"
+    ops = workspace_root / "memory" / "runtime" / "operations"
     ops.mkdir(parents=True, exist_ok=True)
     print("operations root:", ops)
-    (ops / "projects").mkdir(exist_ok=True)
+    proj = workspace_root / "memory" / "knowledge" / "projects"
+    proj.mkdir(parents=True, exist_ok=True)
     created = 0
     for name in STUBS:
         path = ops / name

@@ -42,7 +42,7 @@ Use this order:
 3. `policies/core/deployment-handoff.md` (this file)
 4. `python policies/core/scripts/start_pipeline.py --workspace-root "$AGENT_HOME/workspace" --policy-root "$AGENT_HOME/policies"` (or equivalent env vars) — verify tree, strict `standards/` cues, refresh `INDEX.md`, and materialize runtime outputs; see [`pipeline-runbook.md`](pipeline-runbook.md)
 5. [`security-prompts.md`](security-prompts.md) and [`chief-orchestrator-directive.md`](chief-orchestrator-directive.md) — activation layer in the **policy read** sequence (still required content before org expansion).
-6. `policies/core/governance/standards/token-model-tool-and-channel-governance-policy.md` then `policies/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md` — token / model / tool / channel governance plus Hermes `workspace/operations/hermes_token_governance.runtime.yaml`. **Phased activation (one chat per session)** runs this block as **Sessions 1–2** *before* **Session 3** (runtime activation audit) so caps apply early — see § Session-by-session prompt order. Implementation map: [`hermes-model-delegation-and-tier-runtime.md`](hermes-model-delegation-and-tier-runtime.md).
+6. `policies/core/governance/standards/token-model-tool-and-channel-governance-policy.md` then `policies/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md` — token / model / tool / channel governance plus Hermes `workspace/memory/runtime/operations/hermes_token_governance.runtime.yaml`. **Phased activation (one chat per session)** runs this block as **Sessions 1–2** *before* **Session 3** (runtime activation audit) so caps apply early — see § Session-by-session prompt order. Implementation map: [`hermes-model-delegation-and-tier-runtime.md`](hermes-model-delegation-and-tier-runtime.md).
 7. `workspace/memory/BOOTSTRAP.md`
 8. `workspace/memory/AGENTS.md`
 9. the remaining attached agent markdown files referenced by `BOOTSTRAP.md` and `AGENTS.md` (paths under `workspace/memory/` in this repository)
@@ -141,7 +141,7 @@ Tasks:
 9. Ensure `AGENTS.md` and the other attached agent markdown files contain references to the canonical policies, prompts, runbook, artifact pipeline, and bootstrap flow where relevant.
 10. Stage canonical runtime policy files under `AGENT_HOME/policies/` (outside workspace) so runtime can read them as the authoritative policy layer.
 11. Do not pre-create runtime workspace artifacts manually. Run `python policies/core/scripts/start_pipeline.py --workspace-root "$AGENT_HOME/workspace" --policy-root "$AGENT_HOME/policies"` so the pipeline materializes runtime-editable content and operational files in one controlled step.
-12. Ensure the pipeline output includes operational files under `AGENT_HOME/workspace/operations/`:
+12. Ensure the pipeline output includes operational files under `AGENT_HOME/workspace/memory/runtime/operations/`:
    - `operations/ORG_REGISTRY.md`
    - `operations/ORG_CHART.md`
    - `operations/AGENT_LIFECYCLE_REGISTER.md`
@@ -152,7 +152,7 @@ Tasks:
    - `operations/SECURITY_AUDIT_REPORT.md`
    - `operations/SECURITY_REMEDIATION_QUEUE.md`
    - `operations/INCIDENT_REGISTER.md`
-13. Ensure the pipeline output includes `AGENT_HOME/workspace/operations/projects/` and per-project `memory/archival/` trees for every active project slug.
+13. Ensure the pipeline output includes `AGENT_HOME/workspace/memory/knowledge/projects/` and per-project `memory/archival/` trees for every active project slug.
 14. Ensure the pipeline output includes runtime-editable policy areas under `AGENT_HOME/policies/` (including `core/governance/generated/README.md` and subfolders) and all runtime agent files under `AGENT_HOME/workspace/memory/`.
 15. Create any supporting folders, registries, templates, and operational files required by the runbook, but do not clone or duplicate canonical policy documents into workspace-editable locations unless the file is intended for routine runtime editing.
 16. Do not activate agents yourself unless explicitly required by runtime design.
@@ -211,7 +211,7 @@ Your role is not to redesign the system. Your role is to activate, validate, and
 Hermes runtime discipline (must uphold throughout activation and afterward):
 1. Keep Hermes context injection enabled — do not ask the operator to set `agent.skip_context_files` or `HERMES_SKIP_CONTEXT_FILES`. Governance paths in `HERMES_HOME/.hermes.md` and the workspace `BOOTSTRAP.md` / `AGENTS.md` pack are the canonical wiring; they stay in the system prompt as designed.
 2. Do not paste full policy trees into chat to “load” them. When a step requires policy text, use file tools to read the specific path under `AGENT_HOME/policies/` or `AGENT_HOME/workspace/` (Hermes already points to these in `.hermes.md`). Pull only the sections needed for the current task.
-3. Prefer one focused operator intent per conversation session (new chat / new session when practical) so conversation context stays small; carry state forward via `workspace/operations/` registers, per-project `memory/archival/`, and memory tools — not by re-pasting large prompts.
+3. Prefer one focused operator intent per conversation session (new chat / new session when practical) so conversation context stays small; carry state forward via `workspace/memory/runtime/operations/` registers, per-project `memory/archival/`, and memory tools — not by re-pasting large prompts.
 4. After substantive activation work, write durable outputs to the registers and/or a short workspace charter file; keep summaries tight. The canonical policy files on disk remain authoritative; runtime markdown is pointers, registers, and distilled state — not a second copy of the whole pack.
 5. Observe prompt-caching discipline: do not recommend changing toolsets or rewriting past system context mid-session; if a new phase needs a clean context budget, start a new session and rely on files + registers for continuity.
 
@@ -241,7 +241,7 @@ Use this exact load order:
    - `workspace/memory/README.md`
 13. secondary supporting policy files in `policies/core/governance/standards/`
 14. secondary supporting role templates in `policies/core/governance/role-prompts/`
-15. `AGENT_HOME/workspace/operations/` registers and `AGENT_HOME/workspace/operations/projects/*/memory/archival/` as applicable
+15. `AGENT_HOME/workspace/memory/runtime/operations/` registers and `AGENT_HOME/workspace/memory/knowledge/projects/*/memory/archival/` as applicable
 16. `AGENT_HOME/policies/core/governance/generated/` index and governed additions
 17. `policies/core/gateway-watchdog.md` when the messaging gateway is production-critical (after activation core)
 
@@ -258,7 +258,7 @@ Before broader activation, do the following:
 - verify the canonical policy files exist
 - verify the supporting policy and prompt files exist
 - verify `workspace/memory/BOOTSTRAP.md` and all attached agent markdown files exist
-- verify pipeline materialization has produced the operational files under `AGENT_HOME/workspace/operations/`:
+- verify pipeline materialization has produced the operational files under `AGENT_HOME/workspace/memory/runtime/operations/`:
   - `operations/ORG_REGISTRY.md`
   - `operations/ORG_CHART.md`
   - `operations/AGENT_LIFECYCLE_REGISTER.md`
@@ -288,7 +288,7 @@ Only if the environment passes or is warning-only, continue by:
 
 Rules:
 - register every agent before activation
-- keep memory local by role level and store only active summaries upward; maintain continuous archival writes under `AGENT_HOME/workspace/operations/projects/<slug>/memory/archival/` per `policies/core/governance/artifacts-and-archival-memory.md`
+- keep memory local by role level and store only active summaries upward; maintain continuous archival writes under `AGENT_HOME/workspace/memory/knowledge/projects/<slug>/memory/archival/` per `policies/core/governance/artifacts-and-archival-memory.md`
 - use the warning/critical severity model exactly as defined
 - if ambiguity exists, choose the leaner and more restrictive interpretation
 - do not treat secondary files as overriding the primary canonical pack
@@ -312,14 +312,14 @@ Required output:
 
 Use a **new messaging/CLI session per step** when you want the lowest conversation context: paste **one** block per session. Paths are under the materialized **`AGENT_HOME`** (for Hermes profile deployments, typically `HERMES_HOME/policies/...` and `HERMES_HOME/workspace/...` — see `HERMES_HOME/.hermes.md`).
 
-**Cost controls first:** Sessions **1–2** install token governance **policy** and **`hermes_token_governance.runtime.yaml`** so tier caps, blocklists, and delegation limits apply before the heavy **Session 3** runtime-activation audit. **Prerequisite:** profile + `HERMES_HOME/.hermes.md` + materialized `workspace/operations/` (see `scripts/core/materialize_policies_into_hermes_home.sh`). Cumulative paste blocks: `scripts/templates/activation_sessions_cumulative_cover_2_20.txt`. Hermes wiring reference: `policies/core/hermes-model-delegation-and-tier-runtime.md`.
+**Cost controls first:** Sessions **1–2** install token governance **policy** and **`hermes_token_governance.runtime.yaml`** so tier caps, blocklists, and delegation limits apply before the heavy **Session 3** runtime-activation audit. **Prerequisite:** profile + `HERMES_HOME/.hermes.md` + materialized `workspace/memory/runtime/operations/` (see `scripts/core/materialize_policies_into_hermes_home.sh`). Cumulative paste blocks: `scripts/templates/activation_sessions_cumulative_cover_2_20.txt`. Hermes wiring reference: `policies/core/hermes-model-delegation-and-tier-runtime.md`.
 
 | Session | What to paste / instruct |
 |--------|---------------------------|
 | **1 — Token governance (policy)** | Instruct: read `policies/core/governance/standards/token-model-tool-and-channel-governance-policy.md` fully via tools; summarize binding rules for this deployment. |
-| **2 — Token governance (implement)** | Paste `policies/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md`; create/update only the registries/templates that policy requires under `workspace/` or `operations/`. Copy `scripts/templates/hermes_token_governance.runtime.example.yaml` → `workspace/operations/hermes_token_governance.runtime.yaml`, `enabled: true`. |
+| **2 — Token governance (implement)** | Paste `policies/core/governance/role-prompts/implement-token-model-and-tool-and-channel-governance-prompt.md`; create/update only the registries/templates that policy requires under `workspace/` or `operations/`. Copy `scripts/templates/hermes_token_governance.runtime.example.yaml` → `workspace/memory/runtime/operations/hermes_token_governance.runtime.yaml`, `enabled: true`. |
 | **3 — Runtime activation** | Use **§ Operator first message — Session 3** (minimal or standard starter). Do **not** paste the full Runtime Activation `text` fence — the agent reads it from `POLICY_ROOT/core/deployment-handoff.md`. |
-| **4 — Artifacts + constitution** | One message: read `policies/core/governance/artifacts-and-archival-memory.md` and `policies/core/agentic-company-deployment-pack.md` via tools; confirm how `workspace/operations/` and per-project archival paths will be used; write any missing register stubs only if empty. |
+| **4 — Artifacts + constitution** | One message: read `policies/core/governance/artifacts-and-archival-memory.md` and `policies/core/agentic-company-deployment-pack.md` via tools; confirm how `workspace/memory/runtime/operations/` and per-project archival paths will be used; write any missing register stubs only if empty. |
 | **5 — Security activation pack** | Prefer: *"Read `POLICY_ROOT/core/security-prompts.md` via tools in chunks; execute Chief Security Governor + audit posture against this runtime."* Avoid pasting the full file. |
 | **6 — Chief orchestrator** | Prefer: *"Read `POLICY_ROOT/core/chief-orchestrator-directive.md` via tools; adopt its doctrine for this deployment; output org stance, initial roles, next session pointer."* Paste only if the file read fails — the directive is long. |
 | **7 — Lean org order** | Paste `policies/core/governance/role-prompts/minimal-default-deployment-order.md`; reconcile with Session 6 and update `operations/ORG_REGISTRY.md` / `ORG_CHART.md` if needed. |
@@ -359,7 +359,7 @@ When this pack, a role prompt, or the orchestrator directive tells you to **stan
 - `director-engineering`, `director-product`, `director-operations`
 - `project-acme-lead`, `project-acme-worker-payments`
 
-Document the mapping **profile slug ↔ logical role** in `workspace/operations/ORG_REGISTRY.md`, `ORG_CHART.md`, and `AGENT_LIFECYCLE_REGISTER.md` so audits and operators know which Hermes profile implements which governed role.
+Document the mapping **profile slug ↔ logical role** in `workspace/memory/runtime/operations/ORG_REGISTRY.md`, `ORG_CHART.md`, and `AGENT_LIFECYCLE_REGISTER.md` so audits and operators know which Hermes profile implements which governed role.
 
 **Logical-only roles** (markdown packs, registers, delegate-tool subagents inside one runtime) do not require a new Hermes profile unless you intentionally isolate credentials, gateway, or disk state.
 
@@ -454,7 +454,7 @@ Use this order:
 13. the remaining attached agent markdown files
 14. `policies/core/governance/standards/*.md` supporting policies
 15. `policies/core/governance/role-prompts/*.md` supporting role templates
-16. `AGENT_HOME/workspace/operations/` registers and project memory trees
+16. `AGENT_HOME/workspace/memory/runtime/operations/` registers and project memory trees
 17. `AGENT_HOME/policies/core/governance/generated/` governed additions (indexed in `core/governance/generated/README.md` within the runtime editable policy tree)
 
 <!-- policy-read-order-nav:bottom -->

@@ -29,7 +29,7 @@ After completing this file, the next file in the order of operations is:
 
 Then:
 
-- `policies/core/deployment-handoff.md` — drives deployment of the canonical policies, prompts, runbooks, operational records, bootstrap/agent markdown pack, and the runtime artifact trees (`AGENT_HOME/workspace/operations/` and generated policy material under `AGENT_HOME/policies/core/governance/generated/`).
+- `policies/core/deployment-handoff.md` — drives deployment of the canonical policies, prompts, runbooks, operational records, bootstrap/agent markdown pack, and the runtime artifact trees (`AGENT_HOME/workspace/memory/runtime/operations/` and generated policy material under `AGENT_HOME/policies/core/governance/generated/`).
 
 ---
 
@@ -600,7 +600,7 @@ Before allowing any runtime agent to activate, manually verify:
 
 - workspace exists with input/output/logs
 - no workstation mounts inside workspace
-- `operations/` exists under `AGENT_HOME/workspace/operations/`
+- `operations/` exists under `AGENT_HOME/workspace/memory/runtime/operations/`
 - canonical runtime policy tree (including generated / editable subtrees) exists under `AGENT_HOME/policies/`
 
 ### Network posture
@@ -677,7 +677,7 @@ Rules:
 - Runtime command working directory defaults to the workspace root.
 - Runtime file operations are constrained to workspace paths by policy.
 - Agent state/config directories are separated from task workspace directories.
-- Operational registers and project archival memory live under `AGENT_HOME/workspace/operations/`.
+- Operational registers and project archival memory live under `AGENT_HOME/workspace/memory/runtime/operations/`.
 - Runtime policy consumption and routine editable/generated policy content both use **`AGENT_HOME/policies/`** (outside `workspace/`).
 
 ### 5) Host firewall posture (default-deny inbound and outbound)

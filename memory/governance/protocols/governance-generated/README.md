@@ -13,7 +13,7 @@ Use `by_role/<role_slug>/` semantics when materializing role-scoped generated wo
 - one role folder per logical role instance
 - stable top-level charter and links, volatile details in dated subfiles
 - promote mature role norms into canonical standards via governance process
-- include active project links to `operations/projects/<slug>/`
+- include active project links to `memory/knowledge/projects/<slug>/`
 
 Minimal folder shape:
 

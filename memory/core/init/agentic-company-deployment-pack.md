@@ -22,7 +22,7 @@ If any earlier prompt, role prompt, policy file, runbook, or fragment conflicts 
 
 Filesystem layout for **generated markdown**, **operational registers**, and **per-project archival memory** (subordinate to this pack) is defined in `policies/core/governance/artifacts-and-archival-memory.md`. The policies tree index is `policies/README.md`.
 
-**Hermes CLI:** When instructions in this pack call for **another agent as a separate runtime** (isolated config, API keys, or gateway), use **`hermes profile create <profile-name>`** so each instance has `~/.hermes/profiles/<profile-name>/`. Profile names are flat (no subfolders in the name); encode org hierarchy in the slug (e.g. `director-engineering`, `project-clientname-lead`). Map each slug to the logical role in `workspace/operations/ORG_REGISTRY.md` and `AGENT_LIFECYCLE_REGISTER.md`. Details: `policies/core/deployment-handoff.md` (Hermes profiles section).
+**Hermes CLI:** When instructions in this pack call for **another agent as a separate runtime** (isolated config, API keys, or gateway), use **`hermes profile create <profile-name>`** so each instance has `~/.hermes/profiles/<profile-name>/`. Profile names are flat (no subfolders in the name); encode org hierarchy in the slug (e.g. `director-engineering`, `project-clientname-lead`). Map each slug to the logical role in `workspace/memory/runtime/operations/ORG_REGISTRY.md` and `AGENT_LIFECYCLE_REGISTER.md`. Details: `policies/core/deployment-handoff.md` (Hermes profiles section).
 
 ---
 

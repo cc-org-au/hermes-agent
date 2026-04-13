@@ -5810,7 +5810,7 @@ For more help on a command:
     gov_sub = gov_parser.add_subparsers(dest="governance_action", required=True)
     gov_sub.add_parser(
         "init",
-        help="Copy example YAML into workspace/operations/ if missing",
+        help="Copy example YAML into workspace/memory/runtime/operations/ if missing",
     )
     gov_sub.add_parser(
         "show",

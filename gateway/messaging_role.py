@@ -2,7 +2,7 @@
 
 One Slack / Telegram / WhatsApp bot can serve multiple *organizational personas* by
 routing channel/thread/chat identifiers to a **role slug**. Bindings and required
-policy reads live in ``workspace/operations/role_assignments.yaml``.
+policy reads live in ``workspace/memory/runtime/operations/role_assignments.yaml``.
 
 Hermes still uses a single gateway ``HERMES_HOME`` (one token set). Personas are
 enforced via prompt + disk reads, not separate bot installs. For hard isolation
@@ -18,10 +18,13 @@ from typing import Any, Dict, List, Optional
 
 from gateway.config import Platform
 from gateway.session import SessionSource
+from hermes_constants import resolve_workspace_operations_dir
 
 logger = logging.getLogger(__name__)
 
-_ASSIGNMENTS_REL = Path("workspace") / "operations" / "role_assignments.yaml"
+
+def _role_assignments_path(hermes_home: Path) -> Path:
+    return resolve_workspace_operations_dir(hermes_home) / "role_assignments.yaml"
 
 # Surfaces where token-model §14 disclosure applies (human-visible messaging).
 _DISCLOSURE_SKIP_PLATFORMS = frozenset(
@@ -62,7 +65,7 @@ def append_token_model_disclosure_line(content: str, exact_role_name: str) -> st
 
 
 def _get_role_entry(slug: str, hermes_home: Path) -> Optional[Dict[str, Any]]:
-    path = hermes_home / _ASSIGNMENTS_REL
+    path = _role_assignments_path(hermes_home)
     if not path.is_file():
         return None
     try:
@@ -233,7 +236,7 @@ def load_role_assignment_block(
     max_chars: int = 4000,
 ) -> str:
     """Load role entry from role_assignments.yaml and format a short markdown block."""
-    path = hermes_home / _ASSIGNMENTS_REL
+    path = _role_assignments_path(hermes_home)
     if not path.is_file():
         return ""
 
@@ -341,7 +344,7 @@ def build_messaging_role_ephemeral(
     if not block:
         return (
             f"## Messaging role: `{slug}`\n\n"
-            f"Bindings file missing or role undefined: `{_ASSIGNMENTS_REL}` — "
+            f"Bindings file missing or role undefined: `workspace/memory/runtime/operations/role_assignments.yaml` — "
             f"create it (`hermes workspace governance init`) and define `roles.{slug}`.\n\n"
         )
     return block

@@ -30,7 +30,7 @@ def test_hours_until_midnight_positive():
 
 
 def test_ledger_add_and_persist(home):
-    p = home / "workspace" / "operations" / "daily_budget_state.json"
+    p = home / "workspace" / "memory" / "runtime" / "operations" / "daily_budget_state.json"
     led = BudgetLedger(daily_budget_aud=10.0, aud_to_usd=0.65, path=p)
     assert led.daily_cap_usd == pytest.approx(6.5)
     led.add_spend_usd(0.1)
@@ -55,7 +55,7 @@ def test_hours_until_timezone_midnight_reasonable():
 
 
 def test_is_daily_exhausted(home):
-    p = home / "workspace" / "operations" / "daily_budget_state.json"
+    p = home / "workspace" / "memory" / "runtime" / "operations" / "daily_budget_state.json"
     led = BudgetLedger(daily_budget_aud=10.0, aud_to_usd=0.65, path=p)
     led.add_spend_usd(100.0)
     assert led.is_daily_exhausted()

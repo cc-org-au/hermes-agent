@@ -17,12 +17,12 @@ This note is for **operators and engineers** who need to **reproduce or extend**
 | Auxiliary / delegation models | Same `tier:X` or `tier:dynamic` in `config.yaml` under `auxiliary.*`, `compression.*`, `delegation.model`; resolved per call when dynamic |
 | Max turns / delegate iterations | `max_agent_turns`, `delegation_max_iterations` in runtime YAML → `AIAgent` and `tools/delegate_tool.py` |
 | Optional context stripping | `skip_context_files` in runtime YAML (discouraged for governance activation) |
-| Consultant path (E/F, escalation) | `consultant_routing` in runtime YAML + `agent/consultant_routing.py`; logs `workspace/operations/consultant_deliberations.jsonl` |
+| Consultant path (E/F, escalation) | `consultant_routing` in runtime YAML + `agent/consultant_routing.py`; logs `workspace/memory/runtime/operations/consultant_deliberations.jsonl` |
 
 ## On-disk contract
 
 1. **Profile** — `HERMES_HOME` (e.g. `~/.hermes/profiles/chief-orchestrator/`) holds `config.yaml` and `.env`.
-2. **Runtime governance file** — `HERMES_HOME/workspace/operations/hermes_token_governance.runtime.yaml` (copy from repo `scripts/templates/hermes_token_governance.runtime.example.yaml`). Loaded when `enabled: true` and not disabled by env.
+2. **Runtime governance file** — `HERMES_HOME/workspace/memory/runtime/operations/hermes_token_governance.runtime.yaml` (copy from repo `scripts/templates/hermes_token_governance.runtime.example.yaml`). Loaded when `enabled: true` and not disabled by env.
 3. **Registers** — Workspace registries under `WORKSPACE/operations/` (e.g. `MODEL_ROUTING_REGISTRY.md`) are **policy artifacts**; Hermes does not parse them for routing unless a future feature does—the **YAML + config** drive behavior.
 
 ## Code map (reimplementation checklist)

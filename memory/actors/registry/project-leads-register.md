@@ -12,7 +12,7 @@
 
 ## Paths
 
-- Project workspace folder: `operations/projects/agentic-company/` (see `README.md` there).
+- Project workspace folder: `memory/knowledge/projects/agentic-company/` (see `README.md` there).
 
 ## Delegation
 

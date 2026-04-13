@@ -1,6 +1,6 @@
 """Workspace token-governance runtime caps (activation Session 6+).
 
-If ``HERMES_HOME/workspace/operations/hermes_token_governance.runtime.yaml`` exists
+If ``HERMES_HOME/workspace/memory/runtime/operations/hermes_token_governance.runtime.yaml`` exists
 and ``enabled: true``, Hermes applies model downgrade rules, iteration caps, optional
 ``skip_context_files``, and delegation iteration caps on every :class:`~run_agent.AIAgent`
 construction.
@@ -38,9 +38,9 @@ ENV_ALLOW_PREMIUM = "HERMES_GOVERNANCE_ALLOW_PREMIUM"
 
 
 def _operations_dir():
-    from hermes_constants import get_hermes_home
+    from hermes_constants import get_workspace_operations_dir
 
-    return get_hermes_home() / "workspace" / "operations"
+    return get_workspace_operations_dir()
 
 
 def runtime_config_path() -> str:
@@ -299,7 +299,7 @@ def inherit_token_governance_from_parent(child: Any, parent: Any) -> None:
     ``AIAgent.__init__`` calls ``apply_token_governance_runtime``, which no-ops when
     ``load_runtime_config()`` is empty. That happens for delegated children when
     ``HERMES_HOME`` points at a profile without
-    ``workspace/operations/hermes_token_governance.runtime.yaml`` (notably
+    ``workspace/memory/runtime/operations/hermes_token_governance.runtime.yaml`` (notably
     ``delegate_task(..., hermes_profile=…)``). The parent chief often still has a
     cached ``_token_governance_cfg`` from its own home. Without inheriting it,
     ``apply_per_turn_tier_model`` exits immediately and the child can remain on a

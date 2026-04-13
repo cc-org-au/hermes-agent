@@ -1,7 +1,7 @@
 """Optional automatic HR / org consultation before the chief model acts.
 
 Configured under ``hr_consultation`` in
-``HERMES_HOME/workspace/operations/hermes_token_governance.runtime.yaml`` (same file as
+``HERMES_HOME/workspace/memory/runtime/operations/hermes_token_governance.runtime.yaml`` (same file as
 token governance). When enabled and triggers match the user message, Hermes runs
 ``delegate_task`` against the named Hermes profile (default ``ag-org-hr``) and
 appends the subagent summary to this turn's user message so the chief genuinely

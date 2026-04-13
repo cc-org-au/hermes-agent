@@ -17,7 +17,7 @@ Replace `<role_slug>` with your folder name (e.g. `product_lead`, `data_pipeline
 
 ## Active projects
 
-| Project slug | Link to `operations/projects/...` |
+| Project slug | Link to `memory/knowledge/projects/...` |
 |--------------|-------------------------------------|
 | | |
 

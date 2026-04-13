@@ -12,7 +12,7 @@ Generate or refresh operational artifacts when:
 - runtime workspace is materialized for a profile
 - governance updates require register refresh
 - operations registers are missing in a target workspace
-- rem-operations templates must be synchronized into `workspace/operations`
+- rem-operations templates must be synchronized into `workspace/memory/runtime/operations`
 
 Primary references:
 
@@ -39,7 +39,7 @@ After governance or runtime config changes, restart runtime entrypoints and veri
 If model governance is active, validate runtime YAML exists and is enabled:
 
 ```bash
-cat ~/.hermes/profiles/chief-orchestrator/workspace/operations/hermes_token_governance.runtime.yaml | rg "enabled:"
+cat ~/.hermes/profiles/chief-orchestrator/workspace/memory/runtime/operations/hermes_token_governance.runtime.yaml | rg "enabled:"
 ```
 
 ## Stub Policy

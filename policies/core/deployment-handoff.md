@@ -137,7 +137,7 @@ Tasks:
 9. Ensure `AGENTS.md` and the other attached agent markdown files contain references to the canonical policies, prompts, runbook, artifact pipeline, and bootstrap flow where relevant.
 10. Stage canonical runtime policy files under `AGENT_HOME/policies/` (outside workspace) so runtime can read them as the authoritative policy layer.
 11. Do not pre-create runtime workspace artifacts manually. Run `python policies/core/scripts/start_pipeline.py --workspace-root "$AGENT_HOME/workspace" --policy-root "$AGENT_HOME/policies"` so the pipeline materializes runtime-editable content and operational files in one controlled step.
-12. Ensure the pipeline output includes operational files under `AGENT_HOME/workspace/operations/`:
+12. Ensure the pipeline output includes operational files under `AGENT_HOME/workspace/memory/runtime/operations/`:
    - `operations/ORG_REGISTRY.md`
    - `operations/ORG_CHART.md`
    - `operations/AGENT_LIFECYCLE_REGISTER.md`
@@ -148,7 +148,7 @@ Tasks:
    - `operations/SECURITY_AUDIT_REPORT.md`
    - `operations/SECURITY_REMEDIATION_QUEUE.md`
    - `operations/INCIDENT_REGISTER.md`
-13. Ensure the pipeline output includes `AGENT_HOME/workspace/operations/projects/` and per-project `memory/archival/` trees for every active project slug.
+13. Ensure the pipeline output includes `AGENT_HOME/workspace/memory/knowledge/projects/` and per-project `memory/archival/` trees for every active project slug.
 14. Ensure the pipeline output includes runtime-editable policy areas under `AGENT_HOME/policies/` (including `core/governance/generated/README.md` and subfolders) and all runtime agent files under `AGENT_HOME/policies/core/runtime/agent/` (canonical policy root — not under `workspace/`).
 15. Create any supporting folders, registries, templates, and operational files required by the runbook, but do not clone or duplicate canonical policy documents into workspace-editable locations unless the file is intended for routine runtime editing.
 16. Do not activate agents yourself unless explicitly required by runtime design.
@@ -202,7 +202,7 @@ Use this exact load order:
    - `policies/core/runtime/agent/README.md`
 14. secondary supporting policy files in `policies/core/governance/standards/`
 15. secondary supporting role templates in `policies/core/governance/role-prompts/`
-16. `AGENT_HOME/workspace/operations/` registers and `AGENT_HOME/workspace/operations/projects/*/memory/archival/` as applicable
+16. `AGENT_HOME/workspace/memory/runtime/operations/` registers and `AGENT_HOME/workspace/memory/knowledge/projects/*/memory/archival/` as applicable
 17. `AGENT_HOME/policies/core/governance/generated/` index and governed additions
 
 Activation rules:
@@ -218,7 +218,7 @@ Before broader activation, do the following:
 - verify the canonical policy files exist
 - verify the supporting policy and prompt files exist
 - verify `policies/core/runtime/agent/BOOTSTRAP.md` and all attached agent markdown files exist
-- verify pipeline materialization has produced the operational files under `AGENT_HOME/workspace/operations/`:
+- verify pipeline materialization has produced the operational files under `AGENT_HOME/workspace/memory/runtime/operations/`:
   - `operations/ORG_REGISTRY.md`
   - `operations/ORG_CHART.md`
   - `operations/AGENT_LIFECYCLE_REGISTER.md`
@@ -248,7 +248,7 @@ Only if the environment passes or is warning-only, continue by:
 
 Rules:
 - register every agent before activation
-- keep memory local by role level and store only active summaries upward; maintain continuous archival writes under `AGENT_HOME/workspace/operations/projects/<slug>/memory/archival/` per `policies/core/governance/artifacts-and-archival-memory.md`
+- keep memory local by role level and store only active summaries upward; maintain continuous archival writes under `AGENT_HOME/workspace/memory/knowledge/projects/<slug>/memory/archival/` per `policies/core/governance/artifacts-and-archival-memory.md`
 - use the warning/critical severity model exactly as defined
 - if ambiguity exists, choose the leaner and more restrictive interpretation
 - do not treat secondary files as overriding the primary canonical pack
@@ -355,7 +355,7 @@ Use this order:
 13. the remaining attached agent markdown files
 14. `policies/core/governance/standards/*.md` supporting policies
 15. `policies/core/governance/role-prompts/*.md` supporting role templates
-16. `AGENT_HOME/workspace/operations/` registers and project memory trees
+16. `AGENT_HOME/workspace/memory/runtime/operations/` registers and project memory trees
 17. `AGENT_HOME/policies/core/governance/generated/` governed additions (indexed in `core/governance/generated/README.md` within the runtime policy tree)
 
 <!-- policy-read-order-nav:bottom -->

@@ -1,7 +1,7 @@
 """Persistent calendar-day spend tracking in USD (for API estimates), display in AUD.
 
 Driven by ``routing_canon`` ``hard_budget`` (see ``agent/dynamic_routing_canon.yaml``).
-State file: ``${HERMES_HOME}/workspace/operations/daily_budget_state.json``.
+State file: ``${HERMES_HOME}/workspace/memory/runtime/operations/daily_budget_state.json``.
 
 Daily rollover and the TUI “reset in …” countdown use ``hard_budget.reset_timezone``
 (IANA name, default ``Australia/Sydney``) so VPS UTC clocks still match operator locale.
@@ -72,7 +72,9 @@ def calendar_date_in_timezone(zone_name: Optional[str]) -> str:
 def _state_path() -> Path:
     from hermes_constants import get_hermes_home
 
-    d = get_hermes_home() / "workspace" / "operations"
+    from hermes_constants import get_workspace_operations_dir
+
+    d = get_workspace_operations_dir()
     d.mkdir(parents=True, exist_ok=True)
     return d / STATE_NAME
 

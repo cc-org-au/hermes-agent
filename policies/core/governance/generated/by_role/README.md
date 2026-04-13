@@ -13,7 +13,7 @@ Use this layout when a **named company role** (e.g. product lead, engineering su
 1. **One role folder per logical role instance** — `by_role/<role_slug>/` (slug: `product_lead`, `eng_supervisor`, `pipeline_specialist`, etc.).  
 2. **Stable spine, volatile detail** — keep long-lived indexes and standards at the top of the role tree; put day-to-day churn in dated or numbered subfolders.  
 3. **Promote upward** — material that becomes company-wide policy belongs in [`../../governance/standards/`](../../standards/canonical-ai-agent-security-policy.md) or [`../../agentic-company-deployment-pack.md`](../../agentic-company-deployment-pack.md) through governance, not by silent edits here.  
-4. **Cross-link** — each role folder has a `README.md` listing active projects and pointers to `operations/projects/<slug>/`.
+4. **Cross-link** — each role folder has a `README.md` listing active projects and pointers to `memory/knowledge/projects/<slug>/`.
 
 ## Folder shape (minimal)
 

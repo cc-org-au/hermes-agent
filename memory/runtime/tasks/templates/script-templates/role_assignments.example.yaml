@@ -1,8 +1,8 @@
-# Copy to: HERMES_HOME/workspace/operations/role_assignments.yaml
+# Copy to: HERMES_HOME/workspace/memory/runtime/operations/role_assignments.yaml
 # Install: hermes workspace governance init
 #
 # Maps messaging role slugs (used by config.yaml messaging.role_routing and/or
-# workspace/operations/messaging_role_routing.yaml overlay) to policy reads,
+# workspace/memory/runtime/operations/messaging_role_routing.yaml overlay) to policy reads,
 # allowed_toolsets (gateway ∩ this list), and Hermes profiles for delegation.
 #
 # How to read policies: follow the read-order banners inside each policy file.

@@ -721,7 +721,7 @@ class AIAgent:
             self.api_mode = "codex_responses"
 
         # Optional workspace token governance (activation Session 6+):
-        # ``workspace/operations/hermes_token_governance.runtime.yaml`` may cap
+        # ``workspace/memory/runtime/operations/hermes_token_governance.runtime.yaml`` may cap
         # model choice, max iterations, delegation iterations, and context injection.
         try:
             from agent.token_governance_runtime import apply_token_governance_runtime
@@ -8570,7 +8570,7 @@ class AIAgent:
             # calls so that nudge logic accumulates correctly in CLI mode.
             self.iteration_budget = IterationBudget(self.max_iterations)
         
-            # Optional per-turn tier routing (workspace/operations/hermes_token_governance.runtime.yaml)
+            # Optional per-turn tier routing (workspace/memory/runtime/operations/hermes_token_governance.runtime.yaml)
             try:
                 from agent.token_governance_runtime import apply_per_turn_tier_model
         

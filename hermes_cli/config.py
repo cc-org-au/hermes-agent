@@ -2430,8 +2430,9 @@ def migrate_config(interactive: bool = True, quiet: bool = False) -> Dict[str, A
             # anthropic/claude-sonnet-4-6 (tier D) is not blocked at runtime.
             _ops_path = None
             try:
-                from hermes_constants import get_hermes_home as _ghh
-                _ops_path = _ghh() / "workspace" / "operations" / "hermes_token_governance.runtime.yaml"
+                from hermes_constants import get_hermes_home as _ghh, resolve_workspace_operations_dir
+
+                _ops_path = resolve_workspace_operations_dir(_ghh()) / "hermes_token_governance.runtime.yaml"
             except Exception:
                 pass
             if _ops_path and _ops_path.exists():
@@ -2580,9 +2581,9 @@ def migrate_config(interactive: bool = True, quiet: bool = False) -> Dict[str, A
 
             _ops_path = None
             try:
-                from hermes_constants import get_hermes_home as _ghh
+                from hermes_constants import get_hermes_home as _ghh, resolve_workspace_operations_dir
 
-                _ops_path = _ghh() / "workspace" / "operations" / "hermes_token_governance.runtime.yaml"
+                _ops_path = resolve_workspace_operations_dir(_ghh()) / "hermes_token_governance.runtime.yaml"
             except Exception:
                 pass
             if _ops_path and _ops_path.exists():

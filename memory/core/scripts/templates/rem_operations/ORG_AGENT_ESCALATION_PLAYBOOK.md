@@ -19,7 +19,7 @@
 
 ## Automatic HR consultation (runtime)
 
-When enabled in `workspace/operations/hermes_token_governance.runtime.yaml` under **`hr_consultation`**, the **chief** (parent agent with `delegate_task`, not subagents) automatically delegates once per matching user turn to **`hermes_profile`** (default `ag-org-hr`) and **appends** the subagent summary to the same turn’s user message. Tune **`trigger_keywords`** for your org. See `agent/hr_consultation.py` and the example block in `scripts/templates/hermes_token_governance.runtime.example.yaml`.
+When enabled in `workspace/memory/runtime/operations/hermes_token_governance.runtime.yaml` under **`hr_consultation`**, the **chief** (parent agent with `delegate_task`, not subagents) automatically delegates once per matching user turn to **`hermes_profile`** (default `ag-org-hr`) and **appends** the subagent summary to the same turn’s user message. Tune **`trigger_keywords`** for your org. See `agent/hr_consultation.py` and the example block in `scripts/templates/hermes_token_governance.runtime.example.yaml`.
 
 ## Non-goals
 

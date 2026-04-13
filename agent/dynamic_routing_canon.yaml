@@ -24,7 +24,7 @@ version: 7
 # -----------------------------------------------------------------------------
 # Route DOWN (cheaper / simpler — lowest feasible first, then climb if inadequate)
 # -----------------------------------------------------------------------------
-# - ``tier_models`` in ``workspace/operations/hermes_token_governance.runtime.yaml`` MUST
+# - ``tier_models`` in ``workspace/memory/runtime/operations/hermes_token_governance.runtime.yaml`` MUST
 #   map A→…→G to DISTINCT models (cheap→capable). If A–E all point at the same slug,
 #   per-tier downshifts are ineffective.
 # - Default competent tier: ``default_routing_tier`` (typically D) before heuristics.

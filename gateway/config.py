@@ -17,6 +17,7 @@ from typing import Dict, List, Optional, Any
 from enum import Enum
 
 from hermes_cli.config import get_hermes_home
+from hermes_constants import resolve_workspace_operations_dir
 from utils import is_truthy_value
 
 logger = logging.getLogger(__name__)
@@ -471,7 +472,7 @@ def load_gateway_config() -> GatewayConfig:
     Priority (highest to lowest):
     1. Environment variables
     2. ~/.hermes/config.yaml (primary user-facing config)
-    3. workspace/operations/messaging_role_routing.yaml (overlay for ``messaging.role_routing``)
+    3. workspace/memory/runtime/operations/messaging_role_routing.yaml (overlay for ``messaging.role_routing``)
     4. ~/.hermes/gateway.json (legacy — provides defaults under config.yaml)
     5. Built-in defaults
     """
@@ -635,9 +636,9 @@ def load_gateway_config() -> GatewayConfig:
             e,
         )
 
-    # Optional overlay: workspace/operations/messaging_role_routing.yaml
+    # Optional overlay: workspace/memory/runtime/operations/messaging_role_routing.yaml
     # (from `hermes workspace governance sync-messaging`).
-    _overlay_path = _home / "workspace" / "operations" / "messaging_role_routing.yaml"
+    _overlay_path = resolve_workspace_operations_dir(_home) / "messaging_role_routing.yaml"
     try:
         import yaml as _yaml_rr
 

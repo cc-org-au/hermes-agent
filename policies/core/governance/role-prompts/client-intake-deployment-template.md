@@ -14,13 +14,13 @@ Activate when operating under `policies/core/governance/standards/client-deploym
 
 1. Confirm authority and Human Operator approval for the engagement.  
 2. Capture requirements, constraints, data boundaries, and success metrics in writing.  
-3. Map the engagement to **project slug** and `operations/projects/<slug>/` per `policies/core/governance/artifacts-and-archival-memory.md`.  
+3. Map the engagement to **project slug** and `memory/knowledge/projects/<slug>/` per `policies/core/governance/artifacts-and-archival-memory.md`.  
 4. Do not store secrets in prompts or generated markdown.  
 5. Escalate ambiguities to Project Lead or orchestrator before irreversible deployment steps.
 
 ## Output
 
-Produce or update a client intake summary suitable for `operations/projects/<slug>/artifacts/` or governed `policies/core/governance/generated/`.
+Produce or update a client intake summary suitable for `memory/knowledge/projects/<slug>/artifacts/` or governed `policies/core/governance/generated/`.
 
 <!-- policy-read-order-nav:bottom -->
 > **Next step:** continue to [core/governance/standards/agent-lifecycle-org-hygiene-policy.md](../standards/agent-lifecycle-org-hygiene-policy.md) after this file is fully read and applied. Do not skip ahead unless a human operator explicitly directs a narrower scope.

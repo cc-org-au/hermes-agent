@@ -26,7 +26,7 @@ from agent.token_governance_runtime import (
 def gov_env(tmp_path, monkeypatch):
     home = tmp_path / ".hermes"
     home.mkdir()
-    ops = home / "workspace" / "operations"
+    ops = home / "workspace" / "memory" / "runtime" / "operations"
     ops.mkdir(parents=True)
     monkeypatch.setenv("HERMES_HOME", str(home))
     monkeypatch.delenv("HERMES_TOKEN_GOVERNANCE_DISABLE", raising=False)

@@ -47,7 +47,7 @@ def test_resolve_default(tmp_path):
 
 def test_build_ephemeral_with_assignments(tmp_path):
     cfg = {"enabled": True, "default_role": "r1"}
-    ops = tmp_path / "workspace" / "operations"
+    ops = tmp_path / "workspace" / "memory" / "runtime" / "operations"
     ops.mkdir(parents=True)
     doc = {
         "roles": {
@@ -74,7 +74,7 @@ def test_append_token_model_disclosure_line():
 
 
 def test_resolve_messaging_disclosure_label(tmp_path):
-    ops = tmp_path / "workspace" / "operations"
+    ops = tmp_path / "workspace" / "memory" / "runtime" / "operations"
     ops.mkdir(parents=True)
     doc = {
         "roles": {
@@ -90,7 +90,7 @@ def test_resolve_messaging_disclosure_label(tmp_path):
 
 
 def test_intersect_toolsets_with_messaging_role(tmp_path):
-    ops = tmp_path / "workspace" / "operations"
+    ops = tmp_path / "workspace" / "memory" / "runtime" / "operations"
     ops.mkdir(parents=True)
     doc = {
         "roles": {
@@ -108,7 +108,7 @@ def test_intersect_toolsets_with_messaging_role(tmp_path):
 
 
 def test_load_role_allowed_toolsets(tmp_path):
-    ops = tmp_path / "workspace" / "operations"
+    ops = tmp_path / "workspace" / "memory" / "runtime" / "operations"
     ops.mkdir(parents=True)
     doc = {
         "roles": {

@@ -459,7 +459,7 @@ Do not repeatedly feed the entire canonical pack to every agent.
 
 Use this structure for every new agent.
 
-**Hermes deployments:** If the new agent is a **separate runtime** (own `HERMES_HOME`, credentials, or messaging gateway), create a **Hermes named profile** (`hermes profile create <slug>` → `~/.hermes/profiles/<slug>/`). Slugs are single path segments; reflect hierarchy in the name (e.g. `director-ops`, `project-xyz-lead`). Record slug ↔ role in `workspace/operations/ORG_REGISTRY.md` / `AGENT_LIFECYCLE_REGISTER.md`. For roles that exist only as prompts or delegate work inside one profile, no extra profile is required. See `policies/core/deployment-handoff.md` (Hermes profiles section).
+**Hermes deployments:** If the new agent is a **separate runtime** (own `HERMES_HOME`, credentials, or messaging gateway), create a **Hermes named profile** (`hermes profile create <slug>` → `~/.hermes/profiles/<slug>/`). Slugs are single path segments; reflect hierarchy in the name (e.g. `director-ops`, `project-xyz-lead`). Record slug ↔ role in `workspace/memory/runtime/operations/ORG_REGISTRY.md` / `AGENT_LIFECYCLE_REGISTER.md`. For roles that exist only as prompts or delegate work inside one profile, no extra profile is required. See `policies/core/deployment-handoff.md` (Hermes profiles section).
 
 ```text
 You are [ROLE NAME].

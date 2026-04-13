@@ -42,7 +42,7 @@ WRITE STYLE
 
 Do not write it as commentary. Write it as an operational document for execution.
 
-When generating supplemental markdown from this prompt in a governed deployment, place company-wide scoped outputs under `workspace/memory/governance/source/generated/` (indexed in `workspace/memory/governance/source/generated/README.md`), role-scoped durable work under `workspace/memory/governance/source/generated/by_role/<role_slug>/`, or project-only output under `operations/projects/<slug>/generated/`, per `workspace/memory/governance/source/artifacts-and-archival-memory.md` and `workspace/memory/governance/source/generated/by_role/README.md`.
+When generating supplemental markdown from this prompt in a governed deployment, place company-wide scoped outputs under `workspace/memory/governance/source/generated/` (indexed in `workspace/memory/governance/source/generated/README.md`), role-scoped durable work under `workspace/memory/governance/source/generated/by_role/<role_slug>/`, or project-only output under `memory/knowledge/projects/<slug>/generated/`, per `workspace/memory/governance/source/artifacts-and-archival-memory.md` and `workspace/memory/governance/source/generated/by_role/README.md`.
 
 <!-- policy-read-order-nav:bottom -->
 > **Next step:** continue to [core/governance/role-prompts/minimal-default-deployment-order.md](minimal-default-deployment-order.md) after this file is fully read and applied. Do not skip ahead unless a human operator explicitly directs a narrower scope.

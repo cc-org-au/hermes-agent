@@ -10,7 +10,7 @@ Policy zone (canonical source):
 
 Runtime zone (operational truth for instantiated work):
 
-- `HERMES_HOME/workspace/operations/*`
+- `HERMES_HOME/workspace/memory/runtime/operations/*`
 
 Rules:
 

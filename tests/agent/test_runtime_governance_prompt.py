@@ -10,7 +10,7 @@ def test_load_runtime_governance_prompt_disabled(tmp_path, monkeypatch):
     from agent import runtime_governance_prompt as rgp
 
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
-    ops = tmp_path / "workspace" / "operations"
+    ops = tmp_path / "workspace" / "memory" / "runtime" / "operations"
     ops.mkdir(parents=True)
     p = ops / "runtime_governance.runtime.yaml"
     p.write_text(yaml.safe_dump({"enabled": False, "summary": "x"}), encoding="utf-8")
@@ -21,7 +21,7 @@ def test_load_runtime_governance_prompt_content(tmp_path, monkeypatch):
     from agent import runtime_governance_prompt as rgp
 
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
-    ops = tmp_path / "workspace" / "operations"
+    ops = tmp_path / "workspace" / "memory" / "runtime" / "operations"
     ops.mkdir(parents=True)
     doc = {
         "enabled": True,

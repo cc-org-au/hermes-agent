@@ -1,11 +1,11 @@
-"""Load concise runtime governance directives from workspace/operations.
+"""Load concise runtime governance directives from workspace memory runtime operations.
 
 Chief / HR (or automation) edit ``runtime_governance.runtime.yaml`` under the
 active ``HERMES_HOME``. The block is injected into project context on every
 **new** agent construction (CLI + gateway) so phased activation and policy
 read-order need not be pasted manually.
 
-File (optional): ``HERMES_HOME/workspace/operations/runtime_governance.runtime.yaml``
+File (optional): ``HERMES_HOME/workspace/memory/runtime/operations/runtime_governance.runtime.yaml``
 """
 
 from __future__ import annotations
@@ -14,15 +14,13 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from hermes_constants import get_hermes_home
+from hermes_constants import get_workspace_operations_dir
 
 logger = logging.getLogger(__name__)
 
-_RELATIVE_PATH = Path("workspace") / "operations" / "runtime_governance.runtime.yaml"
-
 
 def runtime_governance_path() -> Path:
-    return get_hermes_home() / _RELATIVE_PATH
+    return get_workspace_operations_dir() / "runtime_governance.runtime.yaml"
 
 
 def load_runtime_governance_prompt(*, max_chars: int = 6000) -> str:
@@ -45,7 +43,7 @@ def load_runtime_governance_prompt(*, max_chars: int = 6000) -> str:
         return ""
 
     lines: List[str] = [
-        "## Runtime governance (workspace operations)",
+        "## Runtime governance (memory runtime operations)",
         "",
         "The operator or org controller maintains this block on disk — follow it "
         "without asking for large policy pastes. Use file tools to read the paths below.",

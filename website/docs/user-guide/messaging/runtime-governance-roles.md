@@ -10,8 +10,8 @@ Hermes already loads `HERMES_HOME/.hermes.md` and the materialized `workspace/` 
 
 | File | Purpose |
 |------|---------|
-| `workspace/operations/runtime_governance.runtime.yaml` | **Concise directives** (activation session pointer, role slug, bullet rules, paths to read with tools). Injected on **every new** agent (CLI + gateway). |
-| `workspace/operations/role_assignments.yaml` | **Per–role-slug** display name, required policy reads, optional `hermes_profile_for_delegation` hint for `delegate_task`. |
+| `workspace/memory/runtime/operations/runtime_governance.runtime.yaml` | **Concise directives** (activation session pointer, role slug, bullet rules, paths to read with tools). Injected on **every new** agent (CLI + gateway). |
+| `workspace/memory/runtime/operations/role_assignments.yaml` | **Per–role-slug** display name, required policy reads, optional `hermes_profile_for_delegation` hint for `delegate_task`. |
 
 ## Bootstrap from the repo
 
@@ -25,13 +25,13 @@ Templates live in the git checkout: `scripts/templates/runtime_governance.runtim
 
 ### Sync routing from `.env` allowlists
 
-After `workspace governance init`, edit `workspace/operations/messaging_channel_role_map.yaml` (Slack `C…` → role slug, etc.), then:
+After `workspace governance init`, edit `workspace/memory/runtime/operations/messaging_channel_role_map.yaml` (Slack `C…` → role slug, etc.), then:
 
 ```bash
 hermes workspace governance sync-messaging   # writes role_assignments + messaging_role_routing.yaml
 ```
 
-The gateway **merges** `workspace/operations/messaging_role_routing.yaml` into `messaging.role_routing` on top of `config.yaml` (overlay wins for `channels` / `chats` / `threads` maps). Restart the gateway after syncing.
+The gateway **merges** `workspace/memory/runtime/operations/messaging_role_routing.yaml` into `messaging.role_routing` on top of `config.yaml` (overlay wins for `channels` / `chats` / `threads` maps). Restart the gateway after syncing.
 
 ### Token-model §14 disclosure (automatic)
 

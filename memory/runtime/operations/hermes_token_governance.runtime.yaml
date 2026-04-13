@@ -1,5 +1,5 @@
 # Token governance runtime (template). Materialize/copy to:
-#   ${HERMES_HOME}/workspace/operations/hermes_token_governance.runtime.yaml
+#   ${HERMES_HOME}/workspace/memory/runtime/operations/hermes_token_governance.runtime.yaml
 #
 # Route-down requires DISTINCT tier_models (cheap → capable). A prior edit forced
 # gpt-5.4 for A–E, which disabled meaningful per-tier downshifts — restored ladder below.

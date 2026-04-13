@@ -2,7 +2,7 @@
 
 Aligned with ``token-model-tool-and-channel-governance-policy.md`` (Tiers A–F) and
 workspace ``MODEL_ROUTING_REGISTRY.md``. Tier **IDs** live in
-``workspace/operations/hermes_token_governance.runtime.yaml`` under ``tier_models`` —
+``workspace/memory/runtime/operations/hermes_token_governance.runtime.yaml`` under ``tier_models`` —
 edit there when pricing or availability changes; do not hardcode slugs in Hermes code.
 """
 
@@ -14,7 +14,7 @@ from typing import Any, Dict, Optional
 TIER_SENTINEL_RE = re.compile(r"^tier:([A-Ga-g])$")
 TIER_DYNAMIC_SENTINEL = "tier:dynamic"
 
-# When ``workspace/operations/hermes_token_governance.runtime.yaml`` is missing or
+# When ``workspace/memory/runtime/operations/hermes_token_governance.runtime.yaml`` is missing or
 # ``tier_models`` omits a letter, OpenRouter must never receive a literal ``tier:X``.
 # User YAML overrides these defaults per key; align with
 # ``memory/runtime/tasks/templates/script-templates/hermes_token_governance.runtime.example.yaml``.

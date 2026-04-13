@@ -144,7 +144,7 @@ You are the Chief Orchestrator for Session 3 (runtime activation only).
 ---BEGIN SESSION 3---
 
 **Cover — phased activation (fresh context)**  
-**Sessions 1–2 complete:** token governance artifacts on disk **and** Hermes runtime enforcement via `workspace/operations/hermes_token_governance.runtime.yaml` when Session 2 succeeded. This chat is **empty of prior turns** — continuity from **files, registers**, and **Operator carry-in**.
+**Sessions 1–2 complete:** token governance artifacts on disk **and** Hermes runtime enforcement via `workspace/memory/runtime/operations/hermes_token_governance.runtime.yaml` when Session 2 succeeded. This chat is **empty of prior turns** — continuity from **files, registers**, and **Operator carry-in**.
 
 **This session = Session 3.** It runs the **full runtime activation** checklist in `POLICY_ROOT/core/deployment-handoff.md` ("## Runtime Activation Prompt"): verification, preflight, security classification, Required output. **Cost caps from Session 2 should already apply** to this run. Do **not** redo Sessions 1–2 unless you find token governance files missing or invalid — fix in **Handoff A** instead. **Do not** paste all of `deployment-handoff.md` into chat — read it from disk with tools.
 
@@ -193,7 +193,7 @@ You are the Chief Orchestrator for Session 3 (runtime activation only).
 
 **Session task**
 
-Read `POLICY_ROOT/core/governance/artifacts-and-archival-memory.md` and `POLICY_ROOT/core/agentic-company-deployment-pack.md` via tools; confirm `workspace/operations/` and archival layout; patch registers only if missing.
+Read `POLICY_ROOT/core/governance/artifacts-and-archival-memory.md` and `POLICY_ROOT/core/agentic-company-deployment-pack.md` via tools; confirm `workspace/memory/runtime/operations/` and archival layout; patch registers only if missing.
 
 **Handoff + Verification (mandatory order)**  
 **Incomplete session** if you skip a top-level **Handoff** heading, omit **A** or **B**, or replace numbered lists with a vague summary. Reply order: substantive work → **Handoff** (below) → **Verification**.

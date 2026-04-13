@@ -1,4 +1,4 @@
-# Copy to: HERMES_HOME/workspace/operations/messaging_channel_role_map.yaml
+# Copy to: HERMES_HOME/workspace/memory/runtime/operations/messaging_channel_role_map.yaml
 # Install: hermes workspace governance init   (copies this if missing)
 #
 # Maps allowlisted IDs from .env (SLACK_ALLOWED_CHANNELS, TELEGRAM_ALLOWED_CHATS,

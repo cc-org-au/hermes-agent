@@ -1,7 +1,7 @@
 # Memory integration override (completeness)
 
 > **Referenced from:** org activation / memory strategy notes.  
-> **Purpose:** Define how **Hermes memory** (`memories/MEMORY.md`, `USER.md`, memory tool) relates to **workspace registers** under `workspace/operations/`.
+> **Purpose:** Define how **Hermes memory** (`memories/MEMORY.md`, `USER.md`, memory tool) relates to **workspace registers** under `workspace/memory/runtime/operations/`.
 
 ## Principles
 
@@ -14,10 +14,10 @@
 
 | Need | Use |
 |------|-----|
-| Alert status, allowlists, formal workflow | `workspace/operations/*.md` registers |
+| Alert status, allowlists, formal workflow | `workspace/memory/runtime/operations/*.md` registers |
 | Operator preferences, environment quirks | `memories/USER.md` / memory tool |
 | Session takeaway bullets | `memories/MEMORY.md` via memory tool |
-| Legal / audit trail | Registers + dated files in `workspace/operations/` |
+| Legal / audit trail | Registers + dated files in `workspace/memory/runtime/operations/` |
 
 ## Archival
 

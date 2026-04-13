@@ -25,5 +25,5 @@
 ## Policy cross-links
 
 - `token-model-tool-and-channel-governance-policy.md`
-- `workspace/operations/hermes_token_governance.runtime.yaml`
+- `workspace/memory/runtime/operations/hermes_token_governance.runtime.yaml`
 - `agent/consultant_routing.py` (governance activation heuristics)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Populate workspace/operations/CHANNEL_ARCHITECTURE.md and SKILL_INVENTORY_REGISTER.md
+Populate workspace/memory/runtime/operations/CHANNEL_ARCHITECTURE.md and SKILL_INVENTORY_REGISTER.md
 from the active HERMES_HOME (.env + skills/). Intended for operator runs on the VPS
 after messaging env is configured.
 
@@ -8,7 +8,7 @@ Usage:
   export HERMES_HOME=/path/to/profile
   ./venv/bin/python scripts/core/render_workspace_registers_from_env.py
 
-Does not print secrets to stdout; writes markdown under workspace/operations/.
+Does not print secrets to stdout; writes markdown under workspace/memory/runtime/operations/.
 """
 
 from __future__ import annotations
@@ -18,6 +18,8 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+from hermes_constants import resolve_workspace_operations_dir
 
 
 def _hermes_home() -> Path:
@@ -218,7 +220,7 @@ def seed_consultant_board(ops: Path) -> None:
 
 def merge_org_tool_policy_notes(home: Path) -> None:
     """Document security sub-agent tier/tool alignment (Hermes ignores unknown YAML keys)."""
-    path = home / "workspace" / "operations" / "hermes_token_governance.runtime.yaml"
+    path = resolve_workspace_operations_dir(home) / "hermes_token_governance.runtime.yaml"
     if not path.is_file():
         return
     try:
@@ -243,7 +245,7 @@ def merge_org_tool_policy_notes(home: Path) -> None:
 
 
 def patch_security_alert_w003_w004(home: Path) -> None:
-    path = home / "workspace" / "operations" / "SECURITY_ALERT_REGISTER.md"
+    path = resolve_workspace_operations_dir(home) / "SECURITY_ALERT_REGISTER.md"
     if not path.is_file():
         return
     text = path.read_text(encoding="utf-8")
@@ -270,7 +272,7 @@ def patch_security_alert_w003_w004(home: Path) -> None:
 
 def main() -> None:
     home = _hermes_home()
-    ops = home / "workspace" / "operations"
+    ops = resolve_workspace_operations_dir(home)
     ops.mkdir(parents=True, exist_ok=True)
     env = parse_dotenv(home / ".env")
     (ops / "CHANNEL_ARCHITECTURE.md").write_text(render_channel_architecture(home, env), encoding="utf-8")

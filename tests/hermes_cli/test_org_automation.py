@@ -47,7 +47,7 @@ def test_sync_org_markdown_files_writes_ops(tmp_path):
         sync_org_markdown_files(manifest, manifest_path=mp, dry_run=False)
 
     for name in ("ORG_REGISTRY.md", "ORG_CHART.md"):
-        p = home / "workspace" / "operations" / name
+        p = home / "workspace" / "memory" / "runtime" / "operations" / name
         assert p.is_file()
         t = p.read_text(encoding="utf-8")
         assert "HERMES_ORG_MANIFEST_SYNC:BEGIN" in t
