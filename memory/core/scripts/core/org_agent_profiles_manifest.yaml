@@ -1,4 +1,6 @@
 # Hermes profiles for org / REM roles (security sub-agents, directors, HR, project lead).
+# Profile directory names match role-style slugs (e.g. project-lead-agentic-company, product-director).
+# Legacy dirs (ag-pl-*, fd-*, ag-sec-*, ag-org-hr): rename to the names below or re-bootstrap.
 # Bootstrap: from repo root, with chief-orchestrator (or another source) already created:
 #   ./venv/bin/python scripts/core/bootstrap_org_agent_profiles.py
 # Optional: --refresh-config to merge toolsets / max_turns / SOUL snippets into existing profiles.
@@ -9,89 +11,89 @@ clone_from: chief-orchestrator
 
 profiles:
   # --- Security foundation (REM-006 / Phase 4) ---
-  - name: ag-sec-preflight
+  - name: security-preflight
     ag_id: AG-004
     toolsets: [terminal, file]
     agent_max_turns: 45
     role_prompt: policies/core/governance/role-prompts/security-foundation-agents-role-prompts.md
 
-  - name: ag-sec-drift
+  - name: security-drift
     ag_id: AG-006
     toolsets: [terminal, file, web]
     agent_max_turns: 45
     role_prompt: policies/core/governance/role-prompts/security-foundation-agents-role-prompts.md
 
-  - name: ag-sec-filesystem
+  - name: security-filesystem
     ag_id: AG-007
     toolsets: [terminal, file]
     agent_max_turns: 45
     role_prompt: policies/core/governance/role-prompts/security-foundation-agents-role-prompts.md
 
-  - name: ag-sec-browser
+  - name: security-browser
     ag_id: AG-008
     toolsets: [terminal, file, web, browser]
     agent_max_turns: 50
     role_prompt: policies/core/governance/role-prompts/security-foundation-agents-role-prompts.md
 
-  - name: ag-sec-integration
+  - name: security-integration
     ag_id: AG-009
     toolsets: [terminal, file, web, mcp]
     agent_max_turns: 50
     role_prompt: policies/core/governance/role-prompts/security-foundation-agents-role-prompts.md
 
-  - name: ag-sec-prompt-memory
+  - name: security-prompt-memory
     ag_id: AG-010
     toolsets: [terminal, file]
     agent_max_turns: 45
     role_prompt: policies/core/governance/role-prompts/security-foundation-agents-role-prompts.md
 
-  - name: ag-sec-exfiltration
+  - name: security-exfiltration
     ag_id: AG-011
     toolsets: [terminal, file, web]
     agent_max_turns: 45
     role_prompt: policies/core/governance/role-prompts/security-foundation-agents-role-prompts.md
 
-  - name: ag-sec-supply-chain
+  - name: security-supply-chain
     ag_id: AG-012
     toolsets: [terminal, file, web]
     agent_max_turns: 50
     role_prompt: policies/core/governance/role-prompts/security-foundation-agents-role-prompts.md
 
-  - name: ag-sec-incident
+  - name: security-incident
     ag_id: AG-013
     toolsets: [terminal, file, web]
     agent_max_turns: 55
     role_prompt: policies/core/governance/role-prompts/security-foundation-agents-role-prompts.md
 
   # --- Org / HR (registry + chief coordination) ---
-  - name: ag-org-hr
+  - name: org-mapper-hr-controller
     toolsets: [terminal, file, web]
     agent_max_turns: 55
     role_prompt: policies/core/governance/role-prompts/org-mapper-hr-controller.md
 
   # --- Functional directors (REM-007) ---
-  - name: fd-product
+  - name: product-director
     toolsets: [terminal, file, web, browser]
     agent_max_turns: 60
     role_prompt: policies/core/governance/role-prompts/functional-director-template.md
 
-  - name: fd-engineering
+  - name: engineering-director
     toolsets: [terminal, file, web, browser]
     agent_max_turns: 60
     role_prompt: policies/core/governance/role-prompts/functional-director-template.md
 
-  - name: fd-operations
+  - name: operations-director
     toolsets: [terminal, file, web]
     agent_max_turns: 60
     role_prompt: policies/core/governance/role-prompts/functional-director-template.md
 
-  - name: fd-it-security
+  - name: it-security-director
     toolsets: [terminal, file, web, browser]
     agent_max_turns: 60
     role_prompt: policies/core/governance/role-prompts/functional-director-template.md
 
   # --- Project lead (agentic-company) ---
-  - name: ag-pl-agentic-company
+  - name: project-lead-agentic-company
     toolsets: [terminal, file, web]
     agent_max_turns: 60
     role_prompt: policies/core/governance/role-prompts/project-lead-template.md

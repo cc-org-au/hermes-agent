@@ -1,7 +1,7 @@
 # Default routing / delegation canon (repo). Overlay: ${HERMES_HOME}/routing_canon.yaml
 # Merged with deep-merge; overlay keys override defaults.
 
-version: 7
+version: 8
 
 # Philosophy order (documentation; enforcement is in routing code paths):
 # 1) cost + compatibility  2) speed + efficiency  3) memory + usefulness
@@ -165,3 +165,95 @@ hard_budget:
   # clarify_callback, calls stay blocked while exhausted. Gateway-only profiles: set false in
   # ${HERMES_HOME}/routing_canon.yaml if you need auto-fallback when cap is hit without a TUI.
   operator_approval_when_daily_cap_exceeded: true
+
+# -----------------------------------------------------------------------------
+# Compression defaults (canon-first; profile config.yaml compression.* may overlay)
+# -----------------------------------------------------------------------------
+compression:
+  # Every N user turns trigger lossy pass when lossy_mode is true (0 = interval off).
+  turn_interval: 0
+  lossy_mode: false
+  preserve_last_pairs: 2
+
+# -----------------------------------------------------------------------------
+# Synthetic /models selector: openrouter/free (strict free-tier only)
+# -----------------------------------------------------------------------------
+openrouter_free_router:
+  enabled: true
+  strict_no_paid_fallback: true
+  ranking: capability_score
+  live_fetch_ttl_seconds: 3600
+  empty_error_message: >-
+    openrouter/free: no free-tier OpenRouter model matched the allowlist.
+    Set OPENROUTER_API_KEY, expand openrouter_free_router.candidate_slugs in routing canon,
+    or pick a different /models option.
+  candidate_slugs:
+    - nvidia/nemotron-3-super-120b-a12b:free
+    - arcee-ai/trinity-large-preview:free
+    - google/gemma-3-4b-it:free
+    - google/gemma-3-12b-it:free
+    - meta-llama/llama-3.3-70b-instruct:free
+    - mistralai/mistral-7b-instruct:free
+    - qwen/qwen-2.5-7b-instruct:free
+    - deepseek/deepseek-r1-distill-llama-70b:free
+    - microsoft/phi-3-mini-128k-instruct:free
+    - openai/gpt-oss-120b:free
+    - openai/gpt-oss-20b:free
+  capability_scores:
+    "nvidia/nemotron-3-super-120b-a12b:free": 95
+    "arcee-ai/trinity-large-preview:free": 88
+    "deepseek/deepseek-r1-distill-llama-70b:free": 87
+    "meta-llama/llama-3.3-70b-instruct:free": 86
+    "openai/gpt-oss-120b:free": 90
+    "openai/gpt-oss-20b:free": 78
+    "google/gemma-3-12b-it:free": 72
+    "google/gemma-3-4b-it:free": 55
+    "mistralai/mistral-7b-instruct:free": 50
+    "qwen/qwen-2.5-7b-instruct:free": 52
+    "microsoft/phi-3-mini-128k-instruct:free": 48
+
+# -----------------------------------------------------------------------------
+# Lazy tool surface (API tools= subset; default off)
+# -----------------------------------------------------------------------------
+agent_lazy_tool_loading:
+  enabled: false
+  core_toolsets:
+    - memory
+  core_tools: []
+  expand_via: meta_tool
+
+# -----------------------------------------------------------------------------
+# Semantic tool result cache (profile-local SQLite; default off)
+# -----------------------------------------------------------------------------
+agent_semantic_cache:
+  enabled: false
+  ttl_seconds: 3600
+  sqlite_relpath: semantic_tool_cache.sqlite
+  allow_tools: []
+  host_role_env_precedence:
+    - HERMES_CLI_INSTANCE_LABEL
+    - HERMES_GATEWAY_LOCK_INSTANCE
+
+# -----------------------------------------------------------------------------
+# Per-turn output / reasoning caps (default off)
+# -----------------------------------------------------------------------------
+agent_cost_caps:
+  enabled: false
+  extractive_max_output_tokens: 1024
+  extractive_user_message_max_chars: 800
+  extractive_keywords:
+    - summarize
+    - bullet
+    - list
+    - extract
+    - classify
+  preserve_full_for_tiers: ["E", "F", "G"]
+
+# -----------------------------------------------------------------------------
+# Concise operational replies (ephemeral injection only; default off)
+# -----------------------------------------------------------------------------
+agent_concise_output:
+  enabled: false
+  ephemeral_fragment: >-
+    Prefer terse operational answers: short bullets or diff-only when editing code.
+    Skip filler and preambles unless the user asks for explanation.

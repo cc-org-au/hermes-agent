@@ -90,6 +90,48 @@ def canonical_native_tier_model_id(model_id: Optional[str]) -> str:
     return s
 
 
+def default_native_gemini_fallback_model(full_config: Optional[Dict[str, Any]] = None) -> str:
+    """Prefer ``free_model_routing.fallback_free_routed_model`` when it is a native Gemini id."""
+    fb = "gemini-2.5-flash"
+    if not full_config or not isinstance(full_config, dict):
+        return fb
+    try:
+        fmr = full_config.get("free_model_routing")
+        if isinstance(fmr, dict):
+            cand = str(fmr.get("fallback_free_routed_model") or "").strip()
+            if cand and "/" not in cand and cand.lower().startswith("gemini"):
+                return cand
+    except Exception:
+        pass
+    return fb
+
+
+def coerce_model_id_for_native_gemini_api(
+    model_id: str,
+    *,
+    full_config: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Ensure ``model.default`` is valid for generativelanguage OpenAI-compat (no OpenRouter slugs).
+
+    Repo defaults use OpenRouter-style ids (e.g. ``openai/gpt-5.4-nano``). Profiles with
+    ``model.provider: gemini`` must use native Gemini model names or the API returns 404.
+    """
+    s = (model_id or "").strip()
+    fb = default_native_gemini_fallback_model(full_config)
+    if not s:
+        return fb
+    low = s.lower()
+    if "/" in s:
+        return fb
+    if low.startswith("gpt-") or low.startswith("o1") or low.startswith("o3") or low.startswith("o4"):
+        return fb
+    if low.startswith("claude-"):
+        return fb
+    if low.startswith("gemini-"):
+        return s
+    return s
+
+
 def resolve_tier_dynamic_model(
     user_text: str,
     gov_cfg: Optional[Dict[str, Any]] = None,

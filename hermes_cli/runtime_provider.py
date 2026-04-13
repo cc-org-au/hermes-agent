@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 from hermes_cli import auth as auth_mod
 from agent.credential_pool import CredentialPool, PooledCredential, get_custom_provider_pool_key, load_pool
@@ -67,7 +70,10 @@ def _auto_detect_local_model(base_url: str) -> str:
 
 
 def _get_model_config() -> Dict[str, Any]:
-    from agent.tier_model_routing import canonical_native_tier_model_id
+    from agent.tier_model_routing import (
+        canonical_native_tier_model_id,
+        coerce_model_id_for_native_gemini_api,
+    )
 
     config = load_config()
     model_cfg = config.get("model")
@@ -86,6 +92,17 @@ def _get_model_config() -> Dict[str, Any]:
                 cfg["default"] = detected
         else:
             cfg["default"] = default
+        prov = str(cfg.get("provider") or "").strip().lower()
+        if prov == "gemini":
+            coerced = coerce_model_id_for_native_gemini_api(cfg.get("default") or "", full_config=config)
+            if coerced != cfg.get("default"):
+                logger.warning(
+                    "model.default %r is not valid for native Gemini API — using %r "
+                    "(OpenRouter-style slugs require provider openrouter or nous).",
+                    cfg.get("default"),
+                    coerced,
+                )
+                cfg["default"] = coerced
         return cfg
     if isinstance(model_cfg, str) and model_cfg.strip():
         return {"default": canonical_native_tier_model_id(model_cfg.strip())}

@@ -7,6 +7,8 @@ import pytest
 from agent.tier_model_routing import (
     BUILTIN_TIER_MODELS,
     canonical_native_tier_model_id,
+    coerce_model_id_for_native_gemini_api,
+    default_native_gemini_fallback_model,
     effective_tier_models,
     infer_tier_letter_for_model,
     normalize_tier_models,
@@ -17,6 +19,19 @@ from agent.tier_model_routing import (
 
 def _legacy_short_tier_alias() -> str:
     return "".join(map(chr, (103, 101, 109, 109, 97))) + "-4"
+
+
+def test_coerce_openrouter_slug_to_native_gemini():
+    fb = coerce_model_id_for_native_gemini_api("openai/gpt-5.4-nano", full_config=None)
+    assert fb == "gemini-2.5-flash"
+    assert coerce_model_id_for_native_gemini_api("gemini-2.5-flash", full_config=None) == "gemini-2.5-flash"
+    assert coerce_model_id_for_native_gemini_api("gpt-5.4-nano", full_config=None) == "gemini-2.5-flash"
+
+
+def test_default_native_gemini_fallback_from_config():
+    cfg = {"free_model_routing": {"fallback_free_routed_model": "gemini-2.5-pro"}}
+    assert default_native_gemini_fallback_model(cfg) == "gemini-2.5-pro"
+    assert default_native_gemini_fallback_model({"free_model_routing": {"fallback_free_routed_model": "openai/x"}}) == "gemini-2.5-flash"
 
 
 def test_canonical_native_tier_model_id_maps_legacy_short_alias():

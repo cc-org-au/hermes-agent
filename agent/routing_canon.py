@@ -183,3 +183,155 @@ def load_hard_budget_config() -> Dict[str, Any]:
         "reset_timezone": reset_tz,
         "operator_approval_when_daily_cap_exceeded": operator_approval,
     }
+
+
+def load_compression_canon_config() -> Dict[str, Any]:
+    """Compression defaults from merged routing canon (canon-first merge in run_agent)."""
+    canon = load_merged_routing_canon()
+    raw = canon.get("compression")
+    if not isinstance(raw, dict):
+        raw = {}
+    try:
+        turn_interval = int(raw.get("turn_interval") or 0)
+    except (TypeError, ValueError):
+        turn_interval = 0
+    try:
+        preserve_last = int(raw.get("preserve_last_pairs") or 2)
+    except (TypeError, ValueError):
+        preserve_last = 2
+    return {
+        "turn_interval": max(0, turn_interval),
+        "lossy_mode": bool(raw.get("lossy_mode", False)),
+        "preserve_last_pairs": max(1, preserve_last),
+    }
+
+
+def load_openrouter_free_router_config() -> Dict[str, Any]:
+    """openrouter/free synthetic selector policy from merged canon."""
+    from utils import is_truthy_value
+
+    canon = load_merged_routing_canon()
+    raw = canon.get("openrouter_free_router")
+    if not isinstance(raw, dict):
+        raw = {}
+    candidates = raw.get("candidate_slugs")
+    if not isinstance(candidates, list):
+        candidates = []
+    slugs = [str(x).strip() for x in candidates if x and str(x).strip()]
+    scores_raw = raw.get("capability_scores")
+    scores: Dict[str, int] = {}
+    if isinstance(scores_raw, dict):
+        for k, v in scores_raw.items():
+            key = str(k).strip()
+            if not key:
+                continue
+            try:
+                scores[key] = int(v)
+            except (TypeError, ValueError):
+                continue
+    try:
+        ttl = int(raw.get("live_fetch_ttl_seconds") or 3600)
+    except (TypeError, ValueError):
+        ttl = 3600
+    return {
+        "enabled": is_truthy_value(raw.get("enabled"), default=True),
+        "strict_no_paid_fallback": is_truthy_value(raw.get("strict_no_paid_fallback"), default=True),
+        "ranking": str(raw.get("ranking") or "capability_score").strip() or "capability_score",
+        "live_fetch_ttl_seconds": max(60, ttl),
+        "empty_error_message": str(raw.get("empty_error_message") or "").strip()
+        or "openrouter/free: no eligible free-tier models.",
+        "candidate_slugs": slugs,
+        "capability_scores": scores,
+    }
+
+
+def load_lazy_tool_loading_config() -> Dict[str, Any]:
+    from utils import is_truthy_value
+
+    canon = load_merged_routing_canon()
+    raw = canon.get("agent_lazy_tool_loading")
+    if not isinstance(raw, dict):
+        raw = {}
+    core_ts = raw.get("core_toolsets")
+    if not isinstance(core_ts, list):
+        core_ts = ["memory"]
+    core_tools = raw.get("core_tools")
+    if not isinstance(core_tools, list):
+        core_tools = []
+    return {
+        "enabled": is_truthy_value(raw.get("enabled"), default=False),
+        "core_toolsets": [str(x).strip() for x in core_ts if str(x).strip()],
+        "core_tools": [str(x).strip() for x in core_tools if str(x).strip()],
+        "expand_via": str(raw.get("expand_via") or "meta_tool").strip() or "meta_tool",
+    }
+
+
+def load_semantic_cache_config() -> Dict[str, Any]:
+    from utils import is_truthy_value
+
+    canon = load_merged_routing_canon()
+    raw = canon.get("agent_semantic_cache")
+    if not isinstance(raw, dict):
+        raw = {}
+    allow = raw.get("allow_tools")
+    if not isinstance(allow, list):
+        allow = []
+    prec = raw.get("host_role_env_precedence")
+    if not isinstance(prec, list):
+        prec = ["HERMES_CLI_INSTANCE_LABEL", "HERMES_GATEWAY_LOCK_INSTANCE"]
+    try:
+        ttl = int(raw.get("ttl_seconds") or 3600)
+    except (TypeError, ValueError):
+        ttl = 3600
+    return {
+        "enabled": is_truthy_value(raw.get("enabled"), default=False),
+        "ttl_seconds": max(60, ttl),
+        "sqlite_relpath": str(raw.get("sqlite_relpath") or "semantic_tool_cache.sqlite").strip()
+        or "semantic_tool_cache.sqlite",
+        "allow_tools": [str(x).strip() for x in allow if str(x).strip()],
+        "host_role_env_precedence": [str(x).strip() for x in prec if str(x).strip()],
+    }
+
+
+def load_cost_caps_config() -> Dict[str, Any]:
+    from utils import is_truthy_value
+
+    canon = load_merged_routing_canon()
+    raw = canon.get("agent_cost_caps")
+    if not isinstance(raw, dict):
+        raw = {}
+    kws = raw.get("extractive_keywords")
+    if not isinstance(kws, list):
+        kws = []
+    tiers = raw.get("preserve_full_for_tiers")
+    if not isinstance(tiers, list):
+        tiers = ["E", "F", "G"]
+    try:
+        max_out = int(raw.get("extractive_max_output_tokens") or 1024)
+    except (TypeError, ValueError):
+        max_out = 1024
+    try:
+        max_um = int(raw.get("extractive_user_message_max_chars") or 800)
+    except (TypeError, ValueError):
+        max_um = 800
+    return {
+        "enabled": is_truthy_value(raw.get("enabled"), default=False),
+        "extractive_max_output_tokens": max(256, max_out),
+        "extractive_user_message_max_chars": max(100, max_um),
+        "extractive_keywords": [str(x).strip().lower() for x in kws if str(x).strip()],
+        "preserve_full_for_tiers": [str(x).strip().upper() for x in tiers if x],
+    }
+
+
+def load_concise_output_config() -> Dict[str, Any]:
+    from utils import is_truthy_value
+
+    canon = load_merged_routing_canon()
+    raw = canon.get("agent_concise_output")
+    if not isinstance(raw, dict):
+        raw = {}
+    frag = raw.get("ephemeral_fragment")
+    return {
+        "enabled": is_truthy_value(raw.get("enabled"), default=False),
+        "ephemeral_fragment": str(frag).strip() if frag else "",
+    }

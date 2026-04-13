@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_date": "2026-04-09",
+  "snapshot_date": "2026-04-13",
   "currency": "USD",
   "disclaimer": "Snapshot for routing assistants. Prices and model availability change frequently. Always confirm on the provider's official pricing and models pages before relying on costs. OpenAI pricing rows use the Standard tier unless noted.",
   "sources": [
@@ -27,6 +27,14 @@
     {
       "provider": "google_models",
       "url": "https://ai.google.dev/gemini-api/docs/models"
+    },
+    {
+      "provider": "openrouter",
+      "url": "https://openrouter.ai/docs"
+    },
+    {
+      "provider": "openrouter_models",
+      "url": "https://openrouter.ai/models"
     }
   ],
   "reasoning_level_scale": {
@@ -2101,6 +2109,725 @@
           },
           "notes": "Shutdown June 1, 2026.",
           "deprecation_hint": "shutdown_2026-06-01"
+        }
+      ]
+    },
+    "openrouter": {
+      "label": "OpenRouter (aggregate hub)",
+      "provider_notes": "Slugs are provider/model as used on OpenRouter. Paid rows use rough per-1M USD; :free rows are 0 in this snapshot — confirm live eligibility via OpenRouter /models.",
+      "models": [
+        {
+          "id": "openai/gpt-5-nano",
+          "category": "hub_openai_budget",
+          "reasoning_level": "low",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.05,
+              "output": 0.4
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Canon step-up / OPM failover ladder"
+        },
+        {
+          "id": "openai/gpt-4.1-nano",
+          "category": "hub_openai_budget",
+          "reasoning_level": "low",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.1,
+              "output": 0.4
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Canon ladder"
+        },
+        {
+          "id": "openai/gpt-5-mini",
+          "category": "hub_openai_efficient",
+          "reasoning_level": "medium",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.25,
+              "output": 2.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Canon ladder"
+        },
+        {
+          "id": "openai/gpt-4.1-mini",
+          "category": "hub_openai_efficient",
+          "reasoning_level": "low",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.4,
+              "output": 1.6
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Canon ladder"
+        },
+        {
+          "id": "openai/gpt-5.4-nano",
+          "category": "hub_openai_budget",
+          "reasoning_level": "low",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.2,
+              "output": 1.25
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Canon ladder"
+        },
+        {
+          "id": "openai/gpt-5.4-mini",
+          "category": "hub_openai_efficient",
+          "reasoning_level": "medium",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.75,
+              "output": 4.5
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Canon ladder"
+        },
+        {
+          "id": "openai/gpt-5.2",
+          "category": "hub_openai_strong",
+          "reasoning_level": "high",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 1.75,
+              "output": 14.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Canon ladder"
+        },
+        {
+          "id": "openai/gpt-5.4",
+          "category": "hub_openai_flagship",
+          "reasoning_level": "high",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 2.5,
+              "output": 15.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Canon ladder"
+        },
+        {
+          "id": "openai/gpt-5.2-codex",
+          "category": "hub_openai_codex",
+          "reasoning_level": "high",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 1.75,
+              "output": 14.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Canon codex ladder"
+        },
+        {
+          "id": "openai/gpt-5.3-codex",
+          "category": "hub_openai_codex",
+          "reasoning_level": "high",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 2.0,
+              "output": 16.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Canon codex ladder"
+        },
+        {
+          "id": "openai/gpt-5.4-pro",
+          "category": "hub_openai_premium",
+          "reasoning_level": "very_high",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 30.0,
+              "output": 180.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Premium tier"
+        },
+        {
+          "id": "anthropic/claude-haiku-4.5",
+          "category": "hub_anthropic_efficient",
+          "reasoning_level": "medium",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 1.0,
+              "output": 5.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Fast Claude"
+        },
+        {
+          "id": "anthropic/claude-sonnet-4.5",
+          "category": "hub_anthropic_balanced",
+          "reasoning_level": "high",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 3.0,
+              "output": 15.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Daily driver"
+        },
+        {
+          "id": "anthropic/claude-sonnet-4.6",
+          "category": "hub_anthropic_balanced",
+          "reasoning_level": "high",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 3.0,
+              "output": 15.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Balanced"
+        },
+        {
+          "id": "anthropic/claude-opus-4.6",
+          "category": "hub_anthropic_flagship",
+          "reasoning_level": "very_high",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 5.0,
+              "output": 25.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Frontier"
+        },
+        {
+          "id": "google/gemini-2.5-flash-preview-05-20",
+          "category": "hub_google_fast",
+          "reasoning_level": "medium",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.15,
+              "output": 0.6
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Low latency"
+        },
+        {
+          "id": "google/gemini-2.5-pro-preview-06-05",
+          "category": "hub_google_flagship",
+          "reasoning_level": "high",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 1.25,
+              "output": 10.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Strong reasoning"
+        },
+        {
+          "id": "google/gemini-3-flash-preview",
+          "category": "hub_google_frontier_fast",
+          "reasoning_level": "high",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.5,
+              "output": 3.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Preview"
+        },
+        {
+          "id": "google/gemini-3-pro-preview",
+          "category": "hub_google_frontier",
+          "reasoning_level": "very_high",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 2.0,
+              "output": 12.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Preview flagship"
+        },
+        {
+          "id": "meta-llama/llama-3.3-70b-instruct",
+          "category": "hub_meta_balanced",
+          "reasoning_level": "high",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.35,
+              "output": 0.4
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Open weights"
+        },
+        {
+          "id": "mistralai/mistral-small-3.2-24b-instruct",
+          "category": "hub_mistral_efficient",
+          "reasoning_level": "medium",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.05,
+              "output": 0.08
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Efficient"
+        },
+        {
+          "id": "qwen/qwen-2.5-72b-instruct",
+          "category": "hub_qwen_balanced",
+          "reasoning_level": "high",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.35,
+              "output": 0.4
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "General"
+        },
+        {
+          "id": "deepseek/deepseek-chat",
+          "category": "hub_deepseek_chat",
+          "reasoning_level": "medium",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.14,
+              "output": 0.28
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Budget chat"
+        },
+        {
+          "id": "deepseek/deepseek-r1",
+          "category": "hub_deepseek_reasoning",
+          "reasoning_level": "reasoning_native",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.55,
+              "output": 2.19
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Reasoning"
+        },
+        {
+          "id": "x-ai/grok-4.20-beta",
+          "category": "hub_xai_frontier",
+          "reasoning_level": "high",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 2.0,
+              "output": 6.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Long context"
+        },
+        {
+          "id": "x-ai/grok-4.1-fast-non-reasoning",
+          "category": "hub_xai_efficient",
+          "reasoning_level": "low",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.2,
+              "output": 0.5
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Fast"
+        },
+        {
+          "id": "nvidia/nemotron-3-super-120b-a12b:free",
+          "category": "openrouter_free",
+          "reasoning_level": "high",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.0,
+              "output": 0.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [
+            "Zero-cost exploration",
+            "openrouter/free selector"
+          ],
+          "notes": "Free tier; canon openrouter/free"
+        },
+        {
+          "id": "arcee-ai/trinity-large-preview:free",
+          "category": "openrouter_free",
+          "reasoning_level": "medium",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.0,
+              "output": 0.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [
+            "Zero-cost exploration",
+            "openrouter/free selector"
+          ],
+          "notes": "Free tier"
+        },
+        {
+          "id": "google/gemma-3-4b-it:free",
+          "category": "openrouter_free",
+          "reasoning_level": "low",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.0,
+              "output": 0.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [
+            "Zero-cost exploration",
+            "openrouter/free selector"
+          ],
+          "notes": "Free tier"
+        },
+        {
+          "id": "google/gemma-3-12b-it:free",
+          "category": "openrouter_free",
+          "reasoning_level": "medium",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.0,
+              "output": 0.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [
+            "Zero-cost exploration",
+            "openrouter/free selector"
+          ],
+          "notes": "Free tier"
+        },
+        {
+          "id": "meta-llama/llama-3.3-70b-instruct:free",
+          "category": "openrouter_free",
+          "reasoning_level": "high",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.0,
+              "output": 0.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [
+            "Zero-cost exploration",
+            "openrouter/free selector"
+          ],
+          "notes": "Free tier"
+        },
+        {
+          "id": "mistralai/mistral-7b-instruct:free",
+          "category": "openrouter_free",
+          "reasoning_level": "low",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.0,
+              "output": 0.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [
+            "Zero-cost exploration",
+            "openrouter/free selector"
+          ],
+          "notes": "Free tier"
+        },
+        {
+          "id": "qwen/qwen-2.5-7b-instruct:free",
+          "category": "openrouter_free",
+          "reasoning_level": "low",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.0,
+              "output": 0.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [
+            "Zero-cost exploration",
+            "openrouter/free selector"
+          ],
+          "notes": "Free tier"
+        },
+        {
+          "id": "deepseek/deepseek-r1-distill-llama-70b:free",
+          "category": "openrouter_free",
+          "reasoning_level": "reasoning_native",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.0,
+              "output": 0.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [
+            "Zero-cost exploration",
+            "openrouter/free selector"
+          ],
+          "notes": "Free tier"
+        },
+        {
+          "id": "microsoft/phi-3-mini-128k-instruct:free",
+          "category": "openrouter_free",
+          "reasoning_level": "low",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.0,
+              "output": 0.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [
+            "Zero-cost exploration",
+            "openrouter/free selector"
+          ],
+          "notes": "Free tier"
+        },
+        {
+          "id": "openai/gpt-oss-120b:free",
+          "category": "openrouter_free",
+          "reasoning_level": "high",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.0,
+              "output": 0.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [
+            "Zero-cost exploration",
+            "openrouter/free selector"
+          ],
+          "notes": "Free tier"
+        },
+        {
+          "id": "openai/gpt-oss-20b:free",
+          "category": "openrouter_free",
+          "reasoning_level": "medium",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.0,
+              "output": 0.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [
+            "Zero-cost exploration",
+            "openrouter/free selector"
+          ],
+          "notes": "Free tier"
+        },
+        {
+          "id": "z-ai/glm-5",
+          "category": "hub_zai_balanced",
+          "reasoning_level": "high",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.5,
+              "output": 2.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "General"
+        },
+        {
+          "id": "stepfun/step-3.5-flash",
+          "category": "hub_stepfun_fast",
+          "reasoning_level": "medium",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 0.2,
+              "output": 0.8
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Fast"
+        },
+        {
+          "id": "xiaomi/mimo-v2-pro",
+          "category": "hub_other",
+          "reasoning_level": "high",
+          "modalities": [
+            "text"
+          ],
+          "pricing": {
+            "usd_per_million_tokens": {
+              "input": 1.0,
+              "output": 4.0
+            }
+          },
+          "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+          "best_for": [],
+          "notes": "Alternate hub"
         }
       ]
     }

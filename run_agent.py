@@ -51,6 +51,36 @@ from agent.budget_ledger import (
     HARD_BUDGET_DENY_CHOICE,
     HardBudgetBlockedError,
 )
+from agent.openrouter_free_router import (
+    OPENROUTER_FREE_SYNTHETIC,
+    OpenRouterFreeResolutionError,
+    resolve_openrouter_free_model_for_api,
+)
+
+_LAZY_TOOL_API_INSTRUCTION = (
+    "Only tools listed in this API request's tools array are invocable on this turn. "
+    "To call other tools that appear in the system prompt, invoke expand_tool_surface "
+    "with their exact names first, or call the tool directly and the surface will expand automatically."
+)
+
+_EXPAND_TOOL_SURFACE_OPENAI = {
+    "name": "expand_tool_surface",
+    "description": (
+        "Add tools to the invocable API surface for this session. Pass exact tool names from "
+        "the system prompt capability list. Already-active tools are ignored."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "tool_names": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Hermes tool names to expose to the model on subsequent API calls.",
+            }
+        },
+        "required": ["tool_names"],
+    },
+}
 
 # Load .env from ~/.hermes/.env first, then project root as dev fallback.
 # User-managed env files should override stale shell exports on restart.
@@ -1483,17 +1513,70 @@ class AIAgent:
             _agent_section = {}
         self._tool_use_enforcement = _agent_section.get("tool_use_enforcement", "auto")
 
+        from agent.routing_canon import (
+            load_compression_canon_config,
+            load_concise_output_config,
+            load_cost_caps_config,
+            load_lazy_tool_loading_config,
+            load_semantic_cache_config,
+        )
+        from agent.semantic_tool_cache import configure_semantic_tool_cache
+        from utils import is_truthy_value
+
+        _sem_m = {**load_semantic_cache_config()}
+        _sem_u = _agent_section.get("semantic_cache")
+        if isinstance(_sem_u, dict):
+            _sem_m = {**_sem_m, **_sem_u}
+        configure_semantic_tool_cache(_sem_m)
+
+        _caps_m = {**load_cost_caps_config()}
+        _caps_u = _agent_section.get("cost_caps")
+        if isinstance(_caps_u, dict):
+            _caps_m = {**_caps_m, **_caps_u}
+        self._cost_caps_cfg = _caps_m
+
+        _conc_m = {**load_concise_output_config()}
+        _conc_u = _agent_section.get("concise_output")
+        if isinstance(_conc_u, dict):
+            _conc_m = {**_conc_m, **_conc_u}
+        self._concise_output_enabled = is_truthy_value(_conc_m.get("enabled"), default=False)
+        self._concise_output_fragment = str(_conc_m.get("ephemeral_fragment") or "").strip()
+
+        _lazy_m = {**load_lazy_tool_loading_config()}
+        _lazy_u = _agent_section.get("lazy_tool_loading")
+        if isinstance(_lazy_u, dict):
+            _lazy_m = {**_lazy_m, **_lazy_u}
+        self._lazy_tool_loading_enabled = is_truthy_value(_lazy_m.get("enabled"), default=False)
+        self._lazy_expand_via = str(_lazy_m.get("expand_via") or "meta_tool").strip().lower()
+        self._lazy_tool_def_by_name: Dict[str, Any] = {}
+        self._api_tool_names: set = set()
+        if self._lazy_tool_loading_enabled:
+            self._apply_lazy_tool_loading_post_init(_lazy_m)
+        elif self.tools:
+            self._api_tool_names = {t["function"]["name"] for t in self.tools if t.get("function", {}).get("name")}
+
         # Initialize context compressor for automatic context management
-        # Compresses conversation when approaching model's context limit
-        # Configuration via config.yaml (compression section)
+        # Canon-first merge: agent/dynamic_routing_canon.yaml compression.* then config.yaml overlay.
+
+        _canon_comp = load_compression_canon_config()
         _compression_cfg = _agent_cfg.get("compression", {})
         if not isinstance(_compression_cfg, dict):
             _compression_cfg = {}
-        compression_threshold = float(_compression_cfg.get("threshold", 0.50))
-        compression_enabled = str(_compression_cfg.get("enabled", True)).lower() in ("true", "1", "yes")
-        compression_summary_model = _compression_cfg.get("summary_model") or None
-        compression_target_ratio = float(_compression_cfg.get("target_ratio", 0.20))
-        compression_protect_last = int(_compression_cfg.get("protect_last_n", 20))
+        _merged_comp = {**_canon_comp, **_compression_cfg}
+        compression_threshold = float(_merged_comp.get("threshold", 0.50))
+        compression_enabled = str(_merged_comp.get("enabled", True)).lower() in ("true", "1", "yes")
+        compression_summary_model = _merged_comp.get("summary_model") or None
+        compression_target_ratio = float(_merged_comp.get("target_ratio", 0.20))
+        compression_protect_last = int(_merged_comp.get("protect_last_n", 20))
+        try:
+            self._compression_turn_interval = max(0, int(_merged_comp.get("turn_interval") or 0))
+        except (TypeError, ValueError):
+            self._compression_turn_interval = 0
+        self._compression_lossy_mode = bool(_merged_comp.get("lossy_mode", False))
+        try:
+            self._compression_preserve_last_pairs = max(1, int(_merged_comp.get("preserve_last_pairs") or 2))
+        except (TypeError, ValueError):
+            self._compression_preserve_last_pairs = 2
 
         # Read explicit context_length override from model config
         _model_cfg = _agent_cfg.get("model", {})
@@ -1540,6 +1623,8 @@ class AIAgent:
             api_key=getattr(self, "api_key", ""),
             config_context_length=_config_context_length,
             provider=self.provider,
+            lossy_mode=self._compression_lossy_mode,
+            lossy_preserve_last_pairs=self._compression_preserve_last_pairs,
         )
         self.compression_enabled = compression_enabled
         self._user_turn_count = 0
@@ -6905,6 +6990,40 @@ class AIAgent:
         m = self.model
         if not m:
             return m
+        m_strip = str(m).strip()
+        if m_strip == OPENROUTER_FREE_SYNTHETIC:
+            pl0 = (self.provider or "").strip().lower()
+            bu0 = (self.base_url or "").lower()
+            if pl0 == "openrouter" or "openrouter.ai" in bu0:
+                resolved = resolve_openrouter_free_model_for_api(
+                    configured_model=m_strip,
+                    api_key=self.api_key or "",
+                    base_url=self.base_url or "",
+                )
+                try:
+                    from agent.routing_canon import load_merged_routing_canon
+                    from agent.routing_trace import emit_routing_decision_trace
+
+                    ver = int(load_merged_routing_canon().get("version") or 0)
+                except Exception:
+                    ver = 0
+                prof = ""
+                try:
+                    from hermes_cli.profiles import get_active_profile_name
+
+                    prof = get_active_profile_name() or ""
+                except Exception:
+                    pass
+                emit_routing_decision_trace(
+                    stage="openrouter_free_router",
+                    chosen_model=resolved,
+                    chosen_provider="openrouter",
+                    reason_code="openrouter_free_resolved",
+                    profile=prof,
+                    session_id=str(getattr(self, "session_id", "") or ""),
+                    extra={"canon_version": ver, "synthetic_selector": OPENROUTER_FREE_SYNTHETIC},
+                )
+                m = resolved
         pl = (self.provider or "").strip().lower()
         bu = (self.base_url or "").lower()
         if pl == "gemini" or "generativelanguage.googleapis.com" in bu:
@@ -6916,6 +7035,7 @@ class AIAgent:
     def _build_api_kwargs(self, api_messages: list) -> dict:
         """Build the keyword arguments dict for the active API mode."""
         self._opm_reconcile_primary_if_disallowed()
+        _cost_cap = self._cost_cap_max_output_for_turn()
         if self.api_mode == "anthropic_messages":
             from agent.anthropic_adapter import build_anthropic_kwargs
             anthropic_messages = self._prepare_anthropic_messages_for_api(api_messages)
@@ -6923,11 +7043,20 @@ class AIAgent:
             # user configured a smaller context window than the model's output limit.
             ctx_len = getattr(self, "context_compressor", None)
             ctx_len = ctx_len.context_length if ctx_len else None
+            _mt = self.max_tokens
+            if _cost_cap is not None:
+                if _mt is None:
+                    _mt = _cost_cap
+                else:
+                    try:
+                        _mt = min(int(_mt), int(_cost_cap))
+                    except (TypeError, ValueError):
+                        _mt = _cost_cap
             return build_anthropic_kwargs(
                 model=self.model,
                 messages=anthropic_messages,
                 tools=self.tools,
-                max_tokens=self.max_tokens,
+                max_tokens=_mt,
                 reasoning_config=self.reasoning_config,
                 is_oauth=self._is_anthropic_oauth,
                 preserve_dots=self._anthropic_preserve_dots(),
@@ -6984,8 +7113,17 @@ class AIAgent:
             elif not is_github_responses:
                 kwargs["include"] = []
 
-            if self.max_tokens is not None:
-                kwargs["max_output_tokens"] = self.max_tokens
+            _mot = self.max_tokens
+            if _cost_cap is not None:
+                if _mot is None:
+                    _mot = _cost_cap
+                else:
+                    try:
+                        _mot = min(int(_mot), int(_cost_cap))
+                    except (TypeError, ValueError):
+                        _mot = _cost_cap
+            if _mot is not None:
+                kwargs["max_output_tokens"] = _mot
 
             return kwargs
 
@@ -7025,10 +7163,11 @@ class AIAgent:
                             tool_call.pop("call_id", None)
                             tool_call.pop("response_item_id", None)
 
+        _model_param = self._openai_compatible_model_param()
+        _model_lower = (_model_param or "").lower()
         # GPT-5 and Codex models respond better to 'developer' than 'system'
         # for instruction-following.  Swap the role at the API boundary so
         # internal message representation stays uniform ("system").
-        _model_lower = (self.model or "").lower()
         if (
             sanitized_messages
             and sanitized_messages[0].get("role") == "system"
@@ -7052,7 +7191,6 @@ class AIAgent:
         if self.provider_data_collection:
             provider_preferences["data_collection"] = self.provider_data_collection
 
-        _model_param = self._openai_compatible_model_param()
         _model_param_l = str(_model_param or "").strip().lower()
         # Cost guard for OpenRouter auto-routing: prefer cheaper providers by default
         # and require explicit provider parameter support.
@@ -7068,9 +7206,18 @@ class AIAgent:
         if self.tools:
             api_kwargs["tools"] = self.tools
 
-        if self.max_tokens is not None:
-            api_kwargs.update(self._max_tokens_param(self.max_tokens))
-        elif self._is_openrouter_url() and "claude" in (self.model or "").lower():
+        _mt_open = self.max_tokens
+        if _cost_cap is not None:
+            if _mt_open is None:
+                _mt_open = _cost_cap
+            else:
+                try:
+                    _mt_open = min(int(_mt_open), int(_cost_cap))
+                except (TypeError, ValueError):
+                    _mt_open = _cost_cap
+        if _mt_open is not None:
+            api_kwargs.update(self._max_tokens_param(_mt_open))
+        elif self._is_openrouter_url() and "claude" in (_model_param or "").lower():
             # OpenRouter translates requests to Anthropic's Messages API,
             # which requires max_tokens as a mandatory field.  When we omit
             # it, OpenRouter picks a default that can be too low — the model
@@ -7080,7 +7227,7 @@ class AIAgent:
             # full capacity.  Other providers handle the default fine.
             try:
                 from agent.anthropic_adapter import _get_anthropic_max_output
-                _model_output_limit = _get_anthropic_max_output(self.model)
+                _model_output_limit = _get_anthropic_max_output(_model_param)
                 api_kwargs["max_tokens"] = _model_output_limit
             except Exception:
                 pass  # fail open — let OpenRouter pick its default
@@ -7101,7 +7248,7 @@ class AIAgent:
             extra_body["provider"] = provider_preferences
         _is_nous = "nousresearch" in self._base_url_lower
 
-        if self._supports_reasoning_extra_body():
+        if self._supports_reasoning_extra_body(model_for_reasoning=_model_param):
             if _is_github_models:
                 github_reasoning = self._github_models_reasoning_extra_body()
                 if github_reasoning is not None:
@@ -7131,7 +7278,7 @@ class AIAgent:
 
         return api_kwargs
 
-    def _supports_reasoning_extra_body(self) -> bool:
+    def _supports_reasoning_extra_body(self, model_for_reasoning: Optional[str] = None) -> bool:
         """Return True when reasoning extra_body is safe to send for this route/model.
 
         OpenRouter forwards unknown extra_body fields to upstream providers.
@@ -7146,7 +7293,8 @@ class AIAgent:
             try:
                 from hermes_cli.models import github_model_reasoning_efforts
 
-                return bool(github_model_reasoning_efforts(self.model))
+                _m = model_for_reasoning if model_for_reasoning is not None else self.model
+                return bool(github_model_reasoning_efforts(_m))
             except Exception:
                 return False
         if "openrouter" not in self._base_url_lower:
@@ -7154,7 +7302,7 @@ class AIAgent:
         if "api.mistral.ai" in self._base_url_lower:
             return False
 
-        model = (self.model or "").lower()
+        model = ((model_for_reasoning if model_for_reasoning is not None else self.model) or "").lower()
         reasoning_model_prefixes = (
             "deepseek/",
             "anthropic/",
@@ -7369,6 +7517,113 @@ class AIAgent:
             for tc in tool_calls
         ]
         return api_msg
+
+    def _refresh_execute_code_schema_for_active_tools(self) -> None:
+        if not self.tools:
+            return
+        active_names = {t["function"]["name"] for t in self.tools if t.get("function", {}).get("name")}
+        if "execute_code" not in active_names:
+            return
+        from tools.code_execution_tool import SANDBOX_ALLOWED_TOOLS, build_execute_code_schema
+
+        sandbox = SANDBOX_ALLOWED_TOOLS & active_names
+        schema = build_execute_code_schema(sandbox)
+        for i, td in enumerate(self.tools):
+            if td.get("function", {}).get("name") == "execute_code":
+                self.tools[i] = {"type": "function", "function": schema}
+                break
+
+    def _expand_lazy_tool_surface(self, tool_names: List[Any]) -> str:
+        names = [str(n).strip() for n in (tool_names or []) if str(n).strip()]
+        if not names:
+            return json.dumps({"success": False, "error": "tool_names required"})
+        unknown = [n for n in names if n not in self._lazy_tool_def_by_name]
+        if unknown:
+            return json.dumps({"success": False, "error": f"Unknown tools: {unknown}"})
+        added: List[str] = []
+        for n in sorted(names):
+            if n == "expand_tool_surface":
+                continue
+            if n not in self._api_tool_names:
+                self._api_tool_names.add(n)
+                added.append(n)
+        self.tools = [self._lazy_tool_def_by_name[k] for k in sorted(self._api_tool_names)]
+        self._refresh_execute_code_schema_for_active_tools()
+        import model_tools as _mt
+
+        _mt._last_resolved_tool_names = [t["function"]["name"] for t in self.tools]
+        return json.dumps(
+            {"success": True, "added": added, "active_tools": sorted(self._api_tool_names)},
+            ensure_ascii=False,
+        )
+
+    def _apply_lazy_tool_loading_post_init(self, lazy_cfg: Dict[str, Any]) -> None:
+        if not self.tools:
+            return
+        full = sorted(
+            self.tools,
+            key=lambda t: (t.get("function") or {}).get("name") or "",
+        )
+        by_name: Dict[str, Any] = {}
+        for t in full:
+            fn = (t.get("function") or {}).get("name")
+            if fn:
+                by_name[fn] = t
+        active: set = set()
+        for x in lazy_cfg.get("core_tools") or []:
+            xs = str(x).strip()
+            if xs in by_name:
+                active.add(xs)
+        from toolsets import resolve_toolset, validate_toolset
+
+        for ts in lazy_cfg.get("core_toolsets") or []:
+            ts = str(ts).strip()
+            if ts and validate_toolset(ts):
+                for n in resolve_toolset(ts):
+                    if n in by_name:
+                        active.add(n)
+        if self._lazy_expand_via == "meta_tool":
+            active.add("expand_tool_surface")
+            by_name["expand_tool_surface"] = {"type": "function", "function": _EXPAND_TOOL_SURFACE_OPENAI}
+        self._lazy_tool_def_by_name = by_name
+        self.valid_tool_names = set(by_name.keys())
+        self._api_tool_names = set(active)
+        self.tools = [by_name[k] for k in sorted(self._api_tool_names)]
+        self._refresh_execute_code_schema_for_active_tools()
+        import model_tools as _mt
+
+        _mt._last_resolved_tool_names = [t["function"]["name"] for t in self.tools]
+        if not self.quiet_mode:
+            print(
+                f"🪶 Lazy tool loading: {len(self.tools)} tool schema(s) for API "
+                f"({len(self.valid_tool_names)} names in prompts)."
+            )
+
+    def _cost_cap_max_output_for_turn(self) -> Optional[int]:
+        cfg = getattr(self, "_cost_caps_cfg", None) or {}
+        from utils import is_truthy_value
+
+        if not is_truthy_value(cfg.get("enabled"), default=False):
+            return None
+        tier = str(getattr(self, "_current_tier_letter", "") or "").strip().upper()
+        preserve = cfg.get("preserve_full_for_tiers") or []
+        if tier and tier in preserve:
+            return None
+        um = getattr(self, "_turn_user_text_for_cost_caps", "") or ""
+        try:
+            max_chars = int(cfg.get("extractive_user_message_max_chars") or 800)
+        except (TypeError, ValueError):
+            max_chars = 800
+        if len(um) > max_chars:
+            return None
+        text = um.lower()
+        kws = cfg.get("extractive_keywords") or []
+        if not kws or not any(kw in text for kw in kws):
+            return None
+        try:
+            return max(256, int(cfg.get("extractive_max_output_tokens") or 1024))
+        except (TypeError, ValueError):
+            return 1024
 
     def flush_memories(self, messages: list = None, min_turns: int = None):
         """Give the model one turn to persist memories before context is lost.
@@ -7643,6 +7898,11 @@ class AIAgent:
         tools. Used by the concurrent execution path; the sequential path retains
         its own inline invocation for backward-compatible display handling.
         """
+        if function_name == "expand_tool_surface":
+            _tn = function_args.get("tool_names")
+            if not isinstance(_tn, list):
+                _tn = []
+            return self._expand_lazy_tool_surface(_tn)
         if function_name == "todo":
             from tools.todo_tool import todo_tool as _todo_tool
             return _todo_tool(
@@ -7993,7 +8253,17 @@ class AIAgent:
 
             tool_start_time = time.time()
 
-            if function_name == "todo":
+            if function_name == "expand_tool_surface":
+                _tn = function_args.get("tool_names")
+                if not isinstance(_tn, list):
+                    _tn = []
+                function_result = self._expand_lazy_tool_surface(_tn)
+                tool_duration = time.time() - tool_start_time
+                if self.quiet_mode and not self.tool_progress_callback:
+                    self._vprint(
+                        f"  {_get_cute_tool_message_impl('expand_tool_surface', function_args, tool_duration, result=function_result)}"
+                    )
+            elif function_name == "todo":
                 from tools.todo_tool import todo_tool as _todo_tool
                 function_result = _todo_tool(
                     todos=function_args.get("todos"),
@@ -8306,7 +8576,9 @@ class AIAgent:
 
             summary_extra_body = {}
             _is_nous = "nousresearch" in self._base_url_lower
-            if self._supports_reasoning_extra_body():
+            if self._supports_reasoning_extra_body(
+                model_for_reasoning=self._openai_compatible_model_param(),
+            ):
                 if self.reasoning_config is not None:
                     summary_extra_body["reasoning"] = self.reasoning_config
                 else:
@@ -8718,6 +8990,9 @@ class AIAgent:
         
             # Preserve the original user message (no nudge injection).
             original_user_message = persist_user_message if persist_user_message is not None else user_message
+            self._turn_user_text_for_cost_caps = (
+                original_user_message if isinstance(original_user_message, str) else str(original_user_message or "")
+            )
         
             # Track memory nudge trigger (turn-based, checked here).
             # Skill trigger is checked AFTER the agent loop completes, based on
@@ -8849,6 +9124,35 @@ class AIAgent:
                         )
                         if _preflight_tokens < self.context_compressor.threshold_tokens:
                             break  # Under threshold
+        
+            # Turn-interval compression (canon compression.turn_interval; lossy via ContextCompressor).
+            if (
+                self.compression_enabled
+                and self._compression_turn_interval > 0
+                and self._user_turn_count > 0
+                and self._user_turn_count % self._compression_turn_interval == 0
+                and len(messages)
+                > self.context_compressor.protect_first_n
+                + self.context_compressor.protect_last_n
+                + 1
+            ):
+                _interval_tok = estimate_request_tokens_rough(
+                    messages,
+                    system_prompt=active_system_prompt or "",
+                    tools=self.tools or None,
+                )
+                if not self.quiet_mode:
+                    self._safe_print(
+                        f"📦 Interval compression (every {self._compression_turn_interval} user turn(s)): "
+                        f"~{_interval_tok:,} tokens"
+                    )
+                messages, active_system_prompt = self._compress_context(
+                    messages,
+                    system_message,
+                    approx_tokens=_interval_tok,
+                    task_id=effective_task_id,
+                )
+                conversation_history = None
         
             # Plugin hook: pre_llm_call
             # Fired once per turn before the tool-calling loop.  Plugins can
@@ -9073,6 +9377,14 @@ class AIAgent:
                 # Plugin context from pre_llm_call hooks — ephemeral, not cached.
                 if _plugin_turn_context:
                     effective_system = (effective_system + "\n\n" + _plugin_turn_context).strip()
+                if getattr(self, "_concise_output_enabled", False) and getattr(
+                    self, "_concise_output_fragment", ""
+                ):
+                    effective_system = (
+                        effective_system + "\n\n" + self._concise_output_fragment
+                    ).strip()
+                if getattr(self, "_lazy_tool_loading_enabled", False):
+                    effective_system = (effective_system + "\n\n" + _LAZY_TOOL_API_INSTRUCTION).strip()
                 if effective_system:
                     api_messages = [{"role": "system", "content": effective_system}] + api_messages
         
@@ -9622,6 +9934,17 @@ class AIAgent:
                         self._emit_status(str(_hb_exc), "lifecycle")
                         self._persist_session(messages, conversation_history)
                         final_response = str(_hb_exc)
+                        break
+
+                    except OpenRouterFreeResolutionError as _fr_exc:
+                        if thinking_spinner:
+                            thinking_spinner.stop("")
+                            thinking_spinner = None
+                        if self.thinking_callback:
+                            self.thinking_callback("")
+                        self._emit_status(str(_fr_exc), "lifecycle")
+                        self._persist_session(messages, conversation_history)
+                        final_response = str(_fr_exc)
                         break
         
                     except InterruptedError:
@@ -10466,6 +10789,16 @@ class AIAgent:
                         if self.verbose_logging:
                             for tc in assistant_message.tool_calls:
                                 logging.debug(f"Tool call: {tc.function.name} with args: {tc.function.arguments[:200]}...")
+        
+                        if getattr(self, "_lazy_tool_loading_enabled", False):
+                            for _tc in assistant_message.tool_calls:
+                                _fn = _tc.function.name
+                                if (
+                                    _fn in self.valid_tool_names
+                                    and _fn not in self._api_tool_names
+                                    and _fn != "expand_tool_surface"
+                                ):
+                                    self._expand_lazy_tool_surface([_fn])
         
                         # Validate tool call names - detect model hallucinations
                         # Repair mismatched tool names before validating

@@ -392,6 +392,16 @@ _AGENT_LOOP_TOOLS = {"todo", "memory", "session_search", "delegate_task"}
 _READ_SEARCH_TOOLS = {"read_file", "search_files"}
 
 
+def _semantic_cache_store_ok(result: str) -> bool:
+    try:
+        parsed = json.loads(result)
+    except json.JSONDecodeError:
+        return False
+    if isinstance(parsed, dict) and parsed.get("error"):
+        return False
+    return True
+
+
 def handle_function_call(
     function_name: str,
     function_args: Dict[str, Any],
@@ -434,6 +444,15 @@ def handle_function_call(
         except Exception:
             pass
 
+        try:
+            from agent.semantic_tool_cache import lookup as _semantic_lookup, store as _semantic_store
+
+            _hit = _semantic_lookup(function_name, function_args)
+            if _hit is not None:
+                return _hit
+        except Exception:
+            pass
+
         if function_name == "execute_code":
             # Prefer the caller-provided list so subagents can't overwrite
             # the parent's tool set via the process-global.
@@ -453,6 +472,14 @@ def handle_function_call(
         try:
             from hermes_cli.plugins import invoke_hook
             invoke_hook("post_tool_call", tool_name=function_name, args=function_args, result=result, task_id=task_id or "")
+        except Exception:
+            pass
+
+        try:
+            from agent.semantic_tool_cache import store as _semantic_store
+
+            if _semantic_cache_store_ok(result):
+                _semantic_store(function_name, function_args, result)
         except Exception:
             pass
 

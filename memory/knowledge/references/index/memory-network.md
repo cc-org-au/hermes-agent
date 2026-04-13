@@ -23,6 +23,21 @@ This file links all memory-layer files for fast recall traversal.
 - `../../domains/model-and-channel-governance.md`
 - `../../domains/workspace-and-runtime-map.md`
 
+## Routing & cost (repo — four files under `references/routing/`)
+
+**Manifest / entry point:** `../ROUTING_DOCS.md` (lists exact repo-relative paths if the folder is “missing” — usually `git pull` needed).
+
+**Materialize into profile workspace (agents that only read `HERMES_HOME`):** from the **repo root**, `./scripts/core/sync_routing_memory_docs.sh` with **`HERMES_HOME`** set to the profile dir (see `../ROUTING_DOCS.md`).
+
+From this index (`references/index/`), the routing pack is:
+
+- `../routing/README.md`
+- `../routing/architecture.md`
+- `../routing/file-inventory.md`
+- `../routing/reconfiguration.md`
+
+**Checkout-relative (from `hermes-agent/` root):** `memory/knowledge/references/routing/*.md`
+
 ## Episodic
 
 - `../../../runtime/logs/governance-and-requests-log.md`

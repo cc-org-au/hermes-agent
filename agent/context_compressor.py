@@ -72,11 +72,18 @@ class ContextCompressor:
         api_key: str = "",
         config_context_length: int | None = None,
         provider: str = "",
+        lossy_mode: bool = False,
+        lossy_preserve_last_pairs: int = 2,
     ):
         self.model = model
         self.base_url = base_url
         self.api_key = api_key
         self.provider = provider
+        self.lossy_mode = bool(lossy_mode)
+        try:
+            self.lossy_preserve_last_pairs = max(1, int(lossy_preserve_last_pairs))
+        except (TypeError, ValueError):
+            self.lossy_preserve_last_pairs = 2
         self.threshold_percent = threshold_percent
         self.protect_first_n = protect_first_n
         self.protect_last_n = protect_last_n
@@ -539,6 +546,45 @@ Write only the summary body. Do not include any preamble or prefix."""
         return max(cut_idx, head_end + 1)
 
     # ------------------------------------------------------------------
+    # Lossy retention (after normal compression)
+    # ------------------------------------------------------------------
+
+    def _apply_lossy_retention(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Keep system prefix + tool excerpts from middle + last K user turns (approx)."""
+        k = max(1, int(getattr(self, "lossy_preserve_last_pairs", 2) or 2))
+        if len(messages) <= 2 + k * 2:
+            return messages
+        system_like: List[Dict[str, Any]] = []
+        i = 0
+        while i < len(messages) and messages[i].get("role") == "system":
+            system_like.append(messages[i].copy())
+            i += 1
+        tail: List[Dict[str, Any]] = []
+        seen_users = 0
+        j = len(messages) - 1
+        while j >= i and seen_users < k:
+            tail.insert(0, messages[j].copy())
+            if messages[j].get("role") == "user":
+                seen_users += 1
+            j -= 1
+        if j < i:
+            return system_like + tail
+        mid = messages[i : j + 1]
+        side_effects: list[str] = []
+        for msg in mid:
+            if msg.get("role") != "tool":
+                continue
+            c = msg.get("content", "")
+            if isinstance(c, str) and c.strip():
+                side_effects.append(c.strip()[:400])
+        bridge = "[LOSSY CONTEXT]\n"
+        if side_effects:
+            bridge += "Tool excerpts:\n- " + "\n- ".join(side_effects[:8])
+        else:
+            bridge += "Earlier turns omitted."
+        return system_like + [{"role": "user", "content": bridge}] + tail
+
+    # ------------------------------------------------------------------
     # Main compression entry point
     # ------------------------------------------------------------------
 
@@ -672,5 +718,8 @@ Write only the summary body. Do not include any preamble or prefix."""
                 saved_estimate,
             )
             logger.info("Compression #%d complete", self.compression_count)
+
+        if getattr(self, "lossy_mode", False):
+            compressed = self._apply_lossy_retention(compressed)
 
         return compressed

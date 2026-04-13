@@ -2494,11 +2494,20 @@ class GatewayRunner:
                         _hyg_provider = _model_cfg.get("provider") or None
                         _hyg_base_url = _model_cfg.get("base_url") or None
 
-                    # Read compression settings — only use enabled flag.
-                    # The threshold is intentionally separate from the agent's
-                    # compression.threshold (hygiene runs higher).
+                    # Read compression settings — canon-first (same merge as run_agent), then
+                    # profile config.yaml overlay. Hygiene only gates on enabled; threshold
+                    # stays 85% of context (separate from agent compression.threshold).
                     _comp_cfg = _hyg_data.get("compression", {})
-                    if isinstance(_comp_cfg, dict):
+                    if not isinstance(_comp_cfg, dict):
+                        _comp_cfg = {}
+                    try:
+                        from agent.routing_canon import load_compression_canon_config
+
+                        _merged_hyg_comp = {**load_compression_canon_config(), **_comp_cfg}
+                        _hyg_compression_enabled = str(
+                            _merged_hyg_comp.get("enabled", True)
+                        ).lower() in ("true", "1", "yes")
+                    except Exception:
                         _hyg_compression_enabled = str(
                             _comp_cfg.get("enabled", True)
                         ).lower() in ("true", "1", "yes")

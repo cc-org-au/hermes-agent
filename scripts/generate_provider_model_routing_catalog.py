@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "agent" / "provider_model_routing_catalog.json"
 
-SNAPSHOT_DATE = "2026-04-09"
+SNAPSHOT_DATE = "2026-04-13"
 
 # OpenAI: Standard column from platform pricing page (USD per 1M tokens).
 # Tuple: (model_id, input, cached_input_or_None, output, category, reasoning_level, notes)
@@ -653,6 +653,79 @@ def _google_models() -> list[dict]:
     ]
 
 
+def _openrouter_hub_models() -> list[dict]:
+    """OpenRouter aggregate hub slugs for routing digest and canon cross-reference.
+
+    Pricing is indicative for paid rows (USD per 1M tokens, rough OpenRouter-style);
+    :free rows use 0. Confirm on https://openrouter.ai/models before production cuts.
+    """
+    rows: list[tuple[str, str, str, float, float, str, str]] = [
+        # OpenAI via OpenRouter (must match dynamic_routing_canon hub ladders)
+        ("openai/gpt-5-nano", "hub_openai_budget", "low", 0.05, 0.4, "text", "Canon step-up / OPM failover ladder"),
+        ("openai/gpt-4.1-nano", "hub_openai_budget", "low", 0.1, 0.4, "text", "Canon ladder"),
+        ("openai/gpt-5-mini", "hub_openai_efficient", "medium", 0.25, 2.0, "text", "Canon ladder"),
+        ("openai/gpt-4.1-mini", "hub_openai_efficient", "low", 0.4, 1.6, "text", "Canon ladder"),
+        ("openai/gpt-5.4-nano", "hub_openai_budget", "low", 0.2, 1.25, "text", "Canon ladder"),
+        ("openai/gpt-5.4-mini", "hub_openai_efficient", "medium", 0.75, 4.5, "text", "Canon ladder"),
+        ("openai/gpt-5.2", "hub_openai_strong", "high", 1.75, 14.0, "text", "Canon ladder"),
+        ("openai/gpt-5.4", "hub_openai_flagship", "high", 2.5, 15.0, "text", "Canon ladder"),
+        ("openai/gpt-5.2-codex", "hub_openai_codex", "high", 1.75, 14.0, "text", "Canon codex ladder"),
+        ("openai/gpt-5.3-codex", "hub_openai_codex", "high", 2.0, 16.0, "text", "Canon codex ladder"),
+        ("openai/gpt-5.4-pro", "hub_openai_premium", "very_high", 30.0, 180.0, "text", "Premium tier"),
+        # Anthropic via OpenRouter
+        ("anthropic/claude-haiku-4.5", "hub_anthropic_efficient", "medium", 1.0, 5.0, "text", "Fast Claude"),
+        ("anthropic/claude-sonnet-4.5", "hub_anthropic_balanced", "high", 3.0, 15.0, "text", "Daily driver"),
+        ("anthropic/claude-sonnet-4.6", "hub_anthropic_balanced", "high", 3.0, 15.0, "text", "Balanced"),
+        ("anthropic/claude-opus-4.6", "hub_anthropic_flagship", "very_high", 5.0, 25.0, "text", "Frontier"),
+        # Google via OpenRouter
+        ("google/gemini-2.5-flash-preview-05-20", "hub_google_fast", "medium", 0.15, 0.6, "text", "Low latency"),
+        ("google/gemini-2.5-pro-preview-06-05", "hub_google_flagship", "high", 1.25, 10.0, "text", "Strong reasoning"),
+        ("google/gemini-3-flash-preview", "hub_google_frontier_fast", "high", 0.5, 3.0, "text", "Preview"),
+        ("google/gemini-3-pro-preview", "hub_google_frontier", "very_high", 2.0, 12.0, "text", "Preview flagship"),
+        # Meta / Mistral / Qwen / DeepSeek
+        ("meta-llama/llama-3.3-70b-instruct", "hub_meta_balanced", "high", 0.35, 0.4, "text", "Open weights"),
+        ("mistralai/mistral-small-3.2-24b-instruct", "hub_mistral_efficient", "medium", 0.05, 0.08, "text", "Efficient"),
+        ("qwen/qwen-2.5-72b-instruct", "hub_qwen_balanced", "high", 0.35, 0.4, "text", "General"),
+        ("deepseek/deepseek-chat", "hub_deepseek_chat", "medium", 0.14, 0.28, "text", "Budget chat"),
+        ("deepseek/deepseek-r1", "hub_deepseek_reasoning", "reasoning_native", 0.55, 2.19, "text", "Reasoning"),
+        # xAI via OpenRouter
+        ("x-ai/grok-4.20-beta", "hub_xai_frontier", "high", 2.0, 6.0, "text", "Long context"),
+        ("x-ai/grok-4.1-fast-non-reasoning", "hub_xai_efficient", "low", 0.2, 0.5, "text", "Fast"),
+        # Free-tier (OpenRouter :free — pricing 0; eligibility confirmed via API at runtime)
+        ("nvidia/nemotron-3-super-120b-a12b:free", "openrouter_free", "high", 0.0, 0.0, "text", "Free tier; canon openrouter/free"),
+        ("arcee-ai/trinity-large-preview:free", "openrouter_free", "medium", 0.0, 0.0, "text", "Free tier"),
+        ("google/gemma-3-4b-it:free", "openrouter_free", "low", 0.0, 0.0, "text", "Free tier"),
+        ("google/gemma-3-12b-it:free", "openrouter_free", "medium", 0.0, 0.0, "text", "Free tier"),
+        ("meta-llama/llama-3.3-70b-instruct:free", "openrouter_free", "high", 0.0, 0.0, "text", "Free tier"),
+        ("mistralai/mistral-7b-instruct:free", "openrouter_free", "low", 0.0, 0.0, "text", "Free tier"),
+        ("qwen/qwen-2.5-7b-instruct:free", "openrouter_free", "low", 0.0, 0.0, "text", "Free tier"),
+        ("deepseek/deepseek-r1-distill-llama-70b:free", "openrouter_free", "reasoning_native", 0.0, 0.0, "text", "Free tier"),
+        ("microsoft/phi-3-mini-128k-instruct:free", "openrouter_free", "low", 0.0, 0.0, "text", "Free tier"),
+        ("openai/gpt-oss-120b:free", "openrouter_free", "high", 0.0, 0.0, "text", "Free tier"),
+        ("openai/gpt-oss-20b:free", "openrouter_free", "medium", 0.0, 0.0, "text", "Free tier"),
+        # Extras for digest breadth
+        ("z-ai/glm-5", "hub_zai_balanced", "high", 0.5, 2.0, "text", "General"),
+        ("stepfun/step-3.5-flash", "hub_stepfun_fast", "medium", 0.2, 0.8, "text", "Fast"),
+        ("xiaomi/mimo-v2-pro", "hub_other", "high", 1.0, 4.0, "text", "Alternate hub"),
+    ]
+    out: list[dict] = []
+    for mid, cat, rlevel, inp, outp, mods, note in rows:
+        entry: dict = {
+            "id": mid,
+            "category": cat,
+            "reasoning_level": rlevel,
+            "modalities": [mods] if mods == "text" else ["text", "image"],
+            "pricing": {"usd_per_million_tokens": {"input": inp, "output": outp}},
+            "pricing_basis": "openrouter_hub_snapshot_2026-04-13",
+            "best_for": [],
+            "notes": note,
+        }
+        if ":free" in mid or cat == "openrouter_free":
+            entry["best_for"] = ["Zero-cost exploration", "openrouter/free selector"]
+        out.append(entry)
+    return out
+
+
 def main() -> None:
     catalog = {
         "schema_version": 1,
@@ -670,6 +743,8 @@ def main() -> None:
             {"provider": "xai", "url": "https://docs.x.ai/docs/models"},
             {"provider": "google", "url": "https://ai.google.dev/gemini-api/docs/pricing"},
             {"provider": "google_models", "url": "https://ai.google.dev/gemini-api/docs/models"},
+            {"provider": "openrouter", "url": "https://openrouter.ai/docs"},
+            {"provider": "openrouter_models", "url": "https://openrouter.ai/models"},
         ],
         "reasoning_level_scale": {
             "none": "No meaningful internal reasoning mode; fastest/cheapest tier for trivial tasks.",
@@ -712,6 +787,14 @@ def main() -> None:
             "google": {
                 "label": "Google (Gemini API / AI Studio)",
                 "models": _google_models(),
+            },
+            "openrouter": {
+                "label": "OpenRouter (aggregate hub)",
+                "provider_notes": (
+                    "Slugs are provider/model as used on OpenRouter. Paid rows use rough per-1M USD; "
+                    ":free rows are 0 in this snapshot — confirm live eligibility via OpenRouter /models."
+                ),
+                "models": _openrouter_hub_models(),
             },
         },
     }

@@ -9,16 +9,10 @@
 # - Your **workstation** keeps access when you change Wi‑Fi/Ethernet/hotspot because it uses the
 #   **Tailscale overlay** (stable 100.x per machine), not the workstation’s ephemeral LAN IP.
 #
-# Typical sequence (step 1 — SSH stack):
+# Typical sequence:
 #   sudo bash ./macmini_operator_ssh_guard.sh begin 600
 #   sudo bash ./macmini_operator_ssh_guard.sh apply
 #   # from laptop: ssh -p 52822 operator@<tailscale-ip>
-#   sudo bash ./macmini_operator_ssh_guard.sh cancel
-#
-# Step 2 — PF: explicit tailnet allow for Screen Sharing (5900), keep :22 drop (after step 1 is stable):
-#   sudo bash ./macmini_operator_ssh_guard.sh begin 600
-#   sudo bash ./macmini_sshd_tailscale_launchd_pf.sh   # rewrites /etc/pf.anchors/org.hermes + pfctl -f
-#   # verify: SSH still works; Screen Sharing from a tailnet peer to :5900 still works
 #   sudo bash ./macmini_operator_ssh_guard.sh cancel
 #
 # If login fails, wait for auto-restore or: sudo bash ./macmini_operator_ssh_guard.sh restore-now
@@ -137,12 +131,8 @@ _cmd_begin() {
   _snapshot "$snap"
   echo "$snap" >"$ACTIVE_SNAP_FILE"
 
-  # nohup + disconnected stdin: rollback still runs after non-interactive SSH exits (no SIGHUP kill).
-  export HERMES_GUARD_SELF="$SELF_ABS" HERMES_GUARD_SNAP="$snap" HERMES_GUARD_LOG="$LOG_FILE" HERMES_GUARD_SECS="$secs"
-  nohup bash -c 'sleep "$HERMES_GUARD_SECS"; exec bash "$HERMES_GUARD_SELF" _restore_internal "$HERMES_GUARD_SNAP" >>"$HERMES_GUARD_LOG" 2>&1' \
-    </dev/null >/dev/null 2>&1 &
+  ( sleep "$secs" && bash "$SELF_ABS" _restore_internal "$snap" >>"$LOG_FILE" 2>&1 ) &
   local pid=$!
-  unset HERMES_GUARD_SELF HERMES_GUARD_SNAP HERMES_GUARD_LOG HERMES_GUARD_SECS
   echo "$pid" >"$ARMED_PID_FILE"
   _log "begin: armed automatic restore in ${secs}s (pid $pid) snap=$snap"
   echo ""

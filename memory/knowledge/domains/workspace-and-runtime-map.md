@@ -28,6 +28,8 @@ Define where policy/runtime files live and how materialized workspace paths are 
 
 - `../../runtime/tasks/procedures/session-and-bootstrap.md`
 - `../../runtime/tasks/procedures/generated-artifacts-and-deployment.md`
+- `../references/ROUTING_DOCS.md` — **entry point** listing all `references/routing/*.md` repo paths (use git checkout + `git pull`)
+- `../references/routing/README.md` — routing/cost reference (optional rsync into `${HERMES_HOME}/workspace/memory/...`)
 
 ## Memory Network
 

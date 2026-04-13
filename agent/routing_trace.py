@@ -23,6 +23,7 @@ def emit_routing_decision_trace(
     explicit_user_model: Optional[bool] = None,
     profile: str = "",
     session_id: str = "",
+    extra: Optional[Dict[str, Any]] = None,
 ) -> None:
     payload = {
         "stage": stage,
@@ -42,6 +43,10 @@ def emit_routing_decision_trace(
         "profile": profile or "",
         "session_id": session_id or "",
     }
+    if extra:
+        for k, v in extra.items():
+            if k not in payload:
+                payload[str(k)] = v
     line = json.dumps(payload, separators=(",", ":"), ensure_ascii=True)
     # DEBUG only — avoids noisy CLI/gateway logs unless log level is turned up.
     logger.debug("[RouteTrace] %s", line)

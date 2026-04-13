@@ -15,6 +15,10 @@ This script:
 - Sets ``platforms.slack.enabled: false`` in config.yaml (gateway still runs Telegram/WhatsApp if configured).
 - Sets ``messaging.slack_role_cron_leader: false`` so ``sync_slack_role_cron_jobs.py --apply`` is a no-op here.
 - Appends ``HERMES_GATEWAY_LOCK_INSTANCE`` / ``HERMES_CLI_INSTANCE_LABEL`` to ``.env`` when missing.
+- Forces **OpenAI primary mode (OPM) off** in ``config.yaml`` and token-governance runtime YAML, and appends
+  ``HERMES_OPENAI_PRIMARY_MODE=0`` so config/runtime cannot re-enable OPM until you remove the env line.
+- If ``model.provider: gemini`` but ``model.default`` looks like an OpenRouter slug, rewrites ``model.default``
+  to a native Gemini id (fixes HTTP 404 ``models/openai/...`` on generativelanguage).
 
 The **operator** Mac should keep profile ``chief-orchestrator`` and set
 ``messaging.slack_role_cron_leader: true`` (default when key absent = leader).
@@ -71,9 +75,73 @@ def _strip_slack_cron_jobs(home: Path) -> int:
     return removed
 
 
+def apply_routing_defaults_to_config(cfg: dict) -> None:
+    """Mutate *cfg* in memory: OPM off; native Gemini model id if provider is gemini."""
+    opm = cfg.setdefault("openai_primary_mode", {})
+    if not isinstance(opm, dict):
+        opm = {}
+        cfg["openai_primary_mode"] = opm
+    opm["enabled"] = False
+
+    mdl = cfg.get("model")
+    if isinstance(mdl, dict):
+        prov = str(mdl.get("provider") or "").strip().lower()
+        if prov == "gemini":
+            from agent.tier_model_routing import coerce_model_id_for_native_gemini_api
+
+            cur = str(mdl.get("default") or mdl.get("model") or "").strip()
+            fixed = coerce_model_id_for_native_gemini_api(cur, full_config=cfg)
+            if fixed != cur:
+                print(f"fix model.default for gemini: {cur!r} -> {fixed!r}")
+                mdl["default"] = fixed
+
+
+def apply_profile_normal_routing_defaults(home: Path) -> None:
+    """OPM off, Gemini slug fix, token-governance OPM off, ``HERMES_OPENAI_PRIMARY_MODE=0`` in ``.env``.
+
+    Use on any profile (e.g. ``chief-orchestrator-droplet``) without Slack/cron isolation.
+    """
+    cfg_path = home / "config.yaml"
+    if not cfg_path.is_file():
+        print(f"warning: missing {cfg_path}", file=sys.stderr)
+    else:
+        cfg = _load_yaml(cfg_path)
+        apply_routing_defaults_to_config(cfg)
+        _save_yaml(cfg_path, cfg)
+        print(f"patched {cfg_path} (openai_primary_mode.enabled=false + gemini model guard)")
+    _patch_token_governance_runtime(home)
+    _append_opm_disable_env(home)
+    print("done — restart gateway: hermes -p <profile> gateway restart --sync")
+
+
+def _append_opm_disable_env(home: Path) -> None:
+    """Append ``HERMES_OPENAI_PRIMARY_MODE=0`` when missing (env wins over YAML for OPM)."""
+    env_path = home / ".env"
+    if not env_path.is_file():
+        print(f"warning: missing {env_path} — add HERMES_OPENAI_PRIMARY_MODE=0 manually", file=sys.stderr)
+        return
+    text = env_path.read_text(encoding="utf-8", errors="replace")
+    keys_present = set()
+    for line in text.splitlines():
+        m = re.match(r'^[ \t]*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)=', line)
+        if m:
+            keys_present.add(m.group(1))
+    key, val = "HERMES_OPENAI_PRIMARY_MODE", "0"
+    if key in keys_present:
+        print(f"keep existing {key}")
+        return
+    with open(env_path, "a", encoding="utf-8") as f:
+        if text and not text.endswith("\n"):
+            f.write("\n")
+        f.write(f"{key}={val}\n")
+    print(f"appended {key}={val}")
+
+
 def _patch_config(home: Path) -> None:
     cfg_path = home / "config.yaml"
     cfg = _load_yaml(cfg_path)
+    apply_routing_defaults_to_config(cfg)
+
     plat = cfg.setdefault("platforms", {})
     if not isinstance(plat, dict):
         plat = {}
@@ -95,15 +163,34 @@ def _patch_config(home: Path) -> None:
 
     _save_yaml(cfg_path, cfg)
     print(
-        f"patched {cfg_path} (platforms.slack.enabled=false, "
-        "messaging.slack_role_cron_leader=false, messaging.watchdog_require_all_platforms=false)"
+        f"patched {cfg_path} (openai_primary_mode.enabled=false, gemini model guard if applicable, "
+        "platforms.slack.enabled=false, messaging.slack_role_cron_leader=false, "
+        "messaging.watchdog_require_all_platforms=false)"
     )
 
 
 _ENV_LINES = [
+    ('HERMES_OPENAI_PRIMARY_MODE', '0'),
     ('HERMES_GATEWAY_LOCK_INSTANCE', 'droplet'),
     ('HERMES_CLI_INSTANCE_LABEL', 'droplet'),
 ]
+
+
+def _patch_token_governance_runtime(home: Path) -> None:
+    path = home / "workspace/memory/runtime/operations/hermes_token_governance.runtime.yaml"
+    if not path.is_file():
+        print(f"skip token governance patch (missing {path})")
+        return
+    doc = _load_yaml(path)
+    if not doc:
+        doc = {}
+    opm = doc.setdefault("openai_primary_mode", {})
+    if not isinstance(opm, dict):
+        opm = {}
+        doc["openai_primary_mode"] = opm
+    opm["enabled"] = False
+    _save_yaml(path, doc)
+    print(f"patched {path} (openai_primary_mode.enabled=false)")
 
 
 def _append_env(home: Path) -> None:
@@ -150,6 +237,7 @@ def main() -> int:
 
     _strip_slack_cron_jobs(home)
     _patch_config(home)
+    _patch_token_governance_runtime(home)
     _append_env(home)
     print("done — restart gateway for this profile: hermes -p <profile> gateway restart --sync")
     return 0
