@@ -222,6 +222,91 @@ def _cron_vague_operational_claim_only(body: str) -> bool:
     return False
 
 
+# Meta-narrative about messaging / absence of news (general blanket — not per-incident strings).
+_CRON_META_FLUFF_RES = (
+    re.compile(r"\bi[' ]?m\s+sending\b", re.I),
+    re.compile(r"\bi\s+am\s+sending\b", re.I),
+    re.compile(r"\bhere\s+is\s+(another\s+)?(message|update)\b", re.I),
+    re.compile(r"\b(this|that)\s+message\s+(is\s+)?(to\s+)?(tell|say|inform)\b", re.I),
+    re.compile(r"\bsending\s+(you\s+)?(a\s+)?(message|update)\b", re.I),
+    re.compile(r"\bnothing\s+to\s+(update|tell|report|say)\b", re.I),
+    re.compile(r"\bnothing\s+has\s+changed\b", re.I),
+    re.compile(r"\bnothing\s+new\s+to\s+report\b", re.I),
+    re.compile(r"\bnothing\s+to\s+report\b", re.I),
+    re.compile(r"\bno\s+changes?\s+(to\s+)?report\b", re.I),
+    re.compile(r"\bno\s+changes?\s+since\b", re.I),
+    re.compile(r"\bthere\s+is\s+nothing\s+to\s+", re.I),
+    re.compile(r"\bthere\s+(has\s+)?been\s+no\s+change\b", re.I),
+    re.compile(r"\bthere\s+are\s+no\s+new\s+(updates?|issues?|incidents?)\b", re.I),
+    re.compile(r"\bjust\s+(wanted\s+)?to\s+(let\s+you\s+know|inform\s+you)\b", re.I),
+    re.compile(r"\btelling\s+you\s+that\s+there\s+(is|are)\s+no\b", re.I),
+    re.compile(r"\bto\s+inform\s+you\s+that\b", re.I),
+    re.compile(r"\bi\s+will\s+(now\s+)?(send|respond|reply|output|provide)\b", re.I),
+    re.compile(r"\bas\s+an\s+ai\b", re.I),
+    re.compile(r"\bfor\s+transparency\b", re.I),
+    re.compile(r"\bhope\s+this\s+(helps|message)\b", re.I),
+    re.compile(r"\bsaying\s+nothing\s+has\s+changed\b", re.I),
+    re.compile(r"\bmessage\s+(to\s+)?(tell|say)\s+you\b", re.I),
+)
+
+# Concrete artefacts operators expect (any hit raises “informative” score).
+_CRON_INFO_SIGNAL_RES = (
+    re.compile(r"\d{3,}"),
+    re.compile(r"\b(sev\s*[012]|sev\d)\b", re.I),
+    re.compile(
+        r"\b(all_connected|gateway_state|gateway\.pid|watchdog|start-limit|start limit)\b",
+        re.I,
+    ),
+    re.compile(r"\d{4}-\d{2}-\d{2}"),
+    re.compile(r"=\s*[\w@.,:+-]+"),
+    re.compile(r"\b(telegram|slack|whatsapp)\s*[=:]"),
+    re.compile(r"[:]\s*(fatal|down|up|ok|connected|disconnected)\b", re.I),
+    re.compile(r"/[\w./~-]{4,}\b"),
+    re.compile(r"\b(error|errno|exception|traceback|timeout|failed)\b", re.I),
+    re.compile(
+        r"\b(fatal|degraded|recovered|resolved|outstanding|intervention|escalat)\w*\b",
+        re.I,
+    ),
+    re.compile(r"^\s*[-*•]\s+\S", re.M),
+)
+
+
+def _cron_meta_fluff_hits(body: str) -> int:
+    return sum(1 for rx in _CRON_META_FLUFF_RES if rx.search(body))
+
+
+def _cron_informative_signal_hits(body: str) -> int:
+    return sum(1 for rx in _CRON_INFO_SIGNAL_RES if rx.search(body))
+
+
+def _cron_suppress_meta_fluff(body: str) -> bool:
+    """
+    Drop LLM prose about *being a message* or *there being nothing to say*.
+    Policy: deliver facts/tools output only; narrative without signals is noise.
+    """
+    if not (body or "").strip():
+        return True
+    low = body.lower()
+    wc = len(body.split())
+    meta = _cron_meta_fluff_hits(body)
+    info = _cron_informative_signal_hits(body)
+    first_person = len(
+        re.findall(r"\b(i'(?:m|ve)|i\s+will|i\s+am|i\s+have|i\s+cannot)\b", low)
+    )
+
+    if meta >= 1 and info == 0:
+        return True
+    if meta >= 2:
+        return True
+    if wc >= 26 and info == 0:
+        return True
+    if wc >= 16 and info <= 1 and meta >= 1:
+        return True
+    if wc >= 18 and first_person >= 2 and info <= 1:
+        return True
+    return False
+
+
 def _cron_prose_announces_silent(low: str) -> bool:
     """Model wrote [SILENT] inside a paragraph instead of alone — never deliver that."""
     if not _RE_SILENT_BRACKET.search(low):
@@ -369,6 +454,8 @@ def sanitize_cron_deliver_content(raw: str, max_chars: int) -> tuple[str, bool]:
         out = body if len(body) <= max_chars else body[: max_chars - 1].rstrip() + "…"
         if _cron_vague_operational_claim_only(out):
             return "", True
+        if _cron_suppress_meta_fluff(out):
+            return "", True
         return out, False
 
     out = _pick_delivery_paragraph(body, max_chars)
@@ -377,6 +464,8 @@ def sanitize_cron_deliver_content(raw: str, max_chars: int) -> tuple[str, bool]:
     if not _ALERT_HINTS.search(out) and len(out) > 120:
         return "", True
     if _cron_vague_operational_claim_only(out):
+        return "", True
+    if _cron_suppress_meta_fluff(out):
         return "", True
     return out, False
 
@@ -678,12 +767,14 @@ def _build_job_prompt(job: dict) -> str:
         "nothing new to report. [SILENT] suppresses delivery to the user. "
         "Never combine [SILENT] with content — either report your "
         "findings normally, or say [SILENT] and nothing more.]\n\n"
-        "[SYSTEM — OUTPUT FORMAT (mandatory): Your final reply must be EITHER "
-        "(a) exactly the single line [SILENT] with nothing else, OR (b) at most "
-        "four short lines (under 500 characters total) of plain operational "
-        "status — no apologies, no \"I will\", no analysis paragraphs, no "
-        "markdown essays, no restating instructions. If nothing changed since "
-        "the last run, output only [SILENT].]\n\n"
+        "[SYSTEM — OUTPUT FORMAT (mandatory): Reply with ONLY the factual "
+        "information this job is supposed to surface (numbers, states, file "
+        "paths, command output, watchdog lines). Do not narrate, explain your "
+        "reasoning, describe sending a message, apologize, or say there is "
+        "nothing to say — if there is no factual delta, output exactly [SILENT] "
+        "alone. Never write meta lines like “I am sending…” or “here is another "
+        "message…”. At most four short lines and under 500 characters unless the "
+        "job explicitly requires pasting raw logs.]\n\n"
     )
     prompt = silent_hint + prompt
     if skills is None:

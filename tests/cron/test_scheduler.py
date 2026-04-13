@@ -889,6 +889,18 @@ class TestSanitizeCronDeliverContent:
         _body, skip = sanitize_cron_deliver_content("[SILENT]", 600)
         assert skip is True
 
+    def test_meta_fluff_sending_message_nothing_to_update_suppresses(self):
+        raw = (
+            "I am sending a message to tell you there is nothing to update at this time."
+        )
+        _body, skip = sanitize_cron_deliver_content(raw, 600)
+        assert skip is True
+
+    def test_meta_fluff_another_message_nothing_changed_suppresses(self):
+        raw = "Here is another message saying nothing has changed since the last check."
+        _body, skip = sanitize_cron_deliver_content(raw, 600)
+        assert skip is True
+
 
 class TestBuildJobPromptSilentHint:
     """Verify _build_job_prompt always injects [SILENT] guidance."""
