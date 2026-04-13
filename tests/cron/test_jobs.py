@@ -506,6 +506,73 @@ class TestGetDueJobs:
         assert [job["id"] for job in due] == ["oneshot-recover"]
         assert get_job("oneshot-recover")["next_run_at"] == run_at
 
+    def test_broken_interval_without_next_run_is_recovered(self, tmp_cron_dir, monkeypatch):
+        now = datetime(2026, 4, 14, 10, 30, 0, tzinfo=timezone.utc)
+        monkeypatch.setattr("cron.jobs._hermes_now", lambda: now)
+
+        save_jobs(
+            [
+                {
+                    "id": "interval-missing-next",
+                    "name": "hourly",
+                    "prompt": "hi",
+                    "schedule": {"kind": "interval", "minutes": 60, "display": "every 60m"},
+                    "schedule_display": "every 60m",
+                    "repeat": {"times": 999999, "completed": 1},
+                    "enabled": True,
+                    "state": "scheduled",
+                    "paused_at": None,
+                    "paused_reason": None,
+                    "created_at": "2026-04-01T00:00:00+00:00",
+                    "next_run_at": None,
+                    "last_run_at": "2026-04-14T08:30:00+00:00",
+                    "last_status": "ok",
+                    "last_error": None,
+                    "deliver": "local",
+                    "origin": None,
+                }
+            ]
+        )
+
+        due = get_due_jobs()
+        assert [j["id"] for j in due] == ["interval-missing-next"]
+        recovered = get_job("interval-missing-next")
+        assert recovered["next_run_at"] is not None
+
+    def test_broken_cron_without_next_run_is_recovered(self, tmp_cron_dir, monkeypatch):
+        pytest.importorskip("croniter")
+        now = datetime(2026, 4, 14, 12, 0, 0, tzinfo=timezone.utc)
+        monkeypatch.setattr("cron.jobs._hermes_now", lambda: now)
+
+        save_jobs(
+            [
+                {
+                    "id": "cron-missing-next",
+                    "name": "daily",
+                    "prompt": "hi",
+                    "schedule": {"kind": "cron", "expr": "0 9 * * *", "display": "0 9 * * *"},
+                    "schedule_display": "0 9 * * *",
+                    "repeat": {"times": 999999, "completed": 1},
+                    "enabled": True,
+                    "state": "scheduled",
+                    "paused_at": None,
+                    "paused_reason": None,
+                    "created_at": "2026-04-01T00:00:00+00:00",
+                    "next_run_at": None,
+                    "last_run_at": "2026-04-13T09:00:00+00:00",
+                    "last_status": "ok",
+                    "last_error": None,
+                    "deliver": "local",
+                    "origin": None,
+                }
+            ]
+        )
+
+        # Recovery runs inside get_due_jobs (may or may not enqueue a due run).
+        get_due_jobs()
+        recovered = get_job("cron-missing-next")
+        assert recovered["next_run_at"] is not None
+
     def test_broken_stale_one_shot_without_next_run_is_not_recovered(self, tmp_cron_dir, monkeypatch):
         now = datetime(2026, 3, 18, 4, 30, 0, tzinfo=timezone.utc)
         monkeypatch.setattr("cron.jobs._hermes_now", lambda: now)

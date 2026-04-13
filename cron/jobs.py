@@ -281,6 +281,51 @@ def _compute_grace_seconds(schedule: dict) -> int:
     return MIN_GRACE
 
 
+def _recover_missing_next_run_at(
+    schedule: Dict[str, Any],
+    last_run_at: Optional[str],
+    now: datetime,
+) -> Optional[str]:
+    """Recompute next_run_at when the stored value is missing (corruption / legacy).
+
+    Unlike a single ``compute_next_run`` step from ``last_run_at``, this advances
+    past occurrences that are fully outside the catch-up grace window so the job
+    is not incorrectly fast-forwarded again by ``get_due_jobs`` stale handling.
+    """
+    kind = schedule.get("kind")
+    if kind == "interval":
+        minutes = schedule.get("minutes", 1)
+        grace_td = timedelta(seconds=_compute_grace_seconds(schedule))
+        if last_run_at:
+            next_run = _ensure_aware(datetime.fromisoformat(last_run_at)) + timedelta(
+                minutes=minutes
+            )
+        else:
+            next_run = now + timedelta(minutes=minutes)
+        while next_run <= now - grace_td:
+            next_run += timedelta(minutes=minutes)
+        return next_run.isoformat()
+
+    if kind == "cron" and HAS_CRONITER:
+        expr = schedule.get("expr")
+        if not expr:
+            return None
+        grace_td = timedelta(seconds=_compute_grace_seconds(schedule))
+        if last_run_at:
+            anchor = _ensure_aware(datetime.fromisoformat(last_run_at))
+            cron = croniter(expr, anchor)
+            next_run = cron.get_next(datetime)
+        else:
+            cron = croniter(expr, now)
+            next_run = cron.get_next(datetime)
+        while next_run <= now - grace_td:
+            cron = croniter(expr, next_run)
+            next_run = cron.get_next(datetime)
+        return next_run.isoformat()
+
+    return None
+
+
 def compute_next_run(schedule: Dict[str, Any], last_run_at: Optional[str] = None) -> Optional[str]:
     """
     Compute the next run time for a schedule.
@@ -659,18 +704,26 @@ def get_due_jobs() -> List[Dict[str, Any]]:
 
         next_run = job.get("next_run_at")
         if not next_run:
-            recovered_next = _recoverable_oneshot_run_at(
-                job.get("schedule", {}),
-                now,
-                last_run_at=job.get("last_run_at"),
-            )
+            schedule = job.get("schedule", {})
+            kind = schedule.get("kind")
+            recovered_next = None
+            if kind in ("cron", "interval"):
+                recovered_next = _recover_missing_next_run_at(
+                    schedule, job.get("last_run_at"), now
+                )
+            if not recovered_next:
+                recovered_next = _recoverable_oneshot_run_at(
+                    schedule,
+                    now,
+                    last_run_at=job.get("last_run_at"),
+                )
             if not recovered_next:
                 continue
 
             job["next_run_at"] = recovered_next
             next_run = recovered_next
             logger.info(
-                "Job '%s' had no next_run_at; recovering one-shot run at %s",
+                "Job '%s' had no next_run_at; recovered next run to %s",
                 job.get("name", job["id"]),
                 recovered_next,
             )
