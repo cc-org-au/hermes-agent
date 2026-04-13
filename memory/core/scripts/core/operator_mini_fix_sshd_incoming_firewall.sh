@@ -39,12 +39,18 @@ launchctl kickstart -k system/org.hermes.tailscale.sshd
 sleep 2
 
 echo ""
-echo "=== LISTEN on 52822 (need *:52822 or 100.67.x.x:52822 and 127.0.0.1:52822) ==="
-lsof -nP -iTCP:52822 -sTCP:LISTEN || {
-  echo "Still nothing listening. Tail hermes sshd log:" >&2
-  tail -30 /var/log/hermes-tailscale-sshd.log 2>/dev/null || true
+echo "=== LISTEN on 52822 (need 127.0.0.1:52822 and Tailscale IP:52822) ==="
+if lsof -nP -iTCP:52822 -sTCP:LISTEN 2>/dev/null | grep -q .; then
+  lsof -nP -iTCP:52822 -sTCP:LISTEN
+elif netstat -anv -p tcp 2>/dev/null | grep -E '\.52822\s.*LISTEN' | grep -q .; then
+  netstat -anv -p tcp 2>/dev/null | grep -E '\.52822\s' || true
+else
+  echo "Still nothing listening. netstat grep 52822:" >&2
+  netstat -an -p tcp 2>/dev/null | grep 52822 || true
+  echo "--- tail /var/log/hermes-tailscale-sshd.log ---" >&2
+  tail -40 /var/log/hermes-tailscale-sshd.log 2>/dev/null || true
   exit 1
-}
+fi
 
 echo ""
 echo "OK. From your laptop: ssh -4 -p 52822 operator@<tailscale-ip>"
