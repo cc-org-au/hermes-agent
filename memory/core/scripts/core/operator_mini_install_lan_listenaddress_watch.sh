@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install a system LaunchDaemon on the operator mini that every 2 minutes (and at boot)
+# Install a system LaunchDaemon on the operator mini that every 60 seconds (and at boot)
 # refreshes the LAN ListenAddress for Hermes sshd :52822 when en0/en1 DHCP changes.
 #
 # You still need Tailscale or LAN reachability for *initial* setup (Screen Sharing, or first SSH).
@@ -38,6 +38,6 @@ launchctl enable system/org.hermes.lan-ssh-listen-refresh
 launchctl kickstart -k system/org.hermes.lan-ssh-listen-refresh
 
 echo "Installed ${PLIST_DST} + ${LIBEXEC}/operator_mini_refresh_lan_listenaddress.sh"
-echo "Interval: 120s (reinstall this script after pulling repo to refresh the plist if it changed)."
+echo "Interval: 60s (reinstall this script after pulling repo to refresh the plist if it changed)."
 echo "Logs: /var/log/hermes-lan-ssh-refresh.log"
 echo "Uninstall: sudo launchctl bootout system $PLIST_DST && sudo rm -f $PLIST_DST ${LIBEXEC}/operator_mini_refresh_lan_listenaddress.sh"
