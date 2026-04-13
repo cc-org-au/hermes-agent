@@ -158,5 +158,6 @@ echo "[ssh-operator-breakglass] all targets failed (last exit ${last})." >&2
 echo "  On this Mac: tailscale status; tailscale down && tailscale up" >&2
 echo "  On mini (Screen Sharing): sudo bash ~/hermes-agent/memory/core/scripts/core/operator_mini_fix_sshd_incoming_firewall.sh" >&2
 echo "  Same Wi‑Fi as mini but TS broken: set MACMINI_SSH_LAN_IP=<mini-LAN-IP> in ${ENV_FILE}" >&2
-echo "    and on mini once: sudo bash ~/hermes-agent/memory/core/scripts/core/operator_mini_add_lan_listenaddress_sshd.sh" >&2
+echo "    On mini (once): sudo bash ~/hermes-agent/memory/core/scripts/core/operator_mini_install_lan_listenaddress_watch.sh" >&2
+echo "    (auto-refreshes LAN ListenAddress every 5m; manual add_lan still works.)" >&2
 exit "$last"
