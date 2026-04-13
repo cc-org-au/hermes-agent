@@ -725,6 +725,9 @@ DEFAULT_CONFIG = {
         # Wrap delivered cron responses with a header (task name) and footer
         # ("The agent cannot see this message").  Set to false for clean output.
         "wrap_response": True,
+        # Skip messaging delivery when the normalized body matches the last
+        # successful delivery for this job (avoids WhatsApp/Telegram spam).
+        "delivery_dedupe": True,
     },
 
     # Optional paths to cloned third-party repos for /paperclip and /autoresearch helpers.
@@ -735,7 +738,7 @@ DEFAULT_CONFIG = {
     },
 
     # Config schema version - bump this when adding new required fields
-    "_config_version": 31,
+    "_config_version": 32,
 }
 
 # =============================================================================
@@ -745,6 +748,7 @@ DEFAULT_CONFIG = {
 # Track which env vars were introduced in each config version.
 # Migration only mentions vars new since the user's previous version.
 ENV_VARS_BY_VERSION: Dict[int, List[str]] = {
+    32: [],
     31: [],
     30: [],
     29: [
@@ -875,6 +879,14 @@ OPTIONAL_ENV_VARS = {
     "MACMINI_SSH_PORT": {
         "description": "Mac mini SSH port (52822 after Tailscale-only hardening; default script uses 22 if unset).",
         "prompt": "Mac mini SSH port (optional, e.g. 52822)",
+        "url": None,
+        "password": False,
+        "category": "setting",
+        "advanced": True,
+    },
+    "MACMINI_SSH_LAN_IP": {
+        "description": "Mac mini LAN IPv4 (e.g. 192.168.1.61) for ssh-operator-breakglass / ssh_operator fallback when Tailscale is wedged after Wi‑Fi change; mini must ListenAddress this IP (see operator_mini_add_lan_listenaddress_sshd.sh).",
+        "prompt": "Mac mini LAN IP for SSH fallback (optional)",
         "url": None,
         "password": False,
         "category": "setting",
@@ -2822,6 +2834,25 @@ def migrate_config(interactive: bool = True, quiet: bool = False) -> Dict[str, A
                 print(f"  ⚠ v31 delegation overlay migration skipped: {e}")
             results["warnings"].append(f"v31 migration: {e}")
             merge_user_config_yaml({"_config_version": 31})
+
+    # ── Version 31 → 32: cron delivery dedupe (default on) ──
+    if current_ver < 32:
+        try:
+            merge_user_config_yaml(
+                {
+                    "_config_version": 32,
+                    "cron": {
+                        "delivery_dedupe": True,
+                    },
+                }
+            )
+            if not quiet:
+                print("  ✓ v32: cron.delivery_dedupe (skip repeat status to messaging)")
+        except Exception as e:
+            if not quiet:
+                print(f"  ⚠ v32 cron dedupe migration skipped: {e}")
+            results["warnings"].append(f"v32 migration: {e}")
+            merge_user_config_yaml({"_config_version": 32})
 
     if current_ver < latest_ver and not quiet:
         print(f"Config version: {current_ver} → {latest_ver}")

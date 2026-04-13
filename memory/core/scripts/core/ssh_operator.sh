@@ -3,6 +3,8 @@
 #
 # Credentials: HERMES_OPERATOR_ENV or ~/.env/.env (same file as droplet is fine):
 #   MACMINI_SSH_USER (default operator), MACMINI_SSH_HOST, MACMINI_SSH_PORT (default 52822),
+#   optional MACMINI_SSH_LAN_IP — second try when Tailscale path fails (mini must ListenAddress it;
+#     see operator_mini_add_lan_listenaddress_sshd.sh),
 #   optional MACMINI_SSH_KEY in the env file (else SSH_KEY_FILE or ~/.env/.ssh_key)
 #   optional HERMES_OPERATOR_REPO — absolute path on the mini (e.g. /Users/operator/hermes-agent)
 #   optional HERMES_OPERATOR_ALLOW_ENV_PASSPHRASE or HERMES_DROPLET_ALLOW_ENV_PASSPHRASE + SSH_PASSPHRASE
@@ -29,6 +31,7 @@ KEY_FILE="${MACMINI_SSH_KEY:-${SSH_KEY_FILE:-${HOME}/.env/.ssh_key}}"
 MACMINI_USER=""
 MACMINI_HOST=""
 MACMINI_PORT="52822"
+MACMINI_SSH_LAN_IP="${MACMINI_SSH_LAN_IP:-}"
 HERMES_OPERATOR_REPO_REMOTE=""
 _ALLOW_ENV_PASS_FROM_FILE=0
 _RAW_SSH_PASSPHRASE=""
@@ -49,6 +52,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
       [[ "$val" != *"@"* ]] && MACMINI_HOST="${val}"
       ;;
     MACMINI_SSH_PORT) MACMINI_PORT="${val}" ;;
+    MACMINI_SSH_LAN_IP) MACMINI_SSH_LAN_IP="${val}" ;;
     MACMINI_SSH_KEY) KEY_FILE="${val}" ;;
     HERMES_OPERATOR_REPO) HERMES_OPERATOR_REPO_REMOTE="${val}" ;;
     HERMES_OPERATOR_ALLOW_ENV_PASSPHRASE)
@@ -125,14 +129,38 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 fi
 if [[ "$_USE_TT" == "1" ]]; then
   _SSH_FLAGS+=(-o RequestTTY=force)
-  _SSH_BASE=(ssh -tt "${_SSH_FLAGS[@]}" "${MACMINI_USER}@${MACMINI_HOST}")
-else
-  _SSH_BASE=(ssh -T "${_SSH_FLAGS[@]}" "${MACMINI_USER}@${MACMINI_HOST}")
 fi
+
+_set_ssh_base_host() {
+  local h="$1"
+  if [[ "$_USE_TT" == "1" ]]; then
+    _SSH_BASE=(ssh -tt "${_SSH_FLAGS[@]}" "${MACMINI_USER}@${h}")
+  else
+    _SSH_BASE=(ssh -T "${_SSH_FLAGS[@]}" "${MACMINI_USER}@${h}")
+  fi
+}
 
 _run_remote() {
   local remote_bash_cmd="$1"
   "${_SSH_ENV[@]}" "${_SSH_BASE[@]}" "bash -lc $(printf '%q' "$remote_bash_cmd")"
+}
+
+_operator_try_hosts() {
+  local remote_bash_cmd="$1"
+  local h _hosts=("$MACMINI_HOST") _last=255 _n
+  if [[ -n "${MACMINI_SSH_LAN_IP:-}" && "${MACMINI_SSH_LAN_IP}" != "$MACMINI_HOST" ]]; then
+    _hosts+=("$MACMINI_SSH_LAN_IP")
+  fi
+  _n="${#_hosts[@]}"
+  for h in "${_hosts[@]}"; do
+    [[ "$_n" -gt 1 ]] && echo "[ssh_operator] trying ${MACMINI_USER}@${h}:${MACMINI_PORT} ..." >&2
+    _set_ssh_base_host "$h"
+    if _run_remote "$remote_bash_cmd"; then
+      return 0
+    fi
+    _last=$?
+  done
+  return "$_last"
 }
 
 _REPO_EXPORT=""
@@ -143,10 +171,10 @@ fi
 
 if [[ $# -eq 0 ]]; then
   _INNER="${_REPO_EXPORT}$(_operator_interactive_shell_cmd)"
-  _run_remote "$_INNER"
+  _operator_try_hosts "$_INNER"
   exit $?
 fi
 
 _USER_CMD="$*"
 _USER_CMD="${_REPO_EXPORT}$(_operator_wrap_cmd_with_venv "$_USER_CMD")"
-_run_remote "$_USER_CMD"
+_operator_try_hosts "$_USER_CMD"

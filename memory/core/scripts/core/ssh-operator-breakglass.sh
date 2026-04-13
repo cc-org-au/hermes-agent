@@ -2,20 +2,20 @@
 # SSH to operator mini using a break-glass private key (no sshd from= on that pubkey line).
 #
 # Host/user/port default from the same ~/.env/.env keys as ssh_operator.sh (MACMINI_SSH_*),
-# so you do not drift from a stale hardcoded IP. Override with OPERATOR_* env vars if needed.
+# plus optional MACMINI_SSH_LAN_IP for same-LAN fallback when Tailscale is wedged after a
+# Wi‑Fi change (Screen Sharing still works via 192.168.x.x but TS SSH times out).
+#
+# Try order (deduped): Tailscale host (MACMINI_SSH_HOST), then MACMINI_SSH_LAN_IP.
+# On the mini, run once (sudo): memory/core/scripts/core/operator_mini_add_lan_listenaddress_sshd.sh
+# so sshd actually listens on that LAN IP (Hermes default is loopback + TS only).
 #
 # Key resolution (first hit wins):
 #   1) OPERATOR_BREAKGLASS_KEY=file
 #   2) $PWD / script dir: id_ed25519, operator_breakglass, breakglass_ed25519, .operator_key, operator_key
 #   3) $HOME/.env/.breakglass as FILE or dir with those key names
 #
-# Reliability: forces IPv4 (-4) for 100.x Tailscale targets (avoids some dual-stack stalls).
-# If raw TCP still times out while `tailscale ping` works, fix the mini (see
-#   scripts/core/operator_mini_ssh_tcp_diagnostic.sh) — usually sshd ListenAddress vs current
-#   `tailscale ip -4`, org.hermes.tailscale.sshd, or Application Firewall blocking 52822.
-#
 # Optional: OPERATOR_BREAKGLASS_USE_TAILSCALE_SSH=1 uses `tailscale ssh` (port 22 on peer
-# unless your tailnet maps otherwise) — only helps if your mini still exposes SSH on 22 for that path.
+# unless your tailnet maps otherwise).
 #
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,6 +24,7 @@ ENV_FILE="${HERMES_OPERATOR_ENV:-${HERMES_DROPLET_ENV:-${HOME}/.env/.env}}"
 _ef_host=""
 _ef_port=""
 _ef_user=""
+_ef_lan=""
 if [[ -f "$ENV_FILE" ]]; then
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
@@ -44,6 +45,7 @@ if [[ -f "$ENV_FILE" ]]; then
         ;;
       MACMINI_SSH_PORT) _ef_port="${val}" ;;
       MACMINI_SSH_USER) _ef_user="${val}" ;;
+      MACMINI_SSH_LAN_IP) _ef_lan="${val}" ;;
     esac
   done <"$ENV_FILE"
 fi
@@ -51,6 +53,7 @@ fi
 HOST="${OPERATOR_TAILSCALE_HOST:-${MACMINI_SSH_HOST:-${_ef_host:-100.67.17.9}}}"
 PORT="${OPERATOR_SSH_PORT:-${MACMINI_SSH_PORT:-${_ef_port:-52822}}}"
 USER_NAME="${OPERATOR_SSH_USER:-${MACMINI_SSH_USER:-${_ef_user:-operator}}}"
+LAN_IP="${MACMINI_SSH_LAN_IP:-${_ef_lan:-}}"
 
 _resolve_breakglass_key() {
   local f
@@ -121,8 +124,39 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 fi
 
 if [[ "${OPERATOR_BREAKGLASS_USE_TAILSCALE_SSH:-0}" == "1" ]] && command -v tailscale >/dev/null 2>&1; then
-  # Uses tailnet SSH feature; remote port is often 22 — only if your ACLs / sshd allow it.
   exec tailscale ssh "${USER_NAME}@${HOST}" "$@"
 fi
 
-exec ssh "${_SSH_BASE[@]}" "${USER_NAME}@${HOST}" "$@"
+_candidate_hosts=()
+_add_candidate() {
+  local cand="$1"
+  [[ -z "$cand" ]] && return
+  local x
+  for x in "${_candidate_hosts[@]:-}"; do
+    [[ "$x" == "$cand" ]] && return
+  done
+  _candidate_hosts+=("$cand")
+}
+
+_add_candidate "$HOST"
+_add_candidate "$LAN_IP"
+
+if [[ "${#_candidate_hosts[@]}" -eq 1 ]]; then
+  exec ssh "${_SSH_BASE[@]}" "${USER_NAME}@${_candidate_hosts[0]}" "$@"
+fi
+
+last=255
+for h in "${_candidate_hosts[@]}"; do
+  echo "[ssh-operator-breakglass] trying ${USER_NAME}@${h} port ${PORT} ..." >&2
+  if ssh "${_SSH_BASE[@]}" "${USER_NAME}@${h}" "$@"; then
+    exit 0
+  fi
+  last=$?
+done
+
+echo "[ssh-operator-breakglass] all targets failed (last exit ${last})." >&2
+echo "  On this Mac: tailscale status; tailscale down && tailscale up" >&2
+echo "  On mini (Screen Sharing): sudo bash ~/hermes-agent/memory/core/scripts/core/operator_mini_fix_sshd_incoming_firewall.sh" >&2
+echo "  Same Wi‑Fi as mini but TS broken: set MACMINI_SSH_LAN_IP=<mini-LAN-IP> in ${ENV_FILE}" >&2
+echo "    and on mini once: sudo bash ~/hermes-agent/memory/core/scripts/core/operator_mini_add_lan_listenaddress_sshd.sh" >&2
+exit "$last"

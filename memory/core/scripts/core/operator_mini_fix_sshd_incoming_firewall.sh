@@ -55,3 +55,4 @@ fi
 echo ""
 echo "OK. From your laptop: ssh -4 -p 52822 operator@<tailscale-ip>"
 echo "If it still times out, check System Settings → Network → Firewall → Options for sshd."
+echo "Same Wi‑Fi but Tailscale wedged: run operator_mini_add_lan_listenaddress_sshd.sh on mini; set MACMINI_SSH_LAN_IP on laptop ~/.env/.env."
