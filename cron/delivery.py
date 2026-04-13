@@ -72,14 +72,18 @@ def cron_delivery_dedupe_enabled() -> bool:
 
 
 def read_cron_limits() -> tuple[int, int]:
-    """Return (delivery_max_chars, max_agent_turns) with safe bounds."""
+    """Return (delivery_max_chars, max_agent_turns) with safe bounds.
+
+    ``delivery_max_chars`` upper bound matches Slack's large ``text`` posts (~40k);
+    Hermes defaults lower in config to avoid spam — raise in ``cron.delivery_max_chars`` when needed.
+    """
     try:
         c = load_config().get("cron") or {}
-        mx = int(c.get("delivery_max_chars", 600))
+        mx = int(c.get("delivery_max_chars", 12000))
         mt = int(c.get("max_agent_turns", 12))
-        return max(200, min(4000, mx)), max(3, min(90, mt))
+        return max(200, min(36000, mx)), max(3, min(90, mt))
     except Exception:
-        return 600, 12
+        return 12000, 12
 
 
 _RE_BRACKET_INTERNAL_NOTE = re.compile(r"\[internal note\s*:[^\]]*\]", re.I)
@@ -533,9 +537,8 @@ def _pick_delivery_paragraph(body: str, max_chars: int) -> str:
     if not lines:
         return ""
     joined = "\n".join(lines)
-    if len(joined) > max_chars:
-        tail = lines[-min(6, len(lines)) :]
-        joined = "\n".join(tail)
+    # Keep the start of the chosen paragraph (bullets, evidence) when over budget — do not
+    # replace with only the last few lines, which hid the headline under a small max_chars.
     if len(joined) > max_chars:
         joined = joined[: max_chars - 1].rstrip() + "…"
     joined = joined.strip()

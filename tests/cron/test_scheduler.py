@@ -1172,3 +1172,17 @@ class TestTickAdvanceBeforeRun:
         adv_mock.assert_called_once_with("test-advance")
         # advance must happen before run
         assert call_order == [("advance", "test-advance"), ("run", "test-advance")]
+
+
+def test_read_cron_limits_default_and_upper_cap():
+    from cron.delivery import read_cron_limits
+
+    with patch("cron.delivery.load_config", return_value={"cron": {}}):
+        mx, _ = read_cron_limits()
+        assert mx == 12000
+    with patch(
+        "cron.delivery.load_config",
+        return_value={"cron": {"delivery_max_chars": 999_999}},
+    ):
+        mx, _ = read_cron_limits()
+        assert mx == 36000

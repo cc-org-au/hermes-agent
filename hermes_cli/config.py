@@ -735,8 +735,8 @@ DEFAULT_CONFIG = {
         "delivery_dedupe": True,
         # Cap agent tool/API rounds for scheduled jobs (see cron/scheduler.py).
         "max_agent_turns": 12,
-        # Max characters sent to messaging after stripping chain-of-thought.
-        "delivery_max_chars": 600,
+        # Max characters sent to messaging after stripping chain-of-thought (Slack allows ~40k text).
+        "delivery_max_chars": 12000,
         # When true, cron messaging requires a valid ###HERMES_CRON_DELIVERY_JSON block;
         # missing/invalid JSON suppresses delivery (deterministic policy). Per-job override:
         # job["strict_delivery_envelope"] in jobs.json.
@@ -751,7 +751,7 @@ DEFAULT_CONFIG = {
     },
 
     # Config schema version - bump this when adding new required fields
-    "_config_version": 36,
+    "_config_version": 37,
 }
 
 # =============================================================================
@@ -2977,6 +2977,34 @@ def migrate_config(interactive: bool = True, quiet: bool = False) -> Dict[str, A
                 print(f"  ⚠ v36 migration skipped: {e}")
             results["warnings"].append(f"v36 migration: {e}")
             merge_user_config_yaml({"_config_version": 36})
+
+    # ── Version 36 → 37: raise cron delivery_max_chars (600 truncated long role-channel updates) ──
+    if current_ver < 37:
+        try:
+            cfg_now = load_config()
+            cron = cfg_now.get("cron") or {}
+            raw_dmc = cron.get("delivery_max_chars", 600)
+            try:
+                dmc_int = int(raw_dmc)
+            except (TypeError, ValueError):
+                dmc_int = 600
+            payload: dict = {"_config_version": 37}
+            if dmc_int <= 600:
+                payload["cron"] = {"delivery_max_chars": 12000}
+            merge_user_config_yaml(payload)
+            if not quiet:
+                if dmc_int <= 600:
+                    print(
+                        "  ✓ v37: cron.delivery_max_chars → 12000 "
+                        "(legacy 600 cut off Slack/cron role updates mid-message)"
+                    )
+                else:
+                    print("  ✓ v37: config version bump")
+        except Exception as e:
+            if not quiet:
+                print(f"  ⚠ v37 migration skipped: {e}")
+            results["warnings"].append(f"v37 migration: {e}")
+            merge_user_config_yaml({"_config_version": 37})
 
     if current_ver < latest_ver and not quiet:
         print(f"Config version: {current_ver} → {latest_ver}")
