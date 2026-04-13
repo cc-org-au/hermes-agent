@@ -7,7 +7,12 @@
 
 Usage:
   HERMES_HOME=~/.hermes/profiles/chief-orchestrator \\
-    ./venv/bin/python scripts/core/sync_slack_role_cron_jobs.py [--apply]
+    ./venv/bin/python memory/core/scripts/core/sync_slack_role_cron_jobs.py [--apply]
+
+Each job prompt ends with ``--operator --<role_slug>`` by default (operator-facing Slack must
+never use ``--droplet`` unless you explicitly ask). Hop is ``--operator`` when ``--hermes-hop auto``
+(default). Use ``--hermes-hop droplet``, or set ``messaging.role_routing.slack.hermes_hop: droplet``,
+or env ``HERMES_SLACK_ROLE_HERMES_HOP=droplet``, only when prompts must name the VPS hop.
 
 Without --apply, prints planned jobs only.
 """
@@ -23,6 +28,28 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 
+def _effective_slack_role_channels(home: Path, cfg: dict) -> dict:
+    """Same merge as ``load_gateway_config``: config.yaml + messaging_role_routing overlay."""
+    base_rr = (cfg.get("messaging") or {}).get("role_routing") or {}
+    if not isinstance(base_rr, dict):
+        base_rr = {}
+    from hermes_constants import resolve_workspace_operations_dir
+    from gateway.config import _extract_role_routing_overlay_doc, _merge_role_routing_overlay
+
+    overlay_path = resolve_workspace_operations_dir(home) / "messaging_role_routing.yaml"
+    if not overlay_path.is_file():
+        merged_rr = base_rr
+    else:
+        doc = _load_yaml(overlay_path) or {}
+        ov_rr = _extract_role_routing_overlay_doc(doc) if isinstance(doc, dict) else None
+        if isinstance(ov_rr, dict) and ov_rr:
+            merged_rr = _merge_role_routing_overlay(dict(base_rr), dict(ov_rr))
+        else:
+            merged_rr = base_rr
+    slack = (merged_rr.get("slack") or {}).get("channels") or {}
+    return slack if isinstance(slack, dict) else {}
+
+
 def _load_yaml(path: Path):
     import yaml
 
@@ -31,7 +58,55 @@ def _load_yaml(path: Path):
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
 
-def _role_prompt(role_slug: str, channel_id: str, *, chief_tag: str) -> str:
+def _infer_hermes_hop_tag(_home: Path, cfg: dict) -> str:
+    """Return ``--droplet`` or ``--operator`` for the Hermes CLI hop (trailing argv token).
+
+    Default is always ``--operator`` so operator Slack channels never see ``--droplet`` from
+    auto-detection. Use config/env/``--hermes-hop droplet`` when a job must reference the VPS hop.
+    """
+    env = os.environ.get("HERMES_SLACK_ROLE_HERMES_HOP", "").strip().lower()
+    if env in ("droplet", "operator"):
+        return f"--{env}"
+    msg = cfg.get("messaging") or {}
+    if isinstance(msg, dict):
+        rr = msg.get("role_routing") or {}
+        if isinstance(rr, dict):
+            slack = rr.get("slack") or {}
+            if isinstance(slack, dict):
+                hop = slack.get("hermes_hop")
+                if isinstance(hop, str):
+                    h = hop.strip().lower()
+                    if h in ("droplet", "operator"):
+                        return f"--{h}"
+    return "--operator"
+
+
+def _legacy_chief_tag_hop(chief_tag: str | None) -> str | None:
+    """If ``--chief-tag`` was ``--operator --chief-orchestrator``, return ``--operator`` only."""
+    if not chief_tag or not str(chief_tag).strip():
+        return None
+    for tok in str(chief_tag).split():
+        if tok in ("--droplet", "--operator"):
+            return tok
+    return None
+
+
+def _resolve_hermes_hop_tag(
+    *,
+    hermes_hop: str,
+    chief_tag: str | None,
+    home: Path,
+    cfg: dict,
+) -> str:
+    if hermes_hop in ("droplet", "operator"):
+        return f"--{hermes_hop}"
+    legacy = _legacy_chief_tag_hop(chief_tag)
+    if legacy is not None:
+        return legacy
+    return _infer_hermes_hop_tag(home, cfg)
+
+
+def _role_prompt(role_slug: str, channel_id: str, *, hermes_hop_tag: str) -> str:
     return f"""Use Australia/Sydney (Hermes timezone). Run once per day at the scheduled wall time.
 
 You are generating the **Slack-only daily status** for role `{role_slug}` in channel `{channel_id}`.
@@ -46,7 +121,7 @@ You are generating the **Slack-only daily status** for role `{role_slug}` in cha
 - Align with published policies under `HERMES_HOME/policies/` relevant to `{role_slug}` when applicable (do not paste large policy text).
 
 **Closing**
-Append its own final line exactly: `{chief_tag} --{role_slug}`"""
+Append its own final line exactly: `{hermes_hop_tag} --{role_slug}` (Hermes hop from this host, then the role slug from config — not the orchestrator profile name)."""
 
 
 def main() -> int:
@@ -61,9 +136,17 @@ def main() -> int:
     )
     parser.add_argument("--stagger", type=int, default=2, help="Minutes between channels (default 2)")
     parser.add_argument(
+        "--hermes-hop",
+        choices=("auto", "droplet", "operator"),
+        default="auto",
+        help="Closing-line CLI hop before --<role> (default auto: --operator; use droplet only if needed)",
+    )
+    parser.add_argument(
         "--chief-tag",
-        default="--operator --chief-orchestrator",
-        help="Trailing signature line for org consistency",
+        default=None,
+        metavar="STRING",
+        help="Deprecated: use --hermes-hop. If set, first --operator/--droplet token is used; "
+        "e.g. '--operator --chief-orchestrator' becomes '--operator'.",
     )
     args = parser.parse_args()
 
@@ -80,10 +163,12 @@ def main() -> int:
             file=sys.stderr,
         )
         return 0
-    rr = (cfg.get("messaging") or {}).get("role_routing") or {}
-    slack = (rr.get("slack") or {}).get("channels") or {}
-    if not isinstance(slack, dict) or not slack:
-        print("No messaging.role_routing.slack.channels in config.yaml — nothing to do", file=sys.stderr)
+    slack = _effective_slack_role_channels(home, cfg)
+    if not slack:
+        print(
+            "No Slack role channels after merge (config.yaml + workspace/.../messaging_role_routing.yaml) — nothing to do",
+            file=sys.stderr,
+        )
         return 1
 
     os.environ["HERMES_HOME"] = str(home)
@@ -91,6 +176,13 @@ def main() -> int:
 
     jobs = load_jobs()
     existing_deliver = {str(j.get("deliver", "")) for j in jobs}
+
+    hermes_hop_tag = _resolve_hermes_hop_tag(
+        hermes_hop=args.hermes_hop,
+        chief_tag=args.chief_tag,
+        home=home,
+        cfg=cfg,
+    )
 
     minute = args.base_minute
     planned = []
@@ -107,7 +199,7 @@ def main() -> int:
             continue
         expr = f"{minute} {args.base_hour} * * *"
         minute += args.stagger
-        prompt = _role_prompt(slug, cid, chief_tag=args.chief_tag)
+        prompt = _role_prompt(slug, cid, hermes_hop_tag=hermes_hop_tag)
         job = {
             "id": uuid.uuid4().hex[:12],
             "name": name,

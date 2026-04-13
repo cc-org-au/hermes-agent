@@ -11,11 +11,11 @@ After running, execute (same profile):
 
   HERMES_HOME=... ./venv/bin/python scripts/core/repair_cron_next_run.py
   HERMES_HOME=... ./venv/bin/python scripts/core/realign_chief_cron_schedules.py
-  HERMES_HOME=... ./venv/bin/python scripts/core/sync_slack_role_cron_jobs.py --apply [--chief-tag ...]
+  HERMES_HOME=... ./venv/bin/python memory/core/scripts/core/sync_slack_role_cron_jobs.py --apply [--hermes-hop auto|droplet|operator]
 
 Then ``gateway restart --sync``.
 
-Or pass ``--run-sync`` to invoke sync_slack_role_cron_jobs (and optional ``--chief-tag``).
+Or pass ``--run-sync`` to invoke sync_slack_role_cron_jobs (optional ``--hermes-hop``; default ``auto`` → closing line uses ``--operator``; pass ``droplet`` only if prompts must name the VPS hop).
 """
 from __future__ import annotations
 
@@ -56,9 +56,16 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--home", metavar="PATH", help="Profile dir (default: HERMES_HOME)")
     ap.add_argument(
+        "--hermes-hop",
+        choices=("auto", "droplet", "operator"),
+        default="auto",
+        help="Passed to sync_slack_role_cron_jobs when --run-sync (default auto → --operator in prompts)",
+    )
+    ap.add_argument(
         "--chief-tag",
-        default="--operator --chief-orchestrator",
-        help="Passed to sync_slack_role_cron_jobs when --run-sync (default: operator)",
+        default=None,
+        metavar="STRING",
+        help="Deprecated: forwarded to sync as --chief-tag if set (prefer --hermes-hop)",
     )
     ap.add_argument(
         "--run-sync",
@@ -102,11 +109,10 @@ def main() -> int:
         if not sync.is_file():
             sync = Path(__file__).resolve().parent / "sync_slack_role_cron_jobs.py"
         env = {**os.environ, "HERMES_HOME": str(home)}
-        r = subprocess.run(
-            [sys.executable, str(sync), "--apply", "--chief-tag", args.chief_tag],
-            env=env,
-            cwd=str(ROOT),
-        )
+        cmd = [sys.executable, str(sync), "--apply", "--hermes-hop", args.hermes_hop]
+        if args.chief_tag:
+            cmd.extend(["--chief-tag", args.chief_tag])
+        r = subprocess.run(cmd, env=env, cwd=str(ROOT))
         return r.returncode
     print("Next: repair_cron_next_run.py, realign_chief_cron_schedules.py, sync_slack_role_cron_jobs.py --apply")
     return 0
