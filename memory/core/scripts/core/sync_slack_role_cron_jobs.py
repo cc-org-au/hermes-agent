@@ -240,6 +240,9 @@ def main() -> int:
     from cron.jobs import compute_next_run, load_jobs, save_jobs
 
     jobs = load_jobs()
+    cron_cfg = cfg.get("cron") if isinstance(cfg.get("cron"), dict) else {}
+    cron_default_model = str(cron_cfg.get("default_model") or "").strip() or None
+    cron_default_provider = str(cron_cfg.get("default_provider") or "").strip() or None
     hermes_hop_tag = _resolve_hermes_hop_tag(
         hermes_hop=args.hermes_hop,
         chief_tag=args.chief_tag,
@@ -267,6 +270,8 @@ def main() -> int:
                 profile_cli_suffix=profile_cli_suffix,
             )
             j["strict_delivery_envelope"] = True
+            j["model"] = cron_default_model
+            j["provider"] = cron_default_provider
             updated += 1
         if updated:
             print(f"refreshed prompts on {updated} existing job(s)", file=sys.stderr)
@@ -301,8 +306,8 @@ def main() -> int:
             "strict_delivery_envelope": True,
             "skills": [],
             "skill": None,
-            "model": None,
-            "provider": None,
+            "model": cron_default_model,
+            "provider": cron_default_provider,
             "base_url": None,
             "schedule": {"kind": "cron", "expr": expr, "display": expr},
             "schedule_display": expr,

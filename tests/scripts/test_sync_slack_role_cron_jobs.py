@@ -133,7 +133,14 @@ def test_apply_creates_slack_role_job_with_strict_delivery_envelope(
     home = tmp_path / ".hermes" / "profiles" / "chief-orchestrator-droplet"
     home.mkdir(parents=True)
     (home / "config.yaml").write_text(
-        "messaging:\n  role_routing:\n    slack:\n      channels:\n        C1: org-mapper-hr-controller\n",
+        "cron:\n"
+        "  default_model: openai/gpt-4o-mini\n"
+        "  default_provider: openrouter\n"
+        "messaging:\n"
+        "  role_routing:\n"
+        "    slack:\n"
+        "      channels:\n"
+        "        C1: org-mapper-hr-controller\n",
         encoding="utf-8",
     )
     captured: dict = {}
@@ -150,6 +157,8 @@ def test_apply_creates_slack_role_job_with_strict_delivery_envelope(
     jobs = captured["jobs"]
     assert len(jobs) == 1
     assert jobs[0]["strict_delivery_envelope"] is True
+    assert jobs[0]["model"] == "openai/gpt-4o-mini"
+    assert jobs[0]["provider"] == "openrouter"
 
 
 def test_slack_prompt_profile_suffix_under_profiles(tmp_path: Path) -> None:

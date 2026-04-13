@@ -208,6 +208,35 @@ def run_job(job: dict) -> tuple[bool, str, str, Optional[str]]:
             },
         )
 
+        disabled_toolsets = [
+            "cronjob",
+            "messaging",
+            "clarify",
+            "web",
+            "search",
+            "browser",
+            "moa",
+            "rl",
+            "image_gen",
+            "vision",
+        ]
+        if str(job_name).startswith("daily-slack-role-status-"):
+            # Slack role check-ins should generate a concise status report, not perform repo /
+            # service maintenance or mutate profile state while composing the message.
+            disabled_toolsets.extend(
+                [
+                    "terminal",
+                    "file",
+                    "delegation",
+                    "code_execution",
+                    "memory",
+                    "session_search",
+                    "skills",
+                    "tts",
+                    "homeassistant",
+                ]
+            )
+
         agent = AIAgent(
             model=turn_route["model"],
             api_key=turn_route["runtime"].get("api_key"),
@@ -223,18 +252,7 @@ def run_job(job: dict) -> tuple[bool, str, str, Optional[str]]:
             providers_ignored=pr.get("ignore"),
             providers_order=pr.get("order"),
             provider_sort=pr.get("sort"),
-            disabled_toolsets=[
-                "cronjob",
-                "messaging",
-                "clarify",
-                "web",
-                "search",
-                "browser",
-                "moa",
-                "rl",
-                "image_gen",
-                "vision",
-            ],
+            disabled_toolsets=disabled_toolsets,
             quiet_mode=True,
             skip_memory=True,
             platform="cron",
