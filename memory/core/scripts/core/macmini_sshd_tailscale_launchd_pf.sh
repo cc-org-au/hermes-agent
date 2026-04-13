@@ -7,7 +7,7 @@
 #   2) Installs LaunchDaemon org.hermes.tailscale.sshd — /usr/sbin/sshd -D so those binds take effect.
 #   3) Installs PF anchor org.hermes to drop inbound TCP 22 (while launchd may still hold the socket).
 #
-# Idempotent. Recovery: /usr/local/share/hermes/mac-mini-ssh-network.txt on-host.
+# Idempotent. Use **macmini_operator_ssh_guard.sh** for snapshot + timed rollback around changes.
 #
 set -euo pipefail
 

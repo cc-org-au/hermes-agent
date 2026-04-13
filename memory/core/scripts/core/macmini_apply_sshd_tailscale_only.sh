@@ -10,10 +10,11 @@
 # Prerequisites: Tailscale up; Remote Login enabled; pubkey already in each AllowUsers account.
 #
 # Usage on mini:
-#   sudo MACMINI_SSH_ALLOW_USERS="operator hurizexian20562" ./macmini_apply_sshd_tailscale_only.sh [PORT]
+#   sudo MACMINI_SSH_ALLOW_USERS="operator" bash ./macmini_apply_sshd_tailscale_only.sh [PORT]
 #
+# Prefer **macmini_operator_ssh_guard.sh begin** then **apply** so a timed rollback can restore state.
 # macOS socket-activated sshd ignores Port/ListenAddress; also run **macmini_sshd_tailscale_launchd_pf.sh**
-# (as root) so sshd -D binds 52822 and PF drops inbound :22. On-host: /usr/local/share/hermes/mac-mini-ssh-network.txt
+# (as root) so sshd -D binds 52822 and PF drops inbound :22.
 #
 set -euo pipefail
 
@@ -31,7 +32,7 @@ fi
   exit 1
 }
 
-ALLOW_USERS="${MACMINI_SSH_ALLOW_USERS:-operator hurizexian20562}"
+ALLOW_USERS="${MACMINI_SSH_ALLOW_USERS:-operator}"
 CONF="/etc/ssh/sshd_config.d/200-hermes-tailscale-only.conf"
 
 if [[ "$(id -u)" != "0" ]]; then

@@ -3,7 +3,7 @@
 #
 # Credentials: HERMES_OPERATOR_ENV or ~/.env/.env (same file as droplet is fine):
 #   MACMINI_SSH_USER (default operator), MACMINI_SSH_HOST, MACMINI_SSH_PORT (default 52822),
-#   optional MACMINI_SSH_KEY (else SSH_KEY_FILE or ~/.env/.ssh_key)
+#   optional MACMINI_SSH_KEY in the env file (else SSH_KEY_FILE or ~/.env/.ssh_key)
 #   optional HERMES_OPERATOR_REPO — absolute path on the mini (e.g. /Users/operator/hermes-agent)
 #   optional HERMES_OPERATOR_ALLOW_ENV_PASSPHRASE or HERMES_DROPLET_ALLOW_ENV_PASSPHRASE + SSH_PASSPHRASE
 #   for encrypted keys without TTY (shared ~/.env)
@@ -37,10 +37,6 @@ if [[ ! -f "$ENV_FILE" ]]; then
   echo "ssh_operator.sh: missing env file ${ENV_FILE} (set HERMES_OPERATOR_ENV)" >&2
   exit 1
 fi
-if [[ ! -f "$KEY_FILE" ]]; then
-  echo "ssh_operator.sh: missing key ${KEY_FILE} (set MACMINI_SSH_KEY or SSH_KEY_FILE)" >&2
-  exit 1
-fi
 
 while IFS= read -r line || [[ -n "$line" ]]; do
   [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
@@ -71,6 +67,10 @@ MACMINI_USER="${MACMINI_USER:-operator}"
   echo "ssh_operator.sh: set MACMINI_SSH_HOST (or SSH_IP_OPERATOR) in ${ENV_FILE}" >&2
   exit 1
 }
+if [[ ! -f "$KEY_FILE" ]]; then
+  echo "ssh_operator.sh: missing key ${KEY_FILE} (set MACMINI_SSH_KEY in ${ENV_FILE} or export MACMINI_SSH_KEY / SSH_KEY_FILE)" >&2
+  exit 1
+fi
 
 if [[ "${HERMES_OPERATOR_WORKSTATION_CLI:-0}" == "1" ]]; then
   _ALLOW_ENV_PASS_FROM_FILE=0
