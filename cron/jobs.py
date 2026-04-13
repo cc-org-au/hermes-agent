@@ -420,6 +420,7 @@ def create_job(
     model: Optional[str] = None,
     provider: Optional[str] = None,
     base_url: Optional[str] = None,
+    deliver_summary: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Create a new cron job.
@@ -436,6 +437,7 @@ def create_job(
         model: Optional per-job model override
         provider: Optional per-job provider override
         base_url: Optional per-job base URL override
+        deliver_summary: Optional first-line label for messaging deliveries (see cron.scheduler)
 
     Returns:
         The created job dict
@@ -494,6 +496,9 @@ def create_job(
         "deliver": deliver,
         "origin": origin,  # Tracks where job was created for "origin" delivery
     }
+    ds = str(deliver_summary).strip() if isinstance(deliver_summary, str) else ""
+    if ds:
+        job["deliver_summary"] = ds
 
     jobs = load_jobs()
     jobs.append(job)
@@ -612,12 +617,21 @@ def remove_job(job_id: str) -> bool:
     return False
 
 
-def mark_job_run(job_id: str, success: bool, error: Optional[str] = None):
+def mark_job_run(
+    job_id: str,
+    success: bool,
+    error: Optional[str] = None,
+    *,
+    deliver_fingerprint_update: Optional[str] = None,
+):
     """
     Mark a job as having been run.
     
     Updates last_run_at, last_status, increments completed count,
     computes next_run_at, and auto-deletes if repeat limit reached.
+
+    When *deliver_fingerprint_update* is set (non-None), stores it as
+    *last_deliver_fingerprint* for cron delivery deduplication.
     """
     jobs = load_jobs()
     for i, job in enumerate(jobs):
@@ -626,6 +640,8 @@ def mark_job_run(job_id: str, success: bool, error: Optional[str] = None):
             job["last_run_at"] = now
             job["last_status"] = "ok" if success else "error"
             job["last_error"] = error if not success else None
+            if deliver_fingerprint_update is not None:
+                job["last_deliver_fingerprint"] = deliver_fingerprint_update
             
             # Increment completed count
             if job.get("repeat"):

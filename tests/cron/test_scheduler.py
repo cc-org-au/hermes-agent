@@ -22,7 +22,18 @@ from cron.scheduler import (
     _build_job_prompt,
     _delivery_content_fingerprint,
     sanitize_cron_deliver_content,
+    format_cron_delivery_with_headline,
+    _cron_read_limits,
 )
+
+
+def _expected_tick_deliver_fingerprint(job: dict, raw_body: str, *, success: bool = True) -> str:
+    """Fingerprint after the same sanitize + headline path as tick()."""
+    max_chars, _ = _cron_read_limits()
+    sanitized, skip = sanitize_cron_deliver_content(raw_body, max_chars)
+    assert not skip
+    final = format_cron_delivery_with_headline(job, sanitized, success=success)
+    return _delivery_content_fingerprint(final)
 
 
 class TestResolveOrigin:
@@ -668,14 +679,14 @@ class TestTickDeliveryDedupe:
     def test_skips_when_fingerprint_matches_previous(self):
         body_a = "Status ok\nUpdated: 2026-04-10T10:00:00+10:00"
         body_b = "Status ok\nUpdated: 2026-04-11T11:00:00+10:00"
-        fp = _delivery_content_fingerprint(body_a)
         job = {
             "id": "dedupe-job",
             "name": "dedupe",
             "deliver": "origin",
             "origin": {"platform": "telegram", "chat_id": "1"},
-            "last_deliver_fingerprint": fp,
         }
+        fp = _expected_tick_deliver_fingerprint(job, body_a)
+        job["last_deliver_fingerprint"] = fp
         mark_mock = MagicMock()
         deliver_mock = MagicMock(return_value=True)
         with patch("cron.scheduler.get_due_jobs", return_value=[job]), \
@@ -706,7 +717,7 @@ class TestTickDeliveryDedupe:
         mark_mock = MagicMock()
         deliver_mock = MagicMock(return_value=True)
         body = "New alert\nUpdated: 2026-04-10T10:00:00+10:00"
-        fp = _delivery_content_fingerprint(body)
+        fp = _expected_tick_deliver_fingerprint(job, body)
         with patch("cron.scheduler.get_due_jobs", return_value=[job]), \
              patch("cron.scheduler.advance_next_run"), \
              patch("cron.scheduler.run_job", return_value=(True, "# o", body, None)), \
@@ -796,6 +807,30 @@ class TestSilentDelivery:
             tick(verbose=False)
         save_mock.assert_called_once_with("monitor-job", "# full output")
         deliver_mock.assert_not_called()
+
+
+class TestCronDeliveryHeadline:
+    """First line summarizes job + inferred status before detail body."""
+
+    def test_auto_headline_from_job_name_and_body(self):
+        job = {"id": "x", "name": "gateway-watchdog-status"}
+        body = "ok all_connected=whatsapp,telegram,slack"
+        out = format_cron_delivery_with_headline(job, body, success=True)
+        lines = out.splitlines()
+        assert lines[0] == "Gateway Watchdog Status — Nominal"
+        assert "ok all_connected" in out
+
+    def test_custom_deliver_summary_override(self):
+        job = {"id": "x", "name": "ignored", "deliver_summary": "Custom Prefix — OK"}
+        body = "Details here."
+        out = format_cron_delivery_with_headline(job, body, success=True)
+        assert out.startswith("Custom Prefix — OK\n")
+
+    def test_failed_run_headline(self):
+        job = {"id": "x", "name": "nightly", "deliver_summary": "Nightly"}
+        body = "TimeoutError: …"
+        out = format_cron_delivery_with_headline(job, body, success=False)
+        assert out.startswith("Nightly — Run failed\n")
 
 
 class TestSanitizeCronDeliverContent:

@@ -270,6 +270,100 @@ def sanitize_cron_deliver_content(raw: str, max_chars: int) -> tuple[str, bool]:
     return out, False
 
 
+def _cron_severity_suffix(body: str, success: bool) -> str:
+    """Compact status phrase inferred from delivery body (no extra LLM call)."""
+    if not success:
+        return "Run failed"
+    low = body.lower()
+    # Critical / needs action now
+    if any(
+        p in low
+        for p in (
+            "gateway down",
+            "no platforms",
+            "telegram: fatal",
+            "slack: fatal",
+            "fatal",
+            "start-limit",
+            "start limit",
+            "bridge disconnected",
+            "not connected",
+            "⚠️ cron job",
+        )
+    ):
+        return "Action needed"
+    if re.search(r"\bsev\s*0\b", low) or re.search(r"\bsev\s*1\b", low):
+        return "Action needed"
+    if re.search(r"\bdown\b", low) and "recovered" not in low and "restored" not in low:
+        return "Action needed"
+    # Elevated attention
+    if any(
+        p in low
+        for p in (
+            "sev2",
+            "sev 2",
+            "degraded",
+            "outstanding",
+            "intervention",
+            "warning",
+            "attention required",
+        )
+    ):
+        return "Review suggested"
+    # Healthy / cleared (before generic "alert" heuristic)
+    if any(
+        p in low
+        for p in (
+            "recovered",
+            "resolved",
+            "cleared",
+            "reconnected",
+            "restored",
+            "healthy",
+            "all_connected",
+            "connectivity restored",
+            "gateway recovered",
+            "platforms: whatsapp",
+            "ok all_connected",
+            "status ok",
+            "all clear",
+        )
+    ):
+        return "Nominal"
+    if re.search(r"\balert\b", low) and "false alert" not in low:
+        return "Review suggested"
+    return "Update"
+
+
+def _cron_headline_line(job: dict, body: str, success: bool) -> str:
+    """Single-line preview: job topic + inferred status (or per-job override)."""
+    custom = str(job.get("deliver_summary") or job.get("delivery_summary") or "").strip()
+    raw = str(job.get("name") or job.get("id") or "Scheduled job").strip()
+    topic = re.sub(r"[-_]+", " ", raw).strip().title()
+    if len(topic) > 44:
+        topic = topic[:41].rstrip() + "…"
+    if custom:
+        if success:
+            return custom[:120]
+        return f"{custom[:72]} — Run failed"[:120]
+    suffix = _cron_severity_suffix(body, success)
+    return f"{topic} — {suffix}"
+
+
+def format_cron_delivery_with_headline(job: dict, body: str, *, success: bool) -> str:
+    """Prefix messaging delivery with one short status line (no extra LLM)."""
+    body = (body or "").strip()
+    if not body:
+        return body
+    headline = _cron_headline_line(job, body, success).strip()
+    if body.startswith(headline):
+        return body
+    first_line = body.splitlines()[0].strip() if body else ""
+    if first_line == headline:
+        return body
+    return f"{headline}\n{body}"
+
+
 # Resolve Hermes home directory (respects HERMES_HOME override)
 _hermes_home = get_hermes_home()
 
@@ -845,6 +939,11 @@ def tick(verbose: bool = True) -> int:
                 if should_deliver and success and deliver_content.strip().upper().startswith(SILENT_MARKER):
                     logger.info("Job '%s': agent returned %s — skipping delivery", job["id"], SILENT_MARKER)
                     should_deliver = False
+
+                if should_deliver:
+                    deliver_content = format_cron_delivery_with_headline(
+                        job, deliver_content, success=success
+                    )
 
                 dedupe_on = _cron_delivery_dedupe_enabled()
                 fp_new: Optional[str] = None
