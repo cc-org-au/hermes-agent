@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -119,6 +121,35 @@ def test_role_prompt_uses_hop_and_profile_suffix() -> None:
         profile_cli_suffix="chief-orchestrator-droplet",
     )
     assert "Append its own final line exactly: `--droplet --chief-orchestrator-droplet`" in text
+    assert "###HERMES_CRON_DELIVERY_JSON" in text
+    assert "requested decision, if any:" in text
+
+
+def test_apply_creates_slack_role_job_with_strict_delivery_envelope(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mod = _load_sync_mod()
+    home = tmp_path / ".hermes" / "profiles" / "chief-orchestrator-droplet"
+    home.mkdir(parents=True)
+    (home / "config.yaml").write_text(
+        "messaging:\n  role_routing:\n    slack:\n      channels:\n        C1: org-mapper-hr-controller\n",
+        encoding="utf-8",
+    )
+    captured: dict = {}
+
+    def _save_jobs(rows):
+        captured["jobs"] = rows
+
+    monkeypatch.setenv("HERMES_HOME", str(home))
+    monkeypatch.setattr(sys, "argv", ["x", "--apply"])
+    with patch("cron.jobs.load_jobs", return_value=[]), patch(
+        "cron.jobs.compute_next_run", return_value="2026-01-01T00:00:00+00:00"
+    ), patch("cron.jobs.save_jobs", side_effect=_save_jobs):
+        assert mod.main() == 0
+    jobs = captured["jobs"]
+    assert len(jobs) == 1
+    assert jobs[0]["strict_delivery_envelope"] is True
 
 
 def test_slack_prompt_profile_suffix_under_profiles(tmp_path: Path) -> None:

@@ -153,21 +153,26 @@ def _role_prompt(
 You are generating the **Slack-only daily status** for role `{role_slug}` in channel `{channel_id}`.
 
 **Hard rules**
-- If there is **no material change** in reportable work, risks, or decisions since the last update for this channel, respond with exactly `[SILENT]` and nothing else.
+- If there is **no material change** in reportable work, risks, or decisions since the last update for this channel, use the exact JSON envelope with `{{"silent": true}}`.
 - **Never** paste or paraphrase content meant for WhatsApp connectivity alerts, Telegram project topics, other Slack channels, or the chief DM summary.
 - Each channel must add **unique** information for this role remit; do not broadcast the same narrative to multiple channels.
 
 **Content** (only when not silent)
 - Align with published policies under `HERMES_HOME/policies/` relevant to `{role_slug}` when applicable (do not paste large policy text).
 - Return **Slack-ready final copy only**. Do **not** include tool traces, command transcripts, internal plans, or chain-of-thought.
-- Use this exact upward-summary structure from policy:
-  objective:
-  current status:
-  evidence:
-  blocker:
-  next action:
-  requested decision, if any:
-  memory recommendation: keep active / archive / close
+- Follow the JSON delivery envelope from the system prompt **exactly** with these exact markers and no spaces:
+  `###HERMES_CRON_DELIVERY_JSON`
+  `###END_HERMES_CRON_DELIVERY_JSON`
+- Put the upward summary into the JSON `lines` array using one string per field, in this exact order:
+  `objective: ...`
+  `current status: ...`
+  `evidence: ...`
+  `blocker: ...`
+  `next action: ...`
+  `requested decision, if any: ...`
+  `memory recommendation: keep active|archive|close`
+- Do **not** write any text after `###END_HERMES_CRON_DELIVERY_JSON`.
+- If you cannot produce grounded, role-relevant lines for this channel, return `{{"silent": true}}` in the exact envelope instead of guessing.
 
 **Blockers, failures, and remediation**
 - Use at most a **small** amount of local inspection to ground the summary.
@@ -261,6 +266,7 @@ def main() -> int:
                 hermes_hop_tag=hermes_hop_tag,
                 profile_cli_suffix=profile_cli_suffix,
             )
+            j["strict_delivery_envelope"] = True
             updated += 1
         if updated:
             print(f"refreshed prompts on {updated} existing job(s)", file=sys.stderr)
@@ -292,6 +298,7 @@ def main() -> int:
             "id": uuid.uuid4().hex[:12],
             "name": name,
             "prompt": prompt,
+            "strict_delivery_envelope": True,
             "skills": [],
             "skill": None,
             "model": None,
