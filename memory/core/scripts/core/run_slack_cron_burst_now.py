@@ -5,10 +5,13 @@ Patches cron.scheduler.get_due_jobs for the duration of tick() so other due jobs
 
 Usage:
   HERMES_HOME=~/.hermes/profiles/chief-orchestrator \\
-    ./venv/bin/python scripts/core/run_slack_cron_burst_now.py [--no-dedupe]
+    ./venv/bin/python memory/core/scripts/core/run_slack_cron_burst_now.py [--no-dedupe]
 
 ``--no-dedupe`` sets ``HERMES_CRON_DELIVERY_DEDUPE=0`` so repeat check-ins are not skipped
 when body fingerprints match the last successful delivery.
+
+``--ping '…'`` skips the LLM and posts the same text to every ``slack:`` cron target (routing /
+allowlist smoke test). Run once per ``HERMES_HOME`` profile that owns those jobs.
 """
 from __future__ import annotations
 
@@ -16,6 +19,7 @@ import argparse
 import os
 import sys
 import time
+from pathlib import Path
 
 
 def main() -> int:
@@ -24,6 +28,12 @@ def main() -> int:
         "--no-dedupe",
         action="store_true",
         help="Disable cron delivery fingerprint dedupe for this run (test / forced check-ins).",
+    )
+    ap.add_argument(
+        "--ping",
+        metavar="TEXT",
+        default=None,
+        help="Post TEXT to each slack:* cron target via gateway delivery (no LLM / no tick).",
     )
     args = ap.parse_args()
     if args.no_dedupe:
@@ -39,14 +49,32 @@ def main() -> int:
     if repo not in sys.path:
         sys.path.insert(0, repo)
 
+    from hermes_cli.env_loader import load_hermes_dotenv
+
+    load_hermes_dotenv(hermes_home=Path(os.environ["HERMES_HOME"]))
+
     from cron.jobs import load_jobs, trigger_job
     import cron.scheduler as sch
 
-    slack_ids = [j["id"] for j in load_jobs() if str(j.get("deliver", "")).startswith("slack:")]
-    if not slack_ids:
+    slack_jobs = [j for j in load_jobs() if str(j.get("deliver", "")).startswith("slack:")]
+    if not slack_jobs:
         print("No slack:* deliver cron jobs in this profile.", file=sys.stderr)
         return 1
 
+    if args.ping is not None:
+        from cron.delivery import deliver_cron_result
+
+        text = str(args.ping).strip() or "(empty ping)"
+        fails = 0
+        for j in slack_jobs:
+            target = str(j.get("deliver", ""))
+            ok = bool(deliver_cron_result(j, text))
+            print(f"ping {j.get('name', j.get('id'))} {target} -> {'ok' if ok else 'FAIL'}", file=sys.stderr)
+            if not ok:
+                fails += 1
+        return 1 if fails else 0
+
+    slack_ids = [j["id"] for j in slack_jobs]
     print(f"Triggering {len(slack_ids)} slack cron job(s)", file=sys.stderr)
     for jid in slack_ids:
         trigger_job(jid)

@@ -167,7 +167,7 @@ role_routing:
     py = repo / "venv" / "bin" / "python"
     sync = repo / "memory" / "core" / "scripts" / "core" / "sync_slack_role_cron_jobs.py"
     filt = repo / "memory" / "core" / "scripts" / "core" / "filter_role_routing_slack_by_env.py"
-    burst = repo / "scripts" / "core" / "run_slack_cron_burst_now.py"
+    burst = repo / "memory" / "core" / "scripts" / "core" / "run_slack_cron_burst_now.py"
     env = {**os.environ, "HERMES_HOME": str(home)}
     r = subprocess.run([str(py), str(sync), "--apply"], cwd=str(repo), env=env)
     if r.returncode != 0:
@@ -176,7 +176,20 @@ role_routing:
     if r.returncode != 0:
         print("filter_role_routing_slack_by_env failed (non-fatal if allowlist already superset)", file=sys.stderr)
     env["HERMES_CRON_DELIVERY_DEDUPE"] = "0"
-    r = subprocess.run([str(py), str(burst), "--no-dedupe"], cwd=str(repo), env=env)
+    ping_msg = (
+        "[Hermes bootstrap — operator workspace] Slack routing ping (no LLM). "
+        "One message per slack:* role cron job in this profile."
+    )
+    r = subprocess.run([str(py), str(burst), "--ping", ping_msg], cwd=str(repo), env=env)
+    if r.returncode != 0:
+        return r.returncode
+    if os.environ.get("HERMES_SLACK_BOOTSTRAP_LLM_BURST", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    ):
+        r = subprocess.run([str(py), str(burst), "--no-dedupe"], cwd=str(repo), env=env)
     return r.returncode
 
 
