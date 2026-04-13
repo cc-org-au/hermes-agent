@@ -10,6 +10,7 @@ from gateway.config import (
     PlatformConfig,
     SessionResetPolicy,
     _apply_env_overrides,
+    _extract_role_routing_overlay_doc,
     _merge_role_routing_overlay,
     load_gateway_config,
 )
@@ -277,6 +278,23 @@ class TestHomeChannelEnvOverrides:
             home = config.platforms[platform].home_channel
             assert home is not None, f"{platform.value}: home_channel should not be None"
             assert (home.chat_id, home.name) == expected, platform.value
+
+
+class TestExtractRoleRoutingOverlayDoc:
+    def test_nested_role_routing(self):
+        doc = {"role_routing": {"slack": {"channels": {"C1": "a"}}}}
+        assert _extract_role_routing_overlay_doc(doc) == {"slack": {"channels": {"C1": "a"}}}
+
+    def test_legacy_top_level_slack(self):
+        doc = {
+            "enabled": True,
+            "default_role": "chief_orchestrator",
+            "slack": {"channels": {"C9": "x"}},
+            "threads": {},
+        }
+        rr = _extract_role_routing_overlay_doc(doc)
+        assert rr["slack"]["channels"] == {"C9": "x"}
+        assert rr["default_role"] == "chief_orchestrator"
 
 
 class TestMergeRoleRoutingOverlay:

@@ -124,7 +124,9 @@ def main() -> int:
     overlay = ops / "messaging_role_routing.yaml"
     if overlay.is_file():
         doc = _load_yaml(overlay)
-        rro = doc.get("role_routing") or {}
+        from gateway.config import _extract_role_routing_overlay_doc
+
+        rro = _extract_role_routing_overlay_doc(doc) if isinstance(doc, dict) else None
         if not isinstance(rro, dict):
             rro = {}
         slo = rro.get("slack") or {}
@@ -138,6 +140,9 @@ def main() -> int:
             if new_och != och:
                 slo["channels"] = new_och
                 rro["slack"] = slo
+                for k in ("enabled", "default_role", "default_slug", "slack", "telegram", "whatsapp", "discord"):
+                    if k in doc and k != "role_routing":
+                        doc.pop(k, None)
                 doc["role_routing"] = rro
                 if not args.dry_run:
                     overlay.parent.mkdir(parents=True, exist_ok=True)

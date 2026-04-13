@@ -423,6 +423,37 @@ class GatewayConfig:
         return self.unauthorized_dm_behavior
 
 
+def _extract_role_routing_overlay_doc(ov_doc: dict) -> Optional[dict]:
+    """Parse ``messaging_role_routing.yaml`` body into a ``role_routing`` mapping.
+
+    Supports:
+    - ``role_routing:`` nested block (preferred).
+    - Legacy shorthand: top-level ``slack:``, ``default_role:``, ``enabled:``, etc.
+    """
+    rr = ov_doc.get("role_routing")
+    if isinstance(rr, dict):
+        return rr
+    legacy_keys = frozenset(
+        {
+            "enabled",
+            "default_role",
+            "default_slug",
+            "slack",
+            "telegram",
+            "whatsapp",
+            "discord",
+            "signal",
+            "mattermost",
+            "matrix",
+            "feishu",
+            "wecom",
+        }
+    )
+    if any(k in ov_doc for k in legacy_keys):
+        return {k: v for k, v in ov_doc.items() if k in legacy_keys}
+    return None
+
+
 def _merge_role_routing_overlay(base: dict, overlay: dict) -> dict:
     """Merge ``role_routing`` overlay into base (from config.yaml).
 
@@ -646,7 +677,7 @@ def load_gateway_config() -> GatewayConfig:
             with open(_overlay_path, encoding="utf-8") as f:
                 _ov_doc = _yaml_rr.safe_load(f) or {}
             if isinstance(_ov_doc, dict):
-                _ov_rr = _ov_doc.get("role_routing")
+                _ov_rr = _extract_role_routing_overlay_doc(_ov_doc)
                 if isinstance(_ov_rr, dict):
                     _msg = gw_data.get("messaging")
                     if not isinstance(_msg, dict):
