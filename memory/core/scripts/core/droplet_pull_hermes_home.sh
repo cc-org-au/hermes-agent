@@ -26,8 +26,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=droplet_remote_venv.sh
+source "${ROOT}/droplet_remote_venv.sh"
 ENV_FILE="${HERMES_DROPLET_ENV:-${HOME}/.env/.env}"
-KEY_FILE="${SSH_KEY_FILE:-${HOME}/.env/.ssh_key}"
 DRY=0
 FULL=0
 while [[ $# -gt 0 ]]; do
@@ -51,10 +52,6 @@ if [[ ! -f "$ENV_FILE" ]]; then
   echo "droplet_pull_hermes_home.sh: missing ${ENV_FILE}" >&2
   exit 1
 fi
-if [[ ! -f "$KEY_FILE" ]]; then
-  echo "droplet_pull_hermes_home.sh: missing key ${KEY_FILE}" >&2
-  exit 1
-fi
 
 SSH_SUDO_PASSWORD=""
 _ALLOW_ENV_PASS_FROM_FILE=0
@@ -64,13 +61,31 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   key="${line%%=*}"
   val="${line#*=}"
   case "$key" in
-    SSH_PORT|SSH_USER|SSH_TAILSCALE_IP|SSH_IP|SSH_SUDO_PASSWORD) export "${key}=${val}" ;;
+    SSH_PORT|SSH_USER|SSH_TAILSCALE_IP|SSH_IP|SSH_SUDO_PASSWORD|\
+    SSH_PORT_DROPLET|SSH_USER_DROPLET|SSH_TAILSCALE_IP_DROPLET|SSH_IP_DROPLET|SSH_TAILSCALE_DNS_DROPLET)
+      export "${key}=${val}"
+      ;;
+    SSH_KEY_FILE|SSH_KEY_DROPLET)
+      export SSH_KEY_FILE="${val}"
+      ;;
     HERMES_DROPLET_ALLOW_ENV_PASSPHRASE)
       case "$val" in 1|true|TRUE|True|yes|YES) _ALLOW_ENV_PASS_FROM_FILE=1 ;; esac
       ;;
     SSH_PASSPHRASE) _RAW_SSH_PASSPHRASE="${val}" ;;
   esac
 done < "$ENV_FILE"
+
+if [[ -z "${SSH_TAILSCALE_IP:-}" && -n "${SSH_TAILSCALE_IP_DROPLET:-}" ]]; then export SSH_TAILSCALE_IP="${SSH_TAILSCALE_IP_DROPLET}"; fi
+if [[ -z "${SSH_IP:-}" && -n "${SSH_IP_DROPLET:-}" ]]; then export SSH_IP="${SSH_IP_DROPLET}"; fi
+if [[ -z "${SSH_USER:-}" && -n "${SSH_USER_DROPLET:-}" ]]; then export SSH_USER="${SSH_USER_DROPLET}"; fi
+if [[ -z "${SSH_PORT:-}" && -n "${SSH_PORT_DROPLET:-}" ]]; then export SSH_PORT="${SSH_PORT_DROPLET}"; fi
+SSH_PORT="${SSH_PORT:-40227}"
+export SSH_PORT
+
+if ! KEY_FILE="$(droplet_resolve_ssh_key_file)"; then
+  echo "droplet_pull_hermes_home.sh: no private key found. Set SSH_KEY_FILE in ${ENV_FILE}, or use ~/.env/.ssh_key or ~/.env/.ssh_droplet_key" >&2
+  exit 1
+fi
 
 HOST="${SSH_TAILSCALE_IP:-${SSH_IP:?}}"
 REMOTE_USER="${SSH_USER:?}"
@@ -86,7 +101,7 @@ SSH_BASE=(
   -o StrictHostKeyChecking=accept-new
   -o ConnectTimeout=30
   -i "$KEY_FILE"
-  -p "${SSH_PORT:?}"
+  -p "${SSH_PORT}"
 )
 if [[ "$(uname -s)" == "Darwin" ]]; then
   SSH_BASE+=(-o UseKeychain=no)

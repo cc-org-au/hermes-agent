@@ -26,15 +26,10 @@
 set -euo pipefail
 
 ENV_FILE="${HERMES_DROPLET_ENV:-${HOME}/.env/.env}"
-KEY_FILE="${SSH_KEY_FILE:-${HOME}/.env/.ssh_key}"
 _LOGIN_USER=""
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "ssh_droplet_user.sh: missing env file ${ENV_FILE} (set HERMES_DROPLET_ENV)" >&2
-  exit 1
-fi
-if [[ ! -f "$KEY_FILE" ]]; then
-  echo "ssh_droplet_user.sh: missing key ${KEY_FILE} (set SSH_KEY_FILE)" >&2
   exit 1
 fi
 
@@ -59,9 +54,17 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     SSH_PORT_DROPLET|SSH_USER_DROPLET|SSH_TAILSCALE_IP_DROPLET|SSH_IP_DROPLET|SSH_TAILSCALE_DNS_DROPLET)
       export "${key}=${val}"
       ;;
+    SSH_KEY_FILE|SSH_KEY_DROPLET)
+      export SSH_KEY_FILE="${val}"
+      ;;
     SSH_LOGIN_USER) _LOGIN_USER="${val}" ;;
   esac
 done < "$ENV_FILE"
+
+if ! KEY_FILE="$(droplet_resolve_ssh_key_file)"; then
+  echo "ssh_droplet_user.sh: no private key found. Set SSH_KEY_FILE or SSH_KEY_DROPLET in ${ENV_FILE}, export SSH_KEY_FILE, or use ~/.env/.ssh_key or ~/.env/.ssh_droplet_key" >&2
+  exit 1
+fi
 
 if [[ -z "${SSH_TAILSCALE_IP:-}" && -n "${SSH_TAILSCALE_IP_DROPLET:-}" ]]; then SSH_TAILSCALE_IP="${SSH_TAILSCALE_IP_DROPLET}"; export SSH_TAILSCALE_IP; fi
 if [[ -z "${SSH_IP:-}" && -n "${SSH_IP_DROPLET:-}" ]]; then SSH_IP="${SSH_IP_DROPLET}"; export SSH_IP; fi

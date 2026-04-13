@@ -5,7 +5,7 @@
 # admin SSH access, use ./scripts/core/ssh_droplet_user.sh instead (SSH as admin, sudo to hermesuser).
 #
 # Expects ~/.env/.env: SSH_TAILSCALE_IP (or SSH_IP); optional SSH_PORT (default 40227)
-# Key: ~/.env/.ssh_key unless SSH_KEY_FILE is set.
+# Key: same resolution as ssh_droplet.sh (SSH_KEY_FILE in env file, ~/.env/.ssh_key, ~/.env/.ssh_droplet_key).
 # Optional: SSH_LOGIN_USER (default hermesuser) — remote account to SSH as.
 # Optional: HERMES_DROPLET_REPO, HERMES_DROPLET_VENV_USER — same as ssh_droplet_user.sh (venv on login).
 #
@@ -26,17 +26,12 @@ _drop_cleanup() {
 trap _drop_cleanup EXIT
 
 ENV_FILE="${HERMES_DROPLET_ENV:-${HOME}/.env/.env}"
-KEY_FILE="${SSH_KEY_FILE:-${HOME}/.env/.ssh_key}"
 _LOGIN_USER=""
 _ALLOW_ENV_PASS_FROM_FILE=0
 _RAW_SSH_PASSPHRASE=""
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "ssh_droplet_hermesuser_direct.sh: missing env file ${ENV_FILE} (set HERMES_DROPLET_ENV)" >&2
-  exit 1
-fi
-if [[ ! -f "$KEY_FILE" ]]; then
-  echo "ssh_droplet_hermesuser_direct.sh: missing key ${KEY_FILE} (set SSH_KEY_FILE)" >&2
   exit 1
 fi
 
@@ -61,6 +56,9 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     SSH_PORT_DROPLET|SSH_TAILSCALE_IP_DROPLET|SSH_IP_DROPLET|SSH_TAILSCALE_DNS_DROPLET)
       export "${key}=${val}"
       ;;
+    SSH_KEY_FILE|SSH_KEY_DROPLET)
+      export SSH_KEY_FILE="${val}"
+      ;;
     SSH_LOGIN_USER) _LOGIN_USER="${val}" ;;
     HERMES_DROPLET_ALLOW_ENV_PASSPHRASE)
       case "$val" in 1|true|TRUE|True|yes|YES) _ALLOW_ENV_PASS_FROM_FILE=1 ;; esac
@@ -68,6 +66,11 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     SSH_PASSPHRASE) _RAW_SSH_PASSPHRASE="${val}" ;;
   esac
 done < "$ENV_FILE"
+
+if ! KEY_FILE="$(droplet_resolve_ssh_key_file)"; then
+  echo "ssh_droplet_hermesuser_direct.sh: no private key found. Set SSH_KEY_FILE or SSH_KEY_DROPLET in ${ENV_FILE}, export SSH_KEY_FILE, or use ~/.env/.ssh_key or ~/.env/.ssh_droplet_key" >&2
+  exit 1
+fi
 
 if [[ -z "${SSH_TAILSCALE_IP:-}" && -n "${SSH_TAILSCALE_IP_DROPLET:-}" ]]; then SSH_TAILSCALE_IP="${SSH_TAILSCALE_IP_DROPLET}"; export SSH_TAILSCALE_IP; fi
 if [[ -z "${SSH_IP:-}" && -n "${SSH_IP_DROPLET:-}" ]]; then SSH_IP="${SSH_IP_DROPLET}"; export SSH_IP; fi

@@ -8,7 +8,8 @@
 #   (or SSH_*_DROPLET aliases), optional SSH_PORT / SSH_PORT_DROPLET (defaults to 40227 if omitted),
 #   optional SSH_SUDO_PASSWORD,
 #   optional HERMES_DROPLET_ALLOW_ENV_PASSPHRASE + SSH_PASSPHRASE for encrypted keys without TTY.
-# Private key: SSH_KEY_FILE or ~/.env/.ssh_key
+# Private key: SSH_KEY_FILE or SSH_KEY_DROPLET in the env file, else $SSH_KEY_FILE, else
+#   ~/.env/.ssh_key, else ~/.env/.ssh_droplet_key
 #
 # HERMES_DROPLET_WORKSTATION_CLI=1 (set by `hermes … droplet`): do not use env-file SSH_PASSPHRASE /
 # ASKPASS — type the key passphrase at the prompt.
@@ -21,17 +22,12 @@
 set -euo pipefail
 
 ENV_FILE="${HERMES_DROPLET_ENV:-${HOME}/.env/.env}"
-KEY_FILE="${SSH_KEY_FILE:-${HOME}/.env/.ssh_key}"
 _SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=droplet_remote_venv.sh
 source "${_SCRIPTS_DIR}/droplet_remote_venv.sh"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "ssh_droplet.sh: missing local env file ${ENV_FILE} (set HERMES_DROPLET_ENV to your workstation secrets path)" >&2
-  exit 1
-fi
-if [[ ! -f "$KEY_FILE" ]]; then
-  echo "ssh_droplet.sh: missing key ${KEY_FILE} (set SSH_KEY_FILE)" >&2
   exit 1
 fi
 
@@ -57,6 +53,9 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     SSH_PORT_DROPLET|SSH_USER_DROPLET|SSH_TAILSCALE_IP_DROPLET|SSH_IP_DROPLET|SSH_TAILSCALE_DNS_DROPLET)
       export "${key}=${val}"
       ;;
+    SSH_KEY_FILE|SSH_KEY_DROPLET)
+      export SSH_KEY_FILE="${val}"
+      ;;
     SSH_SUDO_PASSWORD) SSH_SUDO_PASSWORD="${val}" ;;
     HERMES_DROPLET_ALLOW_ENV_PASSPHRASE)
       case "$val" in 1|true|TRUE|True|yes|YES) _ALLOW_ENV_PASS_FROM_FILE=1 ;; esac
@@ -64,6 +63,11 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     SSH_PASSPHRASE) _RAW_SSH_PASSPHRASE="${val}" ;;
   esac
 done < "$ENV_FILE"
+
+if ! KEY_FILE="$(droplet_resolve_ssh_key_file)"; then
+  echo "ssh_droplet.sh: no private key found. Set SSH_KEY_FILE or SSH_KEY_DROPLET in ${ENV_FILE}, export SSH_KEY_FILE, or install a key at ~/.env/.ssh_key or ~/.env/.ssh_droplet_key" >&2
+  exit 1
+fi
 
 # Alternate key names common in ~/.env/.env (values never printed).
 if [[ -z "${SSH_TAILSCALE_IP:-}" && -n "${SSH_TAILSCALE_IP_DROPLET:-}" ]]; then SSH_TAILSCALE_IP="${SSH_TAILSCALE_IP_DROPLET}"; export SSH_TAILSCALE_IP; fi
