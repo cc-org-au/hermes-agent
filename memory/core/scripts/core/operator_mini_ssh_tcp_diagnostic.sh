@@ -76,3 +76,6 @@ echo "2) If nothing listens on 52822: sudo launchctl bootstrap system /Library/L
 echo "3) Firewall enabled + TCP timeout from laptop: run (from repo on mini):"
 echo "     sudo bash memory/core/scripts/core/operator_mini_fix_sshd_incoming_firewall.sh"
 echo "   Or System Settings → Network → Firewall → Options → allow incoming for sshd."
+echo "4) After reboot, SSH dead until kickstart: Hermes sshd bound before Tailscale had 100.x."
+echo "     Re-apply: sudo bash memory/core/scripts/core/macmini_sshd_tailscale_launchd_pf.sh"
+echo "     (installs wait-for-Tailscale wrapper). Then: sudo launchctl kickstart -k system/org.hermes.tailscale.sshd"
