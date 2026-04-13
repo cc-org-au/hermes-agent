@@ -143,6 +143,32 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   _SSH_FLAGS_COMMON+=(-o UseKeychain=no)
 fi
 
+# Fast TCP+auth probe only — must not treat remote **command** non-zero as “try next host”.
+_SSH_FLAGS_PROBE=(
+  -4
+  -T
+  -o BatchMode=yes
+  -o IdentitiesOnly=yes
+  -o IdentityAgent=none
+  -o AddKeysToAgent=no
+  -o ControlMaster=no
+  -o ControlPath=none
+  -o StrictHostKeyChecking=accept-new
+  -o ServerAliveInterval=5
+  -o ServerAliveCountMax=2
+  -o TCPKeepAlive=yes
+  -i "$KEY_FILE"
+  -p "${MACMINI_PORT:?}"
+)
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  _SSH_FLAGS_PROBE+=(-o UseKeychain=no)
+fi
+
+_op_probe_tcp() {
+  local h="$1" cto="$2"
+  "${_SSH_ENV[@]}" ssh "${_SSH_FLAGS_PROBE[@]}" -o "ConnectTimeout=${cto}" "${MACMINI_USER}@${h}" true
+}
+
 _op_build_ssh_base() {
   local target_host="$1"
   local cto="$2"
@@ -207,6 +233,7 @@ if [[ "$_n" -eq 1 ]]; then
   exit $?
 fi
 
+_chosen=""
 last=255
 for ((_i = 0; _i < _n; _i++)); do
   h="${_candidate_hosts[$_i]}"
@@ -216,20 +243,28 @@ for ((_i = 0; _i < _n; _i++)); do
     _cto="$CTO_FINAL"
   fi
   if [[ "$_i" -gt 0 ]]; then
-    echo "[ssh_operator] fallback: trying ${MACMINI_USER}@${h} port ${MACMINI_PORT} (ConnectTimeout=${_cto}s) ..." >&2
+    echo "[ssh_operator] fallback: probing ${MACMINI_USER}@${h} port ${MACMINI_PORT} (ConnectTimeout=${_cto}s) ..." >&2
   elif [[ "${HERMES_OPERATOR_SSH_VERBOSE_TRY:-0}" == "1" ]]; then
-    echo "[ssh_operator] trying ${MACMINI_USER}@${h} port ${MACMINI_PORT} (ConnectTimeout=${_cto}s) ..." >&2
+    echo "[ssh_operator] probing ${MACMINI_USER}@${h} port ${MACMINI_PORT} (ConnectTimeout=${_cto}s) ..." >&2
   fi
-  export HERMES_OPERATOR_SSH_DST="${MACMINI_USER}@${h}:${MACMINI_PORT}"
-  _op_build_ssh_base "$h" "$_cto"
-  if _run_remote_with_base "$_INNER"; then
-    exit 0
+  if _op_probe_tcp "$h" "$_cto"; then
+    _chosen="$h"
+    break
   fi
   last=$?
 done
 
-echo "[ssh_operator] all targets failed (last exit ${last})." >&2
-echo "  Laptop: tailscale status; tailscale ping <mini-ts-ip>" >&2
-echo "  ~/.env/.env: set MACMINI_SSH_LAN_IP=<mini-LAN-IPv4> when home Wi‑Fi works but TS does not" >&2
-echo "  Mini (Screen Sharing): sudo bash ~/hermes-agent/memory/core/scripts/core/operator_mini_install_ssh_lan_resilience.sh" >&2
-exit "$last"
+if [[ -z "$_chosen" ]]; then
+  echo "[ssh_operator] all targets failed (last exit ${last})." >&2
+  echo "  Laptop: tailscale status; tailscale ping <mini-ts-ip>" >&2
+  echo "  ~/.env/.env: set MACMINI_SSH_LAN_IP=<mini-LAN-IPv4> when home Wi‑Fi works but TS does not" >&2
+  echo "  Mini (Screen Sharing): sudo bash ~/hermes-agent/memory/core/scripts/core/operator_mini_install_ssh_lan_resilience.sh" >&2
+  # ssh sometimes surfaces connect failure as 0 in edge cases — never pretend success.
+  [[ "$last" -eq 0 ]] && last=255
+  exit "$last"
+fi
+
+export HERMES_OPERATOR_SSH_DST="${MACMINI_USER}@${_chosen}:${MACMINI_PORT}"
+_op_build_ssh_base "$_chosen" "$CTO_FINAL"
+_run_remote_with_base "$_INNER"
+exit $?
