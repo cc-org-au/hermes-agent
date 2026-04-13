@@ -7018,7 +7018,11 @@ class AIAgent:
                     stage="openrouter_free_router",
                     chosen_model=resolved,
                     chosen_provider="openrouter",
-                    reason_code="openrouter_free_resolved",
+                    reason_code=(
+                        "openrouter_free_native_api"
+                        if resolved == OPENROUTER_FREE_SYNTHETIC
+                        else "openrouter_free_resolved"
+                    ),
                     profile=prof,
                     session_id=str(getattr(self, "session_id", "") or ""),
                     extra={"canon_version": ver, "synthetic_selector": OPENROUTER_FREE_SYNTHETIC},

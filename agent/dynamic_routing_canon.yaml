@@ -176,15 +176,21 @@ compression:
   preserve_last_pairs: 2
 
 # -----------------------------------------------------------------------------
-# Synthetic /models selector: openrouter/free (strict free-tier only)
+# Synthetic selector: openrouter/free (OpenRouter “Free Models Router”)
 # -----------------------------------------------------------------------------
-# When the configured primary is ``openrouter/free``, the first API hop is a concrete
-# OpenRouter ``:free`` slug; quota errors or a lone ``[HERMES_ESCALATE]`` reply then
-# advance along ``openrouter_step_up_escalation`` toward paid hub ids (nano → … → ceiling).
-# ``strict_no_paid_fallback`` applies only to free-router resolution (no paid substitute
-# inside the selector); it does not block step-up / failover elsewhere in the retry loop.
+# Official API: set ``model`` to ``openrouter/free``; OpenRouter picks a free model that matches
+# the request and the account’s data-policy / guardrails (see their docs). Hermes defaults to
+# that passthrough (``api_use_native_free_router: true``).
+#
+# With ``api_use_native_free_router: false``, Hermes pre-resolves to one concrete ``:free`` slug
+# from ``candidate_slugs`` ∩ live ``GET /models`` (legacy; can 404 if the slug violates privacy).
+#
+# Quota errors or a lone ``[HERMES_ESCALATE]`` advance along ``openrouter_step_up_escalation``
+# toward paid hub ids (nano → … → ceiling). ``strict_no_paid_fallback`` applies only to legacy
+# concrete resolution, not to the native router string.
 openrouter_free_router:
   enabled: true
+  api_use_native_free_router: true
   strict_no_paid_fallback: true
   ranking: capability_score
   live_fetch_ttl_seconds: 3600

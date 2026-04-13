@@ -727,14 +727,10 @@ DEFAULT_CONFIG = {
         # When a job omits model/provider in jobs.json, use these before model.default /
         # HERMES_INFERENCE_PROVIDER.
         #
-        # OpenRouter's API accepts ``openrouter/free`` (their Free Models Router — see
-        # https://openrouter.ai/docs/guides/routing/routers/free-models-router). That slug is valid;
-        # some accounts still get HTTP 404 from *data policy / guardrails* on that router. Cron
-        # therefore defaults to a **concrete** zero-cost slug (``…:free``) from
-        # ``agent/dynamic_routing_canon.yaml`` ``openrouter_free_router.candidate_slugs`` so the
-        # chat request uses a normal model id. To use the router again, set cron.default_model to
-        # ``openrouter/free`` (Hermes resolves it per canon before each call when the stack is
-        # OpenRouter).
+        # OpenRouter's API accepts ``openrouter/free`` (Free Models Router — same URL as docs).
+        # Main-agent path passes that string through by default (``api_use_native_free_router`` in
+        # routing canon) so OpenRouter applies account data-policy filtering server-side. Cron here
+        # still defaults to a **concrete** ``…:free`` slug for predictable, catalog-listed ids in job logs.
         "default_model": "meta-llama/llama-3.3-70b-instruct:free",
         "default_provider": "openrouter",
         # Wrap delivered cron responses with a header (task name) and footer

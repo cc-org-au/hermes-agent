@@ -123,7 +123,13 @@ def resolve_openrouter_free_model_for_api(
     base_url: str,
     timeout: float = 15.0,
 ) -> str:
-    """Return concrete OpenRouter model id, or raise OpenRouterFreeResolutionError."""
+    """Return model id for the OpenAI-compat ``model`` field.
+
+    Default (``api_use_native_free_router``): return ``openrouter/free`` unchanged per OpenRouter
+    Free Models Router (server-side capability + account data-policy filtering).
+
+    Legacy: resolve to a concrete ``…:free`` slug from canon allowlist ∩ live ``GET /models``.
+    """
     if (configured_model or "").strip() != OPENROUTER_FREE_SYNTHETIC:
         return configured_model
 
@@ -137,6 +143,9 @@ def resolve_openrouter_free_model_for_api(
         raise OpenRouterFreeResolutionError(
             "openrouter/free requires OPENROUTER_API_KEY (or a configured API key)."
         )
+
+    if cfg.get("api_use_native_free_router", True):
+        return OPENROUTER_FREE_SYNTHETIC
 
     ttl = int(cfg.get("live_fetch_ttl_seconds") or 3600)
     live = get_openrouter_free_model_ids_cached(api_key, base_url, ttl, timeout=timeout)

@@ -236,6 +236,12 @@ def load_openrouter_free_router_config() -> Dict[str, Any]:
     return {
         "enabled": is_truthy_value(raw.get("enabled"), default=True),
         "strict_no_paid_fallback": is_truthy_value(raw.get("strict_no_paid_fallback"), default=True),
+        # OpenRouter docs: POST chat/completions with model "openrouter/free" (server picks a
+        # policy-compliant free model). Pre-resolving to a concrete :free slug can 404 when that
+        # slug violates account privacy / data-policy guardrails.
+        "api_use_native_free_router": is_truthy_value(
+            raw.get("api_use_native_free_router"), default=True,
+        ),
         "ranking": str(raw.get("ranking") or "capability_score").strip() or "capability_score",
         "live_fetch_ttl_seconds": max(60, ttl),
         "empty_error_message": str(raw.get("empty_error_message") or "").strip()

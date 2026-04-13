@@ -34,6 +34,7 @@ def test_resolve_openrouter_free_success(monkeypatch):
     def _cfg():
         return {
             "enabled": True,
+            "api_use_native_free_router": False,
             "strict_no_paid_fallback": True,
             "ranking": "capability_score",
             "live_fetch_ttl_seconds": 3600,
@@ -61,6 +62,7 @@ def test_resolve_openrouter_free_empty_intersection(monkeypatch):
     def _cfg():
         return {
             "enabled": True,
+            "api_use_native_free_router": False,
             "candidate_slugs": ["only-paid/model"],
             "capability_scores": {},
             "ranking": "capability_score",
@@ -91,3 +93,28 @@ def test_resolve_non_synthetic_passthrough():
         )
         == "anthropic/claude-3-haiku"
     )
+
+
+def test_resolve_openrouter_free_default_uses_native_router_string(monkeypatch):
+    """Default canon passes through ``openrouter/free`` (OpenRouter Free Models Router)."""
+    clear_openrouter_free_cache_for_tests()
+
+    def _cfg():
+        return {
+            "enabled": True,
+            "api_use_native_free_router": True,
+            "strict_no_paid_fallback": True,
+            "ranking": "capability_score",
+            "live_fetch_ttl_seconds": 3600,
+            "empty_error_message": "empty",
+            "candidate_slugs": ["m1:free"],
+            "capability_scores": {},
+        }
+
+    monkeypatch.setattr("agent.routing_canon.load_openrouter_free_router_config", _cfg)
+    out = resolve_openrouter_free_model_for_api(
+        configured_model=OPENROUTER_FREE_SYNTHETIC,
+        api_key="k",
+        base_url="https://openrouter.ai/api/v1",
+    )
+    assert out == OPENROUTER_FREE_SYNTHETIC
