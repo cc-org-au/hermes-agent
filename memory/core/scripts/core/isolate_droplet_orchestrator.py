@@ -18,6 +18,9 @@ This script:
 
 The **operator** Mac should keep profile ``chief-orchestrator`` and set
 ``messaging.slack_role_cron_leader: true`` (default when key absent = leader).
+
+If this VPS uses a **separate Slack app** (different tokens) and a **separate workspace**
+channel map, re-enable Slack check-ins with ``restore_slack_role_checkins.py`` (see that script).
 """
 from __future__ import annotations
 
