@@ -853,6 +853,38 @@ class TestSanitizeCronDeliverContent:
         _body, skip = sanitize_cron_deliver_content(raw, 600)
         assert skip is True
 
+    def test_escalation_resolved_prose_with_silent_suppresses(self):
+        """Models often paste paragraphs ending in 'respond with [SILENT]' — never deliver."""
+        raw = (
+            "Based on the current state file and recent logs, there has been no change in the "
+            "escalation status since the last report. The previous status was \"resolved,\" and "
+            "no new critical issues or severity changes have occurred. Therefore, I will respond "
+            "with [SILENT] to comply with the protocol and avoid redundant messaging."
+        )
+        _body, skip = sanitize_cron_deliver_content(raw, 600)
+        assert skip is True
+
+    def test_truncated_based_on_filtered_as_cot(self):
+        raw = (
+            "ased on the current state file, nothing changed. Therefore, I will respond with [SILENT]."
+        )
+        _body, skip = sanitize_cron_deliver_content(raw, 600)
+        assert skip is True
+
+    def test_audio_hallucination_stripped_then_vague_recovery_suppresses(self):
+        raw = (
+            "The WhatsApp gateway connectivity has recovered and is now UP, with all platforms "
+            "operational. I have generated an alert audio message for this event."
+        )
+        _body, skip = sanitize_cron_deliver_content(raw, 600)
+        assert skip is True
+
+    def test_recovery_with_watchdog_evidence_delivers(self):
+        raw = "WhatsApp gateway recovered. watchdog-check: ok all_connected=whatsapp,telegram,slack"
+        body, skip = sanitize_cron_deliver_content(raw, 600)
+        assert skip is False
+        assert "all_connected" in body
+
     def test_exact_silent_suppresses(self):
         _body, skip = sanitize_cron_deliver_content("[SILENT]", 600)
         assert skip is True

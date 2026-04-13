@@ -117,6 +117,7 @@ _ALERT_HINTS = re.compile(
 
 _COT_LINE_PREFIXES = (
     "based on ",
+    "ased on ",  # truncated model output still reads as chain-of-thought
     "given that ",
     "therefore,",
     "therefore ",
@@ -159,12 +160,112 @@ _COT_LINE_PREFIXES = (
 )
 
 
+_RE_SILENT_BRACKET = re.compile(r"\[\s*\.?\s*silent\s*\]", re.I)
+
+_HALLUCINATION_SNIPPETS = (
+    "alert audio",
+    "audio message",
+    "generated an alert",
+    "i have generated",
+    "text-to-speech",
+    "voice note",
+)
+
+
+def _normalize_silent_brackets(text: str) -> str:
+    """Fullwidth brackets from some models break [SILENT] detection."""
+    return text.replace("\u3010", "[").replace("\u3011", "]").replace("［", "[").replace("］", "]")
+
+
+def _strip_hallucination_sentences(text: str) -> str:
+    """Remove sentences that claim audio/TTS/alerts the gateway did not send."""
+    if not text or not any(sn in text.lower() for sn in _HALLUCINATION_SNIPPETS):
+        return text
+    chunks = re.split(r"(?<=[.!?])\s+", text.strip())
+    kept: list[str] = []
+    for ch in chunks:
+        lowc = ch.lower()
+        if any(sn in lowc for sn in _HALLUCINATION_SNIPPETS):
+            continue
+        t = ch.strip()
+        if t:
+            kept.append(t)
+    return " ".join(kept).strip()
+
+
+def _cron_vague_operational_claim_only(body: str) -> bool:
+    """
+    True when text is only hand-wavy 'everything is up' copy with no check output
+    (watchdog, connected=, gateway_state, etc.) — not worth a WhatsApp ping.
+    """
+    low = body.lower()
+    if not any(w in low for w in ("recovered", "restored", "reconnected", "operational", "is now up")):
+        return False
+    evidence = (
+        "watchdog",
+        "all_connected",
+        "gateway_state",
+        "gateway.pid",
+        "connected:",
+        "platforms:",
+        "telegram",
+        "slack",
+        "systemctl",
+        "start-limit",
+        "json",
+        "`",
+    )
+    if any(sig in low for sig in evidence):
+        return False
+    if "all platforms" in low or "now up" in low or "fully operational" in low:
+        return True
+    return False
+
+
+def _cron_prose_announces_silent(low: str) -> bool:
+    """Model wrote [SILENT] inside a paragraph instead of alone — never deliver that."""
+    if not _RE_SILENT_BRACKET.search(low):
+        return False
+    if any(
+        p in low
+        for p in (
+            "will respond",
+            "respond with",
+            "return exactly",
+            "output exactly",
+            "comply with",
+            "comply to",
+            "avoid redundant",
+            "avoid duplicate",
+            "no change since",
+            "no change in",
+            "has been no change",
+            "unchanged",
+            "nothing new",
+            "nothing to report",
+            "therefore, i will",
+            "therefore i will",
+            "accordingly, i will",
+            "appropriate response is",
+            "finalize this response",
+            "protocol and avoid",
+        )
+    ):
+        return True
+    # Long reasoning that only exists to justify [SILENT]
+    if len(low) > 120 and "resolved" in low and "no new" in low:
+        return True
+    return False
+
+
 def _cron_response_means_silent(text: str) -> bool:
     """True when the model clearly intends no user-visible delivery."""
     if not text or not str(text).strip():
         return True
-    s = str(text).strip()
+    s = _normalize_silent_brackets(str(text).strip())
     low = s.lower()
+    if _cron_prose_announces_silent(low):
+        return True
     first = s.lstrip()
     if re.match(r"^\[\.?silent\]", first, re.I):
         return True
@@ -174,7 +275,7 @@ def _cron_response_means_silent(text: str) -> bool:
     last = lines[-1]
     if re.match(r"^[\s\.]*\[\.?silent\]", last, re.I):
         return True
-    if len(last) < 180 and re.search(r"\[\.?silent\]", last, re.I):
+    if len(last) < 220 and _RE_SILENT_BRACKET.search(last):
         return True
     tail = low[-520:]
     if "[silent]" in tail and any(
@@ -235,9 +336,15 @@ def sanitize_cron_deliver_content(raw: str, max_chars: int) -> tuple[str, bool]:
     Returns:
         (text_to_send, skip_delivery) — skip_delivery True means do not notify the user.
     """
+    raw = _normalize_silent_brackets(str(raw or "").strip())
     if _cron_response_means_silent(raw):
         return "", True
-    s = str(raw).strip()
+    s = raw.strip()
+    s = _strip_hallucination_sentences(s)
+    if not s.strip():
+        return "", True
+    if _cron_response_means_silent(s):
+        return "", True
     s = _RE_BRACKET_INTERNAL_NOTE.sub("", s)
     s = _RE_BRACKET_CONTEXT.sub("", s)
     s = _RE_BRACKET_CONCLUSION.sub("", s)
@@ -260,12 +367,16 @@ def sanitize_cron_deliver_content(raw: str, max_chars: int) -> tuple[str, bool]:
     # Short, already-compact replies (tests + simple summaries)
     if len(body) <= 220 and body.count("\n") <= 2:
         out = body if len(body) <= max_chars else body[: max_chars - 1].rstrip() + "…"
+        if _cron_vague_operational_claim_only(out):
+            return "", True
         return out, False
 
     out = _pick_delivery_paragraph(body, max_chars)
     if not out.strip():
         return "", True
     if not _ALERT_HINTS.search(out) and len(out) > 120:
+        return "", True
+    if _cron_vague_operational_claim_only(out):
         return "", True
     return out, False
 
