@@ -725,8 +725,17 @@ DEFAULT_CONFIG = {
 
     "cron": {
         # When a job omits model/provider in jobs.json, use these before model.default /
-        # HERMES_INFERENCE_PROVIDER (synthetic openrouter/free → concrete :free slug per routing canon).
-        "default_model": "openrouter/free",
+        # HERMES_INFERENCE_PROVIDER.
+        #
+        # OpenRouter's API accepts ``openrouter/free`` (their Free Models Router — see
+        # https://openrouter.ai/docs/guides/routing/routers/free-models-router). That slug is valid;
+        # some accounts still get HTTP 404 from *data policy / guardrails* on that router. Cron
+        # therefore defaults to a **concrete** zero-cost slug (``…:free``) from
+        # ``agent/dynamic_routing_canon.yaml`` ``openrouter_free_router.candidate_slugs`` so the
+        # chat request uses a normal model id. To use the router again, set cron.default_model to
+        # ``openrouter/free`` (Hermes resolves it per canon before each call when the stack is
+        # OpenRouter).
+        "default_model": "meta-llama/llama-3.3-70b-instruct:free",
         "default_provider": "openrouter",
         # Wrap delivered cron responses with a header (task name) and footer
         # ("The agent cannot see this message").  Set to false for clean output.
@@ -752,7 +761,7 @@ DEFAULT_CONFIG = {
     },
 
     # Config schema version - bump this when adding new required fields
-    "_config_version": 38,
+    "_config_version": 39,
 }
 
 # =============================================================================
@@ -3046,6 +3055,35 @@ def migrate_config(interactive: bool = True, quiet: bool = False) -> Dict[str, A
                 print(f"  ⚠ v38 migration skipped: {e}")
             results["warnings"].append(f"v38 migration: {e}")
             merge_user_config_yaml({"_config_version": 38})
+
+    # ── Version 38 → 39: cron default concrete :free slug (avoid openrouter/free router 404 on strict data policy) ──
+    if current_ver < 39:
+        try:
+            cfg_now = load_config()
+            cron = cfg_now.get("cron") or {}
+            cm = str(cron.get("default_model") or "").strip()
+            payload: dict = {"_config_version": 39}
+            if cm == "openrouter/free":
+                payload["cron"] = {
+                    **(cron if isinstance(cron, dict) else {}),
+                    "default_model": "meta-llama/llama-3.3-70b-instruct:free",
+                    "default_provider": str(cron.get("default_provider") or "openrouter").strip()
+                    or "openrouter",
+                }
+            merge_user_config_yaml(payload)
+            if not quiet:
+                if cm == "openrouter/free":
+                    print(
+                        "  ✓ v39: cron.default_model → meta-llama/llama-3.3-70b-instruct:free "
+                        "(openrouter/free is valid OpenRouter router id but may 404 under account data policy)"
+                    )
+                else:
+                    print("  ✓ v39: config version bump")
+        except Exception as e:
+            if not quiet:
+                print(f"  ⚠ v39 migration skipped: {e}")
+            results["warnings"].append(f"v39 migration: {e}")
+            merge_user_config_yaml({"_config_version": 39})
 
     if current_ver < latest_ver and not quiet:
         print(f"Config version: {current_ver} → {latest_ver}")
