@@ -3,6 +3,8 @@
 # They run it locally; it creates a dedicated keypair and prints ONLY the public key
 # for you to append to operator's ~/.ssh/authorized_keys (optionally with from="..." ).
 #
+# macOS: double-click **GenerateOperatorAccessKey.command** instead (same folder) — no Terminal commands.
+#
 # Usage:
 #   bash generate_operator_collaborator_key.sh "Alice Dev"
 #
