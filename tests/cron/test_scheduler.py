@@ -889,6 +889,11 @@ class TestSanitizeCronDeliverContent:
         _body, skip = sanitize_cron_deliver_content("[SILENT]", 600)
         assert skip is True
 
+    def test_devanagari_transliterated_silent_suppresses(self):
+        """Models sometimes spell SILENT in non-Latin scripts instead of ASCII [SILENT]."""
+        _body, skip = sanitize_cron_deliver_content("[एसआईएलेंट]", 600)
+        assert skip is True
+
     def test_meta_fluff_sending_message_nothing_to_update_suppresses(self):
         raw = (
             "I am sending a message to tell you there is nothing to update at this time."

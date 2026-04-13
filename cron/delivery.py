@@ -11,6 +11,7 @@ import hashlib
 import logging
 import os
 import re
+import unicodedata
 from typing import Optional
 
 from hermes_cli.config import load_config
@@ -172,6 +173,25 @@ def _normalize_silent_brackets(text: str) -> str:
     ):
         t = t.replace(a, b)
     return t
+
+
+def _inner_has_unicode_letter(inner: str) -> bool:
+    return any(unicodedata.category(ch).startswith("L") for ch in inner)
+
+
+def _bracketed_foreign_script_silent_marker(text: str) -> bool:
+    """
+    Treat transliterated [SILENT] in non-Latin scripts as silent (e.g. Devanagari [एसआईएलेंट]).
+    Short bracket-only body, no ASCII letter runs, but contains Unicode letters.
+    """
+    s = _normalize_silent_brackets(str(text).strip())
+    m = re.fullmatch(r"\[([^\]]{2,120})\]", s)
+    if not m:
+        return False
+    inner = m.group(1).strip()
+    if re.search(r"[a-zA-Z]{2,}", inner):
+        return False
+    return _inner_has_unicode_letter(inner)
 
 
 def _strip_hallucination_sentences(text: str) -> str:
@@ -384,6 +404,8 @@ def _cron_narrative_no_evidence_suppresses(low: str) -> bool:
 def _line_exempt_from_cot_strip(line: str) -> bool:
     """Do not drop lines that carry [SILENT] / silent compliance (often start with 'I will ')."""
     ln = _normalize_silent_brackets(line.strip())
+    if _bracketed_foreign_script_silent_marker(ln):
+        return True
     low = ln.lower()
     if _RE_SILENT_BRACKET.search(low):
         return True
@@ -437,6 +459,8 @@ def _response_means_silent(text: str) -> bool:
     if not text or not str(text).strip():
         return True
     s = _normalize_silent_brackets(str(text).strip())
+    if _bracketed_foreign_script_silent_marker(s):
+        return True
     low = s.lower()
     if _silent_stand_in_prose(low):
         return True
@@ -453,6 +477,8 @@ def _response_means_silent(text: str) -> bool:
     if not lines:
         return True
     last = lines[-1]
+    if _bracketed_foreign_script_silent_marker(last):
+        return True
     if re.match(r"^[\s\.]*\[\.?silent\]", last, re.I):
         return True
     if len(last) < 220 and _RE_SILENT_BRACKET.search(last):
