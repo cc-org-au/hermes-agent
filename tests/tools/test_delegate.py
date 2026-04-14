@@ -1209,6 +1209,47 @@ class TestDelegationProviderIntegration(unittest.TestCase):
             self.assertEqual(kwargs["provider"], parent.provider)
             self.assertEqual(kwargs["base_url"], parent.base_url)
 
+    @patch("agent.token_governance_runtime.load_runtime_config")
+    @patch("tools.delegate_tool._load_config")
+    @patch("tools.delegate_tool._resolve_delegation_credentials")
+    def test_autoresearch_unbounded_mode_bypasses_child_iteration_caps(
+        self, mock_creds, mock_cfg, mock_load_tg
+    ):
+        mock_cfg.return_value = {"max_iterations": 45, "model": "", "provider": ""}
+        mock_creds.return_value = {
+            "model": None,
+            "provider": None,
+            "base_url": None,
+            "api_key": None,
+            "api_mode": None,
+        }
+        mock_load_tg.return_value = {
+            "subprocess_governance": {"max_iterations_for_subprocess": 15}
+        }
+        parent = _make_mock_parent(depth=0)
+        parent._token_governance_delegation_max = 7
+
+        with (
+            patch.dict(
+                os.environ,
+                {"HERMES_AUTORESEARCH_UNBOUNDED_ITERATIONS": "1"},
+                clear=False,
+            ),
+            patch("run_agent.AIAgent") as MockAgent,
+        ):
+            mock_child = MagicMock()
+            mock_child.run_conversation.return_value = {
+                "final_response": "done",
+                "completed": True,
+                "api_calls": 1,
+            }
+            MockAgent.return_value = mock_child
+
+            delegate_task(goal="Test autoresearch unbounded mode", parent_agent=parent)
+
+            _, kwargs = MockAgent.call_args
+            self.assertEqual(kwargs["max_iterations"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

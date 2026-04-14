@@ -8,6 +8,7 @@ from unittest.mock import patch
 import tools.skills_tool as skills_tool_module
 from agent.skill_commands import (
     build_plan_path,
+    build_explicit_skill_invocation_message,
     build_preloaded_skills_prompt,
     build_skill_invocation_message,
     scan_skill_commands,
@@ -100,6 +101,13 @@ class TestScanSkillCommands:
         assert "/enabled-skill" in result
         assert "/disabled-skill" not in result
 
+    def test_hides_skill_names_that_collide_with_builtin_commands(self, tmp_path):
+        with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
+            _make_skill(tmp_path, "autoresearch")
+            result = scan_skill_commands()
+
+        assert "/autoresearch" not in result
+
 
 class TestBuildPreloadedSkillsPrompt:
     def test_builds_prompt_for_multiple_named_skills(self, tmp_path):
@@ -167,6 +175,16 @@ Generate some audio.
             scan_skill_commands()
             msg = build_skill_invocation_message("/nonexistent")
         assert msg is None
+
+    def test_explicit_loader_can_still_load_hidden_builtin_collision(self, tmp_path):
+        with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
+            skill_dir = _make_skill(tmp_path, "autoresearch")
+            scan_skill_commands()
+            msg = build_explicit_skill_invocation_message(str(skill_dir), "do stuff")
+
+        assert msg is not None
+        assert "autoresearch" in msg
+        assert "do stuff" in msg
 
     def test_uses_shared_skill_loader_for_secure_setup(self, tmp_path, monkeypatch):
         monkeypatch.delenv("TENOR_API_KEY", raising=False)

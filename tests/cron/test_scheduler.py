@@ -17,6 +17,7 @@ from cron.scheduler import (
     _resolve_origin,
     _resolve_delivery_target,
     _deliver_result,
+    execute_due_cron_job,
     run_job,
     SILENT_MARKER,
     _build_job_prompt,
@@ -444,6 +445,56 @@ class TestRunJobSessionPersistence:
         ):
             assert toolset in disabled
 
+    def test_slack_role_open_follow_up_reenables_resolution_toolsets(self, tmp_path):
+        job = {
+            "id": "role-job",
+            "name": "daily-slack-role-status-risk-and-insights-director-C123",
+            "prompt": "hello",
+            "pending_follow_up": {
+                "status": "open",
+                "summary": "Repair the slack gateway connectivity issue",
+                "requested_action": "Restart the gateway and verify all_connected",
+            },
+        }
+        fake_db = MagicMock()
+
+        with patch("cron.scheduler._hermes_home", tmp_path), \
+             patch("cron.scheduler._resolve_origin", return_value=None), \
+             patch("dotenv.load_dotenv"), \
+             patch("hermes_state.SessionDB", return_value=fake_db), \
+             patch(
+                 "hermes_cli.runtime_provider.resolve_runtime_provider",
+                 return_value={
+                     "api_key": "test-key",
+                     "base_url": "https://example.invalid/v1",
+                     "provider": "openrouter",
+                     "api_mode": "chat_completions",
+                 },
+             ), \
+             patch("run_agent.AIAgent") as mock_agent_cls:
+            mock_agent = MagicMock()
+            mock_agent.run_conversation.return_value = {"final_response": "ok"}
+            mock_agent_cls.return_value = mock_agent
+
+            success, output, final_response, error = run_job(job)
+
+        assert success is True
+        assert error is None
+        assert final_response == "ok"
+        disabled = set(mock_agent_cls.call_args.kwargs.get("disabled_toolsets") or [])
+        for toolset in (
+            "terminal",
+            "file",
+            "delegation",
+            "code_execution",
+            "memory",
+            "session_search",
+            "skills",
+            "hermes_core",
+            "todo",
+        ):
+            assert toolset not in disabled
+
     def test_run_job_sets_auto_delivery_env_from_dotenv_home_channel(self, tmp_path, monkeypatch):
         job = {
             "id": "test-job",
@@ -762,8 +813,12 @@ class TestTickDeliveryDedupe:
         }
         mark_mock = MagicMock()
         deliver_mock = MagicMock(return_value=True)
-        body = "New alert\nUpdated: 2026-04-10T10:00:00+10:00"
-        fp = _expected_tick_deliver_fingerprint(job, body)
+        body = (
+            "###HERMES_CRON_DELIVERY_JSON\n"
+            '{"silent": false, "lines": ["New alert", "Updated: 2026-04-10T10:00:00+10:00"]}\n'
+            "###END_HERMES_CRON_DELIVERY_JSON"
+        )
+        fp = _expected_tick_deliver_fingerprint(job, "New alert\nUpdated: 2026-04-10T10:00:00+10:00")
         with patch("cron.scheduler.get_due_jobs", return_value=[job]), \
              patch("cron.scheduler.advance_next_run"), \
              patch("cron.scheduler.run_job", return_value=(True, "# o", body, None)), \
@@ -791,7 +846,19 @@ class TestSilentDelivery:
 
     def test_normal_response_delivers(self):
         with patch("cron.scheduler.get_due_jobs", return_value=[self._make_job()]), \
-             patch("cron.scheduler.run_job", return_value=(True, "# output", "Results here", None)), \
+             patch(
+                 "cron.scheduler.run_job",
+                 return_value=(
+                     True,
+                     "# output",
+                     (
+                         "###HERMES_CRON_DELIVERY_JSON\n"
+                         '{"silent": false, "lines": ["Results here"]}\n'
+                         "###END_HERMES_CRON_DELIVERY_JSON"
+                     ),
+                     None,
+                 ),
+             ), \
              patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"), \
              patch("cron.scheduler._deliver_result") as deliver_mock, \
              patch("cron.scheduler.mark_job_run"):
@@ -1100,6 +1167,24 @@ class TestBuildJobPromptSilentHint:
         result = _build_job_prompt(job)
         assert "HERMES_CRON_DELIVERY_JSON" in result
 
+    def test_open_follow_up_context_injected(self):
+        job = {
+            "prompt": "Check for updates",
+            "deliver": "slack:C123",
+            "pending_follow_up": {
+                "status": "open",
+                "summary": "Repair the Slack gateway connectivity issue",
+                "requested_action": "Restart the gateway and verify all_connected",
+                "first_raised_at": "2026-04-14T00:00:00+00:00",
+                "last_seen_at": "2026-04-14T01:00:00+00:00",
+            },
+        }
+        result = _build_job_prompt(job)
+        assert "OWNED FOLLOW-UP" in result
+        assert "Repair the Slack gateway connectivity issue" in result
+        assert "Restart the gateway and verify all_connected" in result
+        assert "slack:C123" in result
+
 
 class TestBuildJobPromptMissingSkill:
     """Verify that a missing skill logs a warning and does not crash the job."""
@@ -1179,6 +1264,73 @@ class TestTickStateSkipGate:
 
         mark_mock.assert_called_once()
         assert not mark_mock.call_args.kwargs.get("skip_repeat_increment")
+
+
+class TestExecuteDueCronJobFollowUp:
+    def test_open_follow_up_persisted_from_envelope(self):
+        job = {
+            "id": "follow-up-open",
+            "name": "follow up open",
+            "deliver": "origin",
+            "origin": {"platform": "telegram", "chat_id": "1"},
+            "strict_delivery_envelope": True,
+        }
+        final_response = (
+            "###HERMES_CRON_DELIVERY_JSON\n"
+            '{"silent": false, "lines": ["blocker: slack gateway disconnected"], '
+            '"follow_up": {"status": "open", "summary": "Repair slack gateway connectivity", '
+            '"requested_action": "Restart the gateway and verify all_connected"}}\n'
+            "###END_HERMES_CRON_DELIVERY_JSON"
+        )
+
+        with patch("cron.scheduler.advance_next_run"), \
+             patch("cron.scheduler.run_job", return_value=(True, "# out", final_response, None)), \
+             patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"), \
+             patch("cron.scheduler._deliver_result", return_value=True), \
+             patch("cron.scheduler._cron_delivery_dedupe_enabled", return_value=False), \
+             patch("cron.scheduler.mark_job_run"), \
+             patch("cron.scheduler.update_job") as update_mock, \
+             patch("cron.scheduler.fingerprint_for_state_skip_gate", return_value=None):
+            assert execute_due_cron_job(job, verbose=False) is True
+
+        update_mock.assert_called_once()
+        assert update_mock.call_args.args[0] == "follow-up-open"
+        follow_up = update_mock.call_args.args[1]["pending_follow_up"]
+        assert follow_up["status"] == "open"
+        assert follow_up["summary"] == "Repair slack gateway connectivity"
+        assert follow_up["requested_action"] == "Restart the gateway and verify all_connected"
+
+    def test_resolved_follow_up_clears_owned_state(self):
+        job = {
+            "id": "follow-up-resolved",
+            "name": "follow up resolved",
+            "deliver": "origin",
+            "origin": {"platform": "telegram", "chat_id": "1"},
+            "strict_delivery_envelope": True,
+            "pending_follow_up": {
+                "status": "open",
+                "summary": "Repair slack gateway connectivity",
+                "requested_action": "Restart the gateway and verify all_connected",
+            },
+        }
+        final_response = (
+            "###HERMES_CRON_DELIVERY_JSON\n"
+            '{"silent": false, "lines": ["resolved: slack gateway restored"], '
+            '"follow_up": {"status": "resolved", "summary": "Slack gateway restored"}}\n'
+            "###END_HERMES_CRON_DELIVERY_JSON"
+        )
+
+        with patch("cron.scheduler.advance_next_run"), \
+             patch("cron.scheduler.run_job", return_value=(True, "# out", final_response, None)), \
+             patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"), \
+             patch("cron.scheduler._deliver_result", return_value=True), \
+             patch("cron.scheduler._cron_delivery_dedupe_enabled", return_value=False), \
+             patch("cron.scheduler.mark_job_run"), \
+             patch("cron.scheduler.update_job") as update_mock, \
+             patch("cron.scheduler.fingerprint_for_state_skip_gate", return_value=None):
+            assert execute_due_cron_job(job, verbose=False) is True
+
+        update_mock.assert_called_once_with("follow-up-resolved", {"pending_follow_up": None})
 
 
 class TestTickAdvanceBeforeRun:

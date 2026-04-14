@@ -152,6 +152,21 @@ def _build_skill_message(
     return "\n".join(parts)
 
 
+def _reserved_builtin_command_keys() -> set[str]:
+    """Return slash-command keys reserved by built-in commands and aliases."""
+    try:
+        from hermes_cli.commands import COMMAND_REGISTRY
+    except Exception:
+        return set()
+
+    reserved: set[str] = set()
+    for cmd in COMMAND_REGISTRY:
+        reserved.add(f"/{cmd.name}")
+        for alias in cmd.aliases:
+            reserved.add(f"/{alias}")
+    return reserved
+
+
 def scan_skill_commands() -> Dict[str, Dict[str, Any]]:
     """Scan ~/.hermes/skills/ and return a mapping of /command -> skill info.
 
@@ -164,6 +179,7 @@ def scan_skill_commands() -> Dict[str, Dict[str, Any]]:
         from tools.skills_tool import SKILLS_DIR, _parse_frontmatter, skill_matches_platform, _get_disabled_skill_names
         from agent.skill_utils import get_external_skills_dirs
         disabled = _get_disabled_skill_names()
+        reserved_commands = _reserved_builtin_command_keys()
         seen_names: set = set()
 
         # Scan local dir first, then external dirs
@@ -195,9 +211,11 @@ def scan_skill_commands() -> Dict[str, Dict[str, Any]]:
                             if line and not line.startswith('#'):
                                 description = line[:80]
                                 break
+                    cmd_key = f"/{name.lower().replace(' ', '-').replace('_', '-')}"
+                    if cmd_key in reserved_commands:
+                        continue
                     seen_names.add(name)
-                    cmd_name = name.lower().replace(' ', '-').replace('_', '-')
-                    _skill_commands[f"/{cmd_name}"] = {
+                    _skill_commands[cmd_key] = {
                         "name": name,
                         "description": description or f"Invoke the {name} skill",
                         "skill_md_path": str(skill_md),
@@ -215,6 +233,36 @@ def get_skill_commands() -> Dict[str, Dict[str, Any]]:
     if not _skill_commands:
         scan_skill_commands()
     return _skill_commands
+
+
+def build_explicit_skill_invocation_message(
+    skill_identifier: str,
+    user_instruction: str = "",
+    task_id: str | None = None,
+    runtime_note: str = "",
+) -> Optional[str]:
+    """Build a skill invocation message from a skill name or path.
+
+    Unlike ``build_skill_invocation_message()``, this bypasses the public
+    slash-command registry so built-in commands can still load a colliding
+    skill internally without exposing duplicate ``/command`` entries.
+    """
+    loaded = _load_skill_payload(skill_identifier, task_id=task_id)
+    if not loaded:
+        return None
+
+    loaded_skill, skill_dir, skill_name = loaded
+    activation_note = (
+        f'[SYSTEM: The user has invoked the "{skill_name}" skill, indicating they want '
+        "you to follow its instructions. The full skill content is loaded below.]"
+    )
+    return _build_skill_message(
+        loaded_skill,
+        skill_dir,
+        activation_note,
+        user_instruction=user_instruction,
+        runtime_note=runtime_note,
+    )
 
 
 def build_skill_invocation_message(
@@ -237,22 +285,15 @@ def build_skill_invocation_message(
     if not skill_info:
         return None
 
-    loaded = _load_skill_payload(skill_info["skill_dir"], task_id=task_id)
-    if not loaded:
-        return f"[Failed to load skill: {skill_info['name']}]"
-
-    loaded_skill, skill_dir, skill_name = loaded
-    activation_note = (
-        f'[SYSTEM: The user has invoked the "{skill_name}" skill, indicating they want '
-        "you to follow its instructions. The full skill content is loaded below.]"
-    )
-    return _build_skill_message(
-        loaded_skill,
-        skill_dir,
-        activation_note,
+    msg = build_explicit_skill_invocation_message(
+        skill_info["skill_dir"],
         user_instruction=user_instruction,
+        task_id=task_id,
         runtime_note=runtime_note,
     )
+    if msg is None:
+        return f"[Failed to load skill: {skill_info['name']}]"
+    return msg
 
 
 def build_preloaded_skills_prompt(

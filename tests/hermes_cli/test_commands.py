@@ -43,6 +43,10 @@ class TestCommandRegistry:
         for entry in COMMAND_REGISTRY:
             assert isinstance(entry, CommandDef), f"Unexpected type: {type(entry)}"
 
+    def test_autoresearch_is_a_runtime_command_without_bootstrap_subcommand(self):
+        entry = next(cmd for cmd in COMMAND_REGISTRY if cmd.name == "autoresearch")
+        assert entry.subcommands == ("show", "cancel")
+
     def test_no_duplicate_canonical_names(self):
         names = [cmd.name for cmd in COMMAND_REGISTRY]
         assert len(names) == len(set(names)), f"Duplicate names: {[n for n in names if names.count(n) > 1]}"

@@ -309,6 +309,10 @@ class IterationBudget:
     Users control the per-subagent limit via ``delegation.max_iterations``
     in config.yaml.
 
+    ``max_total <= 0`` means "unbounded" and is used by the autoresearch
+    background worker so runtime can be limited by wall-clock budget instead
+    of the normal Hermes iteration cap.
+
     ``execute_code`` (programmatic tool calling) iterations are refunded via
     :meth:`refund` so they don't eat into the budget.
     """
@@ -321,6 +325,9 @@ class IterationBudget:
     def consume(self) -> bool:
         """Try to consume one iteration.  Returns True if allowed."""
         with self._lock:
+            if self.max_total <= 0:
+                self._used += 1
+                return True
             if self._used >= self.max_total:
                 return False
             self._used += 1
@@ -337,8 +344,10 @@ class IterationBudget:
         return self._used
 
     @property
-    def remaining(self) -> int:
+    def remaining(self) -> float:
         with self._lock:
+            if self.max_total <= 0:
+                return float("inf")
             return max(0, self.max_total - self._used)
 
 
@@ -1200,6 +1209,11 @@ class AIAgent:
                     ]
         except Exception:
             logger.debug("opm fallback chain disallowed strip failed", exc_info=True)
+        # When the primary selection is explicitly ``openrouter/free`` on an
+        # OpenRouter runtime, do not auto-hop to other providers or paid
+        # fallback routes after a failure. Users who pick the free router want
+        # that exact budget boundary preserved.
+        self._suppress_fallback_chain_for_strict_openrouter_free_primary()
         self._fallback_index = 0
         self._fallback_activated = False
         # Legacy attribute kept for backward compat (tests, external callers)
@@ -5476,6 +5490,20 @@ class AIAgent:
         """Strip Hermes-only keys from a fallback chain entry for the provider router."""
         return {k: v for k, v in fb.items() if k not in _FALLBACK_CHAIN_META_KEYS}
 
+    def _suppress_fallback_chain_for_strict_openrouter_free_primary(self) -> None:
+        """Disable provider fallback when the primary runtime is explicit ``openrouter/free``."""
+        try:
+            primary_model = str(self.model or "").strip()
+            primary_provider = str(self.provider or "").strip().lower()
+            primary_base = str(self.base_url or "").strip().lower()
+            if (
+                primary_model == OPENROUTER_FREE_SYNTHETIC
+                and (primary_provider == "openrouter" or "openrouter.ai" in primary_base)
+            ):
+                self._fallback_chain = []
+        except Exception:
+            logger.debug("openrouter/free primary fallback suppression failed", exc_info=True)
+
     @staticmethod
     def _coerce_http_status_from_exception(exc: BaseException) -> Optional[int]:
         """Best-effort HTTP status for retry / 4xx classification.
@@ -5924,6 +5952,13 @@ class AIAgent:
         _gn_set = frozenset(_gn) if isinstance(_gn, list) else frozenset()
         if fb_model in _gn_set:
             fb_provider = "gemini"
+        if fb_provider == "gemini" and fb_model:
+            try:
+                from agent.tier_model_routing import coerce_model_id_for_native_gemini_api
+
+                fb_model = coerce_model_id_for_native_gemini_api(fb_model)
+            except Exception:
+                logger.debug("gemini fallback model coercion failed", exc_info=True)
         if not fb_provider or not fb_model:
             return self._try_activate_fallback(triggered_by_rate_limit=triggered_by_rate_limit)  # skip invalid, try next
 
@@ -7031,9 +7066,15 @@ class AIAgent:
         pl = (self.provider or "").strip().lower()
         bu = (self.base_url or "").lower()
         if pl == "gemini" or "generativelanguage.googleapis.com" in bu:
-            ms = str(m)
-            if ms.startswith("google/"):
-                return ms.split("/", 1)[1]
+            try:
+                from agent.tier_model_routing import coerce_model_id_for_native_gemini_api
+
+                return coerce_model_id_for_native_gemini_api(str(m))
+            except Exception:
+                ms = str(m)
+                if ms.startswith("google/"):
+                    return ms.split("/", 1)[1]
+                return ms
         return m
 
     def _build_api_kwargs(self, api_messages: list) -> dict:
@@ -9217,7 +9258,10 @@ class AIAgent:
         
             _turn_start_monotonic = time.monotonic()
         
-            while api_call_count < self.max_iterations and self.iteration_budget.remaining > 0:
+            while (
+                (self.max_iterations <= 0 or api_call_count < self.max_iterations)
+                and self.iteration_budget.remaining > 0
+            ):
                 # Reset per-turn checkpoint dedup so each iteration can take one snapshot
                 self._checkpoint_mgr.new_turn()
         
@@ -11299,7 +11343,7 @@ class AIAgent:
                     # role-alternation invariants.
         
                     # If we're near the limit, break to avoid infinite loops
-                    if api_call_count >= self.max_iterations - 1:
+                    if self.max_iterations > 0 and api_call_count >= self.max_iterations - 1:
                         final_response = f"I apologize, but I encountered repeated errors: {error_msg}"
                         # Append as assistant so the history stays valid for
                         # session resume (avoids consecutive user messages).
@@ -11307,7 +11351,7 @@ class AIAgent:
                         break
         
             if final_response is None and (
-                api_call_count >= self.max_iterations
+                (self.max_iterations > 0 and api_call_count >= self.max_iterations)
                 or self.iteration_budget.remaining <= 0
             ):
                 if self.iteration_budget.remaining <= 0 and not self.quiet_mode:
@@ -11315,7 +11359,9 @@ class AIAgent:
                 final_response = self._handle_max_iterations(messages, api_call_count)
         
             # Determine if conversation completed successfully
-            completed = final_response is not None and api_call_count < self.max_iterations
+            completed = final_response is not None and (
+                self.max_iterations <= 0 or api_call_count < self.max_iterations
+            )
         
             # Summary review: lightweight alignment check using the free model.
             # Only runs once per turn (no loops) and only when the turn completed.

@@ -1111,7 +1111,12 @@ def resolve_provider_client(
         default_model = _API_KEY_PROVIDER_AUX_MODELS.get(provider, "")
         final_model = model or default_model
         if provider == "gemini" and final_model:
-            final_model = normalize_gemini_api_model_id(final_model) or final_model
+            try:
+                from agent.tier_model_routing import coerce_model_id_for_native_gemini_api
+
+                final_model = coerce_model_id_for_native_gemini_api(final_model) or final_model
+            except Exception:
+                final_model = normalize_gemini_api_model_id(final_model) or final_model
 
         # Provider-specific headers
         headers = {}
@@ -1499,7 +1504,12 @@ def _get_cached_client(
     """
     provider = (provider or "").strip().lower()
     if provider == "gemini" and model:
-        model = normalize_gemini_api_model_id(model)
+        try:
+            from agent.tier_model_routing import coerce_model_id_for_native_gemini_api
+
+            model = coerce_model_id_for_native_gemini_api(model)
+        except Exception:
+            model = normalize_gemini_api_model_id(model)
 
     # Include loop identity for async clients to prevent cross-loop reuse.
     # httpx.AsyncClient (inside AsyncOpenAI) is bound to the loop where it

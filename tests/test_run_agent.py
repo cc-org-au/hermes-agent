@@ -82,6 +82,15 @@ def agent_with_memory_tool():
         return a
 
 
+def test_iteration_budget_zero_is_unbounded():
+    budget = run_agent.IterationBudget(0)
+
+    assert budget.consume() is True
+    assert budget.consume() is True
+    assert budget.used == 2
+    assert budget.remaining == float("inf")
+
+
 def test_aiagent_reuses_existing_errors_log_handler():
     """Repeated AIAgent init should not accumulate duplicate errors.log handlers."""
     root_logger = logging.getLogger()
@@ -134,6 +143,14 @@ def test_aiagent_reuses_existing_errors_log_handler():
                 handler.close()
         for handler in original_handlers:
             root_logger.addHandler(handler)
+
+
+def test_openai_compatible_model_param_coerces_openrouter_free_for_gemini(agent):
+    agent.model = "openrouter/free"
+    agent.provider = "gemini"
+    agent.base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+
+    assert agent._openai_compatible_model_param() == "gemini-2.5-flash"
 
 
 # ---------------------------------------------------------------------------

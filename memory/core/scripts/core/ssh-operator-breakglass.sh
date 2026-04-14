@@ -189,8 +189,9 @@ for ((_i = 0; _i < _n; _i++)); do
   fi
   if ssh "${_SSH_BASE[@]}" "${USER_NAME}@${h}" "$@"; then
     exit 0
+  else
+    last=$?
   fi
-  last=$?
 done
 
 echo "[ssh-operator-breakglass] all targets failed (last exit ${last})." >&2

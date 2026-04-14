@@ -14,8 +14,9 @@ import re
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
-from hermes_constants import get_hermes_home
 from typing import Optional, Dict, List, Any
+
+from hermes_constants import OPENROUTER_FREE_SYNTHETIC, get_hermes_home
 
 logger = logging.getLogger(__name__)
 
@@ -463,7 +464,9 @@ def create_job(
     normalized_model = str(model).strip() if isinstance(model, str) else None
     normalized_provider = str(provider).strip() if isinstance(provider, str) else None
     normalized_base_url = str(base_url).strip().rstrip("/") if isinstance(base_url, str) else None
-    normalized_model = normalized_model or None
+    normalized_model = normalized_model or OPENROUTER_FREE_SYNTHETIC
+    if not normalized_provider and normalized_model == OPENROUTER_FREE_SYNTHETIC:
+        normalized_provider = "openrouter"
     normalized_provider = normalized_provider or None
     normalized_base_url = normalized_base_url or None
 
@@ -492,6 +495,7 @@ def create_job(
         "last_run_at": None,
         "last_status": None,
         "last_error": None,
+        "strict_delivery_envelope": True,
         # Delivery configuration
         "deliver": deliver,
         "origin": origin,  # Tracks where job was created for "origin" delivery

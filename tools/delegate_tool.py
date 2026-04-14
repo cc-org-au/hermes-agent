@@ -124,6 +124,13 @@ MAX_CONCURRENT_CHILDREN = 3
 MAX_DEPTH = 2  # parent (0) -> child (1) -> grandchild rejected (2)
 DEFAULT_MAX_ITERATIONS = 50
 DEFAULT_TOOLSETS = ["terminal", "file", "web"]
+AUTORESEARCH_UNBOUNDED_ITERATIONS_ENV = "HERMES_AUTORESEARCH_UNBOUNDED_ITERATIONS"
+
+
+def _autoresearch_unbounded_iterations_enabled() -> bool:
+    return os.environ.get(
+        AUTORESEARCH_UNBOUNDED_ITERATIONS_ENV, ""
+    ).strip().lower() in ("1", "true", "yes", "on")
 
 
 def check_delegate_requirements() -> bool:
@@ -379,9 +386,8 @@ def _build_child_agent(
     )
 
     # Each subagent gets its own iteration budget capped at max_iterations
-    # (configurable via delegation.max_iterations, default 50).  This means
-    # total iterations across parent + subagents can exceed the parent's
-    # max_iterations.  The user controls the per-subagent cap in config.yaml.
+    # (configurable via delegation.max_iterations, default 50). A value of 0
+    # means "unbounded" and is used for autoresearch-only background runs.
 
     # Resolve effective credentials: config override > parent inherit
     effective_model = model or parent_agent.model
@@ -1181,33 +1187,36 @@ def delegate_task(
 
     # Load config
     cfg = _load_config()
-    default_max_iter = cfg.get("max_iterations", DEFAULT_MAX_ITERATIONS)
-    effective_max_iter = max_iterations or default_max_iter
-    tg_cap = getattr(parent_agent, "_token_governance_delegation_max", None)
-    if tg_cap is not None:
-        try:
-            tg_i = int(tg_cap)
-            if tg_i > 0:
-                effective_max_iter = min(effective_max_iter, tg_i)
-        except (TypeError, ValueError):
-            pass
+    if _autoresearch_unbounded_iterations_enabled():
+        effective_max_iter = 0
+    else:
+        default_max_iter = cfg.get("max_iterations", DEFAULT_MAX_ITERATIONS)
+        effective_max_iter = max_iterations or default_max_iter
+        tg_cap = getattr(parent_agent, "_token_governance_delegation_max", None)
+        if tg_cap is not None:
+            try:
+                tg_i = int(tg_cap)
+                if tg_i > 0:
+                    effective_max_iter = min(effective_max_iter, tg_i)
+            except (TypeError, ValueError):
+                pass
 
-    # Subprocess governance: cap iterations for subprocesses to max_iterations_for_subprocess.
-    # This prevents runaway subagents from making excessive API calls.
-    # The cap is loaded from the token governance YAML; fallback is 15.
-    try:
-        from agent.token_governance_runtime import load_runtime_config as _load_tg
-        _tg = _load_tg()
-        _subproc_cap = None
-        if _tg:
-            _sg = _tg.get("subprocess_governance") or {}
-            _subproc_cap = _sg.get("max_iterations_for_subprocess")
-        if _subproc_cap is not None:
-            _sp_cap_i = int(_subproc_cap)
-            if _sp_cap_i > 0:
-                effective_max_iter = min(effective_max_iter, _sp_cap_i)
-    except Exception:
-        pass
+        # Subprocess governance: cap iterations for subprocesses to max_iterations_for_subprocess.
+        # This prevents runaway subagents from making excessive API calls.
+        # The cap is loaded from the token governance YAML; fallback is 15.
+        try:
+            from agent.token_governance_runtime import load_runtime_config as _load_tg
+            _tg = _load_tg()
+            _subproc_cap = None
+            if _tg:
+                _sg = _tg.get("subprocess_governance") or {}
+                _subproc_cap = _sg.get("max_iterations_for_subprocess")
+            if _subproc_cap is not None:
+                _sp_cap_i = int(_subproc_cap)
+                if _sp_cap_i > 0:
+                    effective_max_iter = min(effective_max_iter, _sp_cap_i)
+        except Exception:
+            pass
 
     from agent.tier_model_routing import is_tier_dynamic
 

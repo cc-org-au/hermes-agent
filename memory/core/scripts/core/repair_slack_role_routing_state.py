@@ -55,7 +55,7 @@ MANAGED_ROLE_GROUPS: tuple[tuple[tuple[str, ...], str, str | None], ...] = (
         None,
     ),
     (("org-registry",), "org-registry-coordinator", None),
-    (("executive-briefings", "executive-briefing"), "executive-briefing-lead", None),
+    (("executive-briefings", "executive-briefing"), "executive-team-briefings", None),
 )
 
 

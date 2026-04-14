@@ -46,8 +46,9 @@ from cron.delivery import (
     resolve_origin,
     sanitize_cron_deliver_content,
 )
+from cron.delivery_envelope import parse_cron_delivery_envelope
 from cron.job_prompt import build_cron_job_prompt
-from cron.jobs import advance_next_run, get_due_jobs, mark_job_run, save_job_output
+from cron.jobs import advance_next_run, get_due_jobs, mark_job_run, save_job_output, update_job
 from cron.state_gate import fingerprint_for_state_skip_gate, should_skip_llm_for_unchanged_state
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,79 @@ _build_job_prompt = build_cron_job_prompt
 _hermes_home = get_hermes_home()
 _LOCK_DIR = _hermes_home / "cron"
 _LOCK_FILE = _LOCK_DIR / ".tick.lock"
+_FOLLOW_UP_UNCHANGED = object()
+
+
+def _job_pending_follow_up(job: dict) -> Optional[dict]:
+    follow_up = job.get("pending_follow_up")
+    if not isinstance(follow_up, dict):
+        return None
+    if str(follow_up.get("status") or "").strip().lower() != "open":
+        return None
+    return follow_up
+
+
+def _next_follow_up_state(
+    job: dict,
+    envelope_follow_up: Optional[dict],
+    *,
+    success: bool,
+    error: Optional[str],
+    reported_text: str,
+):
+    existing = _job_pending_follow_up(job)
+    now = _hermes_now().isoformat()
+
+    if isinstance(envelope_follow_up, dict):
+        status = str(envelope_follow_up.get("status") or "").strip().lower()
+        if status in {"resolved", "none"}:
+            if reported_text.strip():
+                return None
+            return existing if existing is not None else _FOLLOW_UP_UNCHANGED
+        if status == "open":
+            state = dict(existing or {})
+            state["status"] = "open"
+            state["summary"] = str(
+                envelope_follow_up.get("summary") or state.get("summary") or ""
+            ).strip()
+            state["requested_action"] = str(
+                envelope_follow_up.get("requested_action")
+                or state.get("requested_action")
+                or ""
+            ).strip()
+            state["source_deliver"] = str(job.get("deliver") or state.get("source_deliver") or "").strip()
+            state["first_raised_at"] = str(state.get("first_raised_at") or now).strip()
+            state["last_seen_at"] = now
+            if reported_text:
+                state["last_channel_update"] = reported_text[:2000]
+            return state
+
+    if not success:
+        state = dict(existing or {})
+        state["status"] = "open"
+        state["summary"] = str(
+            error or f"Cron job '{job.get('name', job.get('id'))}' failed."
+        ).strip()
+        state["requested_action"] = str(
+            state.get("requested_action")
+            or "Repair the failure and post the resolved status back to this same channel."
+        ).strip()
+        state["source_deliver"] = str(job.get("deliver") or state.get("source_deliver") or "").strip()
+        state["first_raised_at"] = str(state.get("first_raised_at") or now).strip()
+        state["last_seen_at"] = now
+        if reported_text:
+            state["last_channel_update"] = reported_text[:2000]
+        return state
+
+    return _FOLLOW_UP_UNCHANGED
+
+
+def _persist_follow_up_state(job: dict, job_id: str, next_state) -> None:
+    if next_state is _FOLLOW_UP_UNCHANGED:
+        return
+    if next_state is None and _job_pending_follow_up(job) is None:
+        return
+    update_job(job_id, {"pending_follow_up": next_state})
 
 
 def run_job(job: dict) -> tuple[bool, str, str, Optional[str]]:
@@ -208,6 +282,8 @@ def run_job(job: dict) -> tuple[bool, str, str, Optional[str]]:
             },
         )
 
+        pending_follow_up_open = _job_pending_follow_up(job) is not None
+
         disabled_toolsets = [
             "cronjob",
             "messaging",
@@ -238,6 +314,22 @@ def run_job(job: dict) -> tuple[bool, str, str, Optional[str]]:
                     "todo",
                 ]
             )
+        if pending_follow_up_open:
+            # Once a cron job has raised an unresolved blocker, give it the local execution /
+            # delegation surface needed to fix that blocker on later runs and report back here.
+            for toolset in (
+                "terminal",
+                "file",
+                "delegation",
+                "code_execution",
+                "memory",
+                "session_search",
+                "skills",
+                "hermes_core",
+                "todo",
+            ):
+                while toolset in disabled_toolsets:
+                    disabled_toolsets.remove(toolset)
 
         agent = AIAgent(
             model=turn_route["model"],
@@ -369,10 +461,17 @@ def execute_due_cron_job(
         deliver_content = final_response if success else f"⚠️ Cron job '{job.get('name', job_id)}' failed:\n{error}"
         should_deliver = bool(deliver_content)
         max_chars, _ = _cron_read_limits()
+        strict_env = job.get("strict_delivery_envelope")
+        if strict_env is None:
+            strict_env = cron_strict_delivery_envelope()
+        parsed_envelope = None
+        if success:
+            parsed_envelope = parse_cron_delivery_envelope(
+                deliver_content,
+                max_chars,
+                strict=bool(strict_env),
+            )
         if should_deliver and success:
-            strict_env = job.get("strict_delivery_envelope")
-            if strict_env is None:
-                strict_env = cron_strict_delivery_envelope()
             sanitized, skip_user = sanitize_cron_deliver_content(
                 deliver_content,
                 max_chars,
@@ -432,6 +531,20 @@ def execute_due_cron_job(
             deliver_fingerprint_update=deliver_fingerprint_update,
             state_gate_fingerprint_update=state_gate_fp,
         )
+        follow_up_state = _next_follow_up_state(
+            job,
+            parsed_envelope.get("follow_up") if isinstance(parsed_envelope, dict) else None,
+            success=success,
+            error=error,
+            reported_text=(
+                deliver_content
+                if should_deliver
+                else str(parsed_envelope.get("text") or "")
+                if isinstance(parsed_envelope, dict)
+                else ""
+            ),
+        )
+        _persist_follow_up_state(job, job_id, follow_up_state)
         return True
 
     except Exception as e:

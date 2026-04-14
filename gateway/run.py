@@ -503,6 +503,7 @@ class GatewayRunner:
         # Key: session_key, Value: AIAgent instance
         self._running_agents: Dict[str, Any] = {}
         self._pending_messages: Dict[str, str] = {}  # Queued messages during interrupt
+        self._pending_autoresearch: Dict[str, Dict[str, Any]] = {}
 
         # Cache AIAgent instances per session to preserve prompt caching.
         # Without this, a new AIAgent is created per message, rebuilding the
@@ -1943,6 +1944,26 @@ class GatewayRunner:
                 _nl = parse_gateway_approval_natural_language(event.text or "")
                 if _nl is not None:
                     return self._apply_parsed_blocking_approval(_quick_key, _nl)
+
+        if _quick_key in self._pending_autoresearch and not event.is_command():
+            try:
+                from hermes_cli.autoresearch_flow import (
+                    prepare_autoresearch_background_run,
+                )
+
+                prepared = prepare_autoresearch_background_run(
+                    user_instructions=event.text or "",
+                    task_id=_quick_key,
+                )
+                self._pending_autoresearch.pop(_quick_key, None)
+                return await self._start_autoresearch_background_run(
+                    event,
+                    prepared,
+                    _quick_key,
+                )
+            except Exception as e:
+                self._pending_autoresearch.pop(_quick_key, None)
+                return f"Autoresearch setup failed: {e}"
 
         if _quick_key in self._running_agents:
             if event.get_command() == "status":
@@ -3956,12 +3977,98 @@ class GatewayRunner:
         cfg = _load_gateway_config()
         return format_paperclip_message((event.text or "").strip(), cfg)
 
-    async def _handle_autoresearch_command(self, event: MessageEvent) -> str:
-        """Handle /autoresearch — cc-org-au/autoresearch workflow hints."""
-        from hermes_cli.integration_repos import format_autoresearch_message
+    async def _handle_autoresearch_command(self, event: MessageEvent) -> str | None:
+        """Handle /autoresearch — capture program.md instructions, then load the skill."""
+        from hermes_cli.autoresearch_flow import (
+            format_autoresearch_capture_prompt,
+            format_autoresearch_target_message,
+            prepare_autoresearch_background_run,
+        )
 
-        cfg = _load_gateway_config()
-        return format_autoresearch_message((event.text or "").strip(), cfg)
+        session_key = self._session_key_for_source(event.source)
+        user_arg = event.get_command_args().strip()
+        lowered = user_arg.lower()
+
+        if not user_arg:
+            self._pending_autoresearch[session_key] = {"started": time.time()}
+            return format_autoresearch_capture_prompt()
+
+        if lowered in {"cancel", "abort", "stop"}:
+            if self._pending_autoresearch.pop(session_key, None) is not None:
+                return "Autoresearch instruction capture cancelled."
+            return "No pending /autoresearch instruction capture."
+
+        if lowered in {"show", "path"}:
+            return format_autoresearch_target_message()
+
+        try:
+            prepared = prepare_autoresearch_background_run(
+                user_instructions=user_arg,
+                task_id=session_key,
+            )
+        except Exception as e:
+            self._pending_autoresearch.pop(session_key, None)
+            return f"Autoresearch setup failed: {e}"
+
+        self._pending_autoresearch.pop(session_key, None)
+        return await self._start_autoresearch_background_run(
+            event,
+            prepared,
+            session_key,
+        )
+
+    async def _start_autoresearch_background_run(
+        self,
+        event: MessageEvent,
+        prepared,
+        session_key: str,
+    ) -> str:
+        from hermes_cli.autoresearch_flow import (
+            build_autoresearch_worker_command,
+            resolve_hermes_repo_root,
+        )
+        from tools.process_registry import process_registry
+
+        command = build_autoresearch_worker_command(
+            prepared.prompt_path,
+            python_executable=sys.executable,
+        )
+        proc_session = process_registry.spawn_local(
+            command=command,
+            cwd=str(resolve_hermes_repo_root()),
+            task_id=prepared.job_id,
+            session_key=session_key,
+        )
+
+        watcher = {
+            "session_id": proc_session.id,
+            "check_interval": 20,
+            "session_key": session_key,
+            "platform": event.source.platform.value,
+            "chat_id": event.source.chat_id,
+            "thread_id": event.source.thread_id or "",
+        }
+        proc_session.watcher_platform = watcher["platform"]
+        proc_session.watcher_chat_id = watcher["chat_id"]
+        proc_session.watcher_thread_id = watcher["thread_id"]
+        proc_session.watcher_interval = watcher["check_interval"]
+
+        _task = asyncio.create_task(self._run_process_watcher(watcher))
+        self._background_tasks.add(_task)
+        _task.add_done_callback(self._background_tasks.discard)
+
+        return "\n".join(
+            [
+                "Autoresearch background run started.",
+                "Your last message was the only required interactive step.",
+                f"Job ID: {prepared.job_id}",
+                f"Process session: {proc_session.id}",
+                f"Program file updated: {prepared.program_path}",
+                f"Live log: {prepared.log_path}",
+                "Progress updates will be posted here automatically.",
+                "You can close your device now. The VPS job will keep running.",
+            ]
+        )
 
     async def _handle_voice_channel_join(self, event: MessageEvent) -> str:
         """Join the user's current Discord voice channel."""

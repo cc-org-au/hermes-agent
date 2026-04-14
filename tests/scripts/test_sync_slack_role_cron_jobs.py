@@ -1,4 +1,4 @@
-"""sync_slack_role_cron_jobs.py hermes-hop inference and prompt suffix."""
+"""sync_slack_role_cron_jobs.py hermes-hop inference and role-specific suffix."""
 
 from __future__ import annotations
 
@@ -67,6 +67,18 @@ def test_infer_hermes_hop_env_overrides(
     assert mod._infer_hermes_hop_tag(home, {}) == "--droplet"
 
 
+def test_infer_hermes_hop_gateway_lock_instance_overrides(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mod = _load_sync_mod()
+    home = tmp_path / ".hermes" / "profiles" / "chief-orchestrator"
+    home.mkdir(parents=True)
+    monkeypatch.delenv("HERMES_SLACK_ROLE_HERMES_HOP", raising=False)
+    monkeypatch.setenv("HERMES_GATEWAY_LOCK_INSTANCE", "droplet")
+    assert mod._infer_hermes_hop_tag(home, {}) == "--droplet"
+
+
 def test_resolve_explicit_hermes_hop(tmp_path: Path) -> None:
     mod = _load_sync_mod()
     home = tmp_path / ".hermes" / "profiles" / "chief-orchestrator"
@@ -112,17 +124,37 @@ def test_effective_slack_overlay_replaces_base_channels(tmp_path: Path) -> None:
     assert ch == {"C2": "from-overlay"}
 
 
-def test_role_prompt_uses_hop_and_profile_suffix() -> None:
+def test_role_prompt_uses_hop_and_role_suffix() -> None:
     mod = _load_sync_mod()
     text = mod._role_prompt(
         "org-mapper-hr-controller",
         "C0123",
         hermes_hop_tag="--droplet",
-        profile_cli_suffix="chief-orchestrator-droplet",
     )
-    assert "Append its own final line exactly: `--droplet --chief-orchestrator-droplet`" in text
+    assert "Add the final line in the JSON `lines` array exactly: `--droplet --org-mapper-hr-controller`" in text
     assert "###HERMES_CRON_DELIVERY_JSON" in text
     assert "requested decision, if any:" in text
+    assert "Slack is **never** a human-operator intervention channel." in text
+
+
+def test_expand_role_slugs_for_executive_briefings() -> None:
+    mod = _load_sync_mod()
+    assert mod._expand_role_slugs("executive-team-briefings") == (
+        "project-lead-agentic-company",
+        "engineering-director",
+        "it-security-director",
+        "operations-director",
+        "product-director",
+    )
+
+
+def test_refresh_role_slug_for_multi_role_channel_uses_job_name() -> None:
+    mod = _load_sync_mod()
+    job = {"name": "daily-slack-role-status-product-director-C0EXEC"}
+    assert (
+        mod._refresh_role_slug_for_job(job, "executive-team-briefings", "C0EXEC")
+        == "product-director"
+    )
 
 
 def test_apply_creates_slack_role_job_with_strict_delivery_envelope(
@@ -161,15 +193,72 @@ def test_apply_creates_slack_role_job_with_strict_delivery_envelope(
     assert jobs[0]["provider"] == "openrouter"
 
 
-def test_slack_prompt_profile_suffix_under_profiles(tmp_path: Path) -> None:
+def test_apply_creates_multiple_exec_jobs_for_executive_channel(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     mod = _load_sync_mod()
-    h = tmp_path / "profiles" / "chief-orchestrator-droplet"
-    h.mkdir(parents=True)
-    assert mod._slack_prompt_profile_suffix(h) == "chief-orchestrator-droplet"
+    home = tmp_path / ".hermes" / "profiles" / "chief-orchestrator"
+    home.mkdir(parents=True)
+    (home / "config.yaml").write_text(
+        "cron:\n"
+        "  default_model: openrouter/free\n"
+        "  default_provider: openrouter\n"
+        "messaging:\n"
+        "  role_routing:\n"
+        "    slack:\n"
+        "      channels:\n"
+        "        CEXEC: executive-team-briefings\n",
+        encoding="utf-8",
+    )
+    captured: dict = {}
+
+    def _save_jobs(rows):
+        captured["jobs"] = rows
+
+    monkeypatch.setenv("HERMES_HOME", str(home))
+    monkeypatch.setattr(sys, "argv", ["x", "--apply"])
+    with patch("cron.jobs.load_jobs", return_value=[]), patch(
+        "cron.jobs.compute_next_run", return_value="2026-01-01T00:00:00+00:00"
+    ), patch("cron.jobs.save_jobs", side_effect=_save_jobs):
+        assert mod.main() == 0
+    names = [job["name"] for job in captured["jobs"]]
+    assert names == [
+        "daily-slack-role-status-project-lead-agentic-company-CEXEC",
+        "daily-slack-role-status-engineering-director-CEXEC",
+        "daily-slack-role-status-it-security-director-CEXEC",
+        "daily-slack-role-status-operations-director-CEXEC",
+        "daily-slack-role-status-product-director-CEXEC",
+    ]
 
 
-def test_slack_prompt_profile_suffix_default_hermes(tmp_path: Path) -> None:
+def test_apply_skips_standalone_project_lead_channel(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     mod = _load_sync_mod()
-    h = tmp_path / ".hermes"
-    h.mkdir(parents=True)
-    assert mod._slack_prompt_profile_suffix(h) == "chief-orchestrator"
+    home = tmp_path / ".hermes" / "profiles" / "chief-orchestrator"
+    home.mkdir(parents=True)
+    (home / "config.yaml").write_text(
+        "cron:\n"
+        "  default_model: openrouter/free\n"
+        "  default_provider: openrouter\n"
+        "messaging:\n"
+        "  role_routing:\n"
+        "    slack:\n"
+        "      channels:\n"
+        "        CPROJ: project-lead-agentic-company\n",
+        encoding="utf-8",
+    )
+    captured: dict = {}
+
+    def _save_jobs(rows):
+        captured["jobs"] = rows
+
+    monkeypatch.setenv("HERMES_HOME", str(home))
+    monkeypatch.setattr(sys, "argv", ["x", "--apply"])
+    with patch("cron.jobs.load_jobs", return_value=[]), patch(
+        "cron.jobs.compute_next_run", return_value="2026-01-01T00:00:00+00:00"
+    ), patch("cron.jobs.save_jobs", side_effect=_save_jobs):
+        assert mod.main() == 0
+    assert captured["jobs"] == []

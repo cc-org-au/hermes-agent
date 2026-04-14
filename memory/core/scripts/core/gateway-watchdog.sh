@@ -133,6 +133,27 @@ _ensure_systemd_user_bus() {
   fi
 }
 
+reset_gateway_runtime_for_current_home() {
+  (
+    cd "$HERMES_AGENT_DIR" 2>/dev/null || exit 0
+    HERMES_HOME="$HERMES_HOME" HERMES_PROFILE_BASE="${HERMES_PROFILE_BASE:-$HOME/.hermes}" \
+      "$PY" - <<'PY'
+import time
+from gateway.status import (
+    kill_all_gateway_processes_for_current_home,
+    release_all_scoped_locks,
+    remove_pid_file,
+)
+
+kill_all_gateway_processes_for_current_home()
+time.sleep(2)
+kill_all_gateway_processes_for_current_home(force=True)
+release_all_scoped_locks()
+remove_pid_file()
+PY
+  )
+}
+
 launchd_gateway_label() {
   "$PY" -c "from hermes_cli.gateway import get_launchd_label; print(get_launchd_label())" 2>/dev/null || echo ""
 }
@@ -167,12 +188,19 @@ try_systemd_restart() {
     return 1
   fi
   _ensure_systemd_user_bus
-  log "recovery: systemctl --user restart ${base}.service"
-  if ! systemctl --user restart "${base}.service"; then
-    log "recovery: systemctl restart failed (exit $?)"
+  log "recovery: reset current-home gateway state + systemctl start ${base}.service"
+  systemctl --user stop "${base}.service" >/dev/null 2>&1 || true
+  reset_gateway_runtime_for_current_home
+  systemctl --user reset-failed "${base}.service" >/dev/null 2>&1 || true
+  if ! systemctl --user start "${base}.service"; then
+    log "recovery: systemctl start failed (exit $?)"
     return 1
   fi
   sleep 5
+  if ! systemctl --user is-active --quiet "${base}.service"; then
+    log "recovery: ${base}.service is not active after start"
+    return 1
+  fi
   return 0
 }
 
@@ -198,8 +226,12 @@ recover() {
       fi
     fi
   elif [[ "${WATCHDOG_PREFER_SYSTEMD:-1}" != "0" ]]; then
-    if try_systemd_restart; then
-      return 0
+    local base unit
+    base="$(service_unit_name)"
+    unit="${HOME}/.config/systemd/user/${base}.service"
+    if [[ -n "$base" && -f "$unit" ]]; then
+      try_systemd_restart
+      return $?
     fi
   fi
   try_gateway_replace

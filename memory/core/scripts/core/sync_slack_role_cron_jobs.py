@@ -8,16 +8,16 @@ ownership, not the same ``slack:C…`` targets twice.
 
 - Skips channels already covered by an existing job with the same deliver target.
 - Stagger minutes starting at base (default 10:05 Sydney wall time via cron minute/hour fields).
-- Prompts enforce [SILENT] when no state change and forbid cross-channel duplication.
+- Prompts enforce material-change-only delivery, strict silent envelopes, and forbid
+  cross-channel duplication.
 
 Usage:
   HERMES_HOME=~/.hermes/profiles/chief-orchestrator \\
     ./venv/bin/python memory/core/scripts/core/sync_slack_role_cron_jobs.py [--apply]
 
-Each job prompt ends with ``--<hop> --<profile>`` where *profile* is the active profile directory
-name (e.g. ``chief-orchestrator`` on the Mac, ``chief-orchestrator-droplet`` on the VPS) — **not** a
-department role slug, and never ``chief-orchestrator`` on a non-chief profile. Hop is ``--operator``
-or ``--droplet``: ``auto`` uses ``--droplet`` when ``HERMES_HOME`` is ``…/profiles/*-droplet``, else
+Each job prompt ends with ``--<hop> --<role-slug>`` where *role-slug* is the reporting role for that
+specific message (for example ``--droplet --engineering-director``). Hop is ``--operator`` or
+``--droplet``: ``auto`` uses ``--droplet`` when ``HERMES_HOME`` is ``…/profiles/*-droplet``, else
 ``--operator``. Override with ``messaging.role_routing.slack.hermes_hop`` or
 ``HERMES_SLACK_ROLE_HERMES_HOP``.
 
@@ -72,18 +72,26 @@ def _load_yaml(path: Path):
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
 
-def _slack_prompt_profile_suffix(home: Path) -> str:
-    """Profile dirname for CLI ``-p`` token in the closing line (not department role slug)."""
-    try:
-        resolved = home.expanduser().resolve()
-        if resolved.parent.name == "profiles":
-            return resolved.name
-    except OSError:
-        pass
-    nm = home.name
-    if nm in (".hermes", "") or str(home).rstrip("/").endswith("/.hermes"):
-        return "chief-orchestrator"
-    return nm or "chief-orchestrator"
+EXECUTIVE_BRIEFING_CHANNEL_SLUGS = frozenset(
+    {
+        "executive-team-briefings",
+        "executive-briefing-lead",
+    }
+)
+
+EXECUTIVE_BRIEFING_ROLES: tuple[str, ...] = (
+    "project-lead-agentic-company",
+    "engineering-director",
+    "it-security-director",
+    "operations-director",
+    "product-director",
+)
+
+DISABLED_SINGLE_CHANNEL_SLUGS = frozenset(
+    {
+        "project-lead-agentic-company",
+    }
+)
 
 
 def _infer_hermes_hop_tag(_home: Path, cfg: dict) -> str:
@@ -96,6 +104,12 @@ def _infer_hermes_hop_tag(_home: Path, cfg: dict) -> str:
     env = os.environ.get("HERMES_SLACK_ROLE_HERMES_HOP", "").strip().lower()
     if env in ("droplet", "operator"):
         return f"--{env}"
+    inst = os.environ.get("HERMES_GATEWAY_LOCK_INSTANCE", "").strip().lower()
+    if inst in ("droplet", "operator"):
+        return f"--{inst}"
+    label = os.environ.get("HERMES_CLI_INSTANCE_LABEL", "").strip().lower()
+    if label in ("droplet", "operator"):
+        return f"--{label}"
     msg = cfg.get("messaging") or {}
     if isinstance(msg, dict):
         rr = msg.get("role_routing") or {}
@@ -141,19 +155,64 @@ def _resolve_hermes_hop_tag(
     return _infer_hermes_hop_tag(home, cfg)
 
 
+def _expand_role_slugs(role_slug: str) -> tuple[str, ...]:
+    slug = str(role_slug).strip()
+    if slug in EXECUTIVE_BRIEFING_CHANNEL_SLUGS:
+        return EXECUTIVE_BRIEFING_ROLES
+    return (slug,)
+
+
+def _role_slug_from_job_name(name: str, channel_id: str) -> str | None:
+    prefix = "daily-slack-role-status-"
+    suffix = f"-{channel_id}"
+    if not name.startswith(prefix) or not name.endswith(suffix):
+        return None
+    middle = name[len(prefix):-len(suffix)]
+    return middle.strip() or None
+
+
+def _refresh_role_slug_for_job(job: dict, channel_slug: str, channel_id: str) -> str | None:
+    expanded = _expand_role_slugs(channel_slug)
+    if len(expanded) == 1:
+        return expanded[0]
+    parsed = _role_slug_from_job_name(str(job.get("name", "")), channel_id)
+    if parsed in expanded:
+        return parsed
+    return None
+
+
+def _should_skip_channel_slug(channel_slug: str) -> bool:
+    slug = str(channel_slug).strip()
+    return slug in DISABLED_SINGLE_CHANNEL_SLUGS
+
+
 def _role_prompt(
     role_slug: str,
     channel_id: str,
     *,
     hermes_hop_tag: str,
-    profile_cli_suffix: str,
+    executive_briefing: bool = False,
 ) -> str:
-    return f"""Use Australia/Sydney (Hermes timezone). Run once per day at the scheduled wall time.
-
-You are generating the **Slack-only daily status** for role `{role_slug}` in channel `{channel_id}`.
+    if executive_briefing:
+        intro = (
+            f"Use Australia/Sydney (Hermes timezone). Run once per day at the scheduled wall time.\n\n"
+            f"You are generating the **Slack-only executive-briefings update** for role `{role_slug}` "
+            f"in channel `{channel_id}`.\n"
+            f"This channel must receive a **separate post per relevant executive role**; do not synthesize "
+            f"a combined executive-team summary."
+        )
+    else:
+        intro = (
+            f"Use Australia/Sydney (Hermes timezone). Run once per day at the scheduled wall time.\n\n"
+            f"You are generating the **Slack-only daily status** for role `{role_slug}` in channel `{channel_id}`."
+        )
+    return f"""{intro}
 
 **Hard rules**
-- If there is **no material change** in reportable work, risks, or decisions since the last update for this channel, use the exact JSON envelope with `{{"silent": true}}`.
+- If there is **no material change** in reportable work, risks, staffing, ownership, or decisions since the last delivered update for this role/channel, use the exact JSON envelope with `{{"silent": true}}`.
+- Slack is **never** a human-operator intervention channel. Do **not** ask the human operator to do anything here.
+- Attempt autonomous resolution first using available internal tools, delegation, subprocesses, and free OpenRouter models before mentioning a blocker.
+- Only report blockers that remain after autonomous action, and phrase them as current internal blockers rather than a human request.
 - **Never** paste or paraphrase content meant for WhatsApp connectivity alerts, Telegram project topics, other Slack channels, or the chief DM summary.
 - Each channel must add **unique** information for this role remit; do not broadcast the same narrative to multiple channels.
 
@@ -171,17 +230,19 @@ You are generating the **Slack-only daily status** for role `{role_slug}` in cha
   `next action: ...`
   `requested decision, if any: ...`
   `memory recommendation: keep active|archive|close`
+- Add the final line in the JSON `lines` array exactly: `{hermes_hop_tag} --{role_slug}`
 - Do **not** write any text after `###END_HERMES_CRON_DELIVERY_JSON`.
+- Never output literal `[SILENT]`.
 - If you cannot produce grounded, role-relevant lines for this channel, return `{{"silent": true}}` in the exact envelope instead of guessing.
 
 **Blockers, failures, and remediation**
 - Use at most a **small** amount of local inspection to ground the summary.
 - Only attempt remediation when the blocker is directly about this channel's deliverability or the current host's status signal for this role (for example Slack `is_archived`, missing allowlist entry, gateway platform disconnected, stale cron state).
 - Do **not** run unrelated maintenance, package upgrades, setup wizards, or broad repo changes just to compose a report.
-- When you fix something, state **what broke**, **what you changed**, and **verification** in the status lines. If still blocked after attempting remediation, say what remains and the minimum human action.
+- When you fix something, state **what broke**, **what you changed**, and **verification** in the status lines. If a matter truly still needs human judgment after exhausting internal options, keep Slack non-escalatory and route that judgment need internally to the WhatsApp escalation service instead.
 
 **Closing**
-Append its own final line exactly: `{hermes_hop_tag} --{profile_cli_suffix}` (Hermes CLI trailing argv: hop token, then the **active profile** directory name such as `chief-orchestrator` or `chief-orchestrator-droplet` — not a department role slug and not a different profile name than the one running this job)."""
+Return **only** the policy-formatted report lines via the JSON envelope. The final line must be exactly `{hermes_hop_tag} --{role_slug}` on its own line."""
 
 
 def main() -> int:
@@ -221,6 +282,12 @@ def main() -> int:
         return 2
     home = Path(hh).expanduser()
     cfg = _load_yaml(home / "config.yaml")
+    try:
+        from hermes_cli.env_loader import load_hermes_dotenv
+
+        load_hermes_dotenv(hermes_home=home)
+    except Exception:
+        pass
     _msg = cfg.get("messaging") or {}
     if isinstance(_msg, dict) and _msg.get("slack_role_cron_leader") is False:
         print(
@@ -249,8 +316,6 @@ def main() -> int:
         home=home,
         cfg=cfg,
     )
-    profile_cli_suffix = _slack_prompt_profile_suffix(home)
-
     if args.refresh_prompts and args.apply:
         updated = 0
         for j in jobs:
@@ -262,12 +327,16 @@ def main() -> int:
             slug = slack.get(cid)
             if not slug or str(slug).strip() == "chief_orchestrator":
                 continue
-            slug = str(slug).strip()
+            if _should_skip_channel_slug(str(slug).strip()):
+                continue
+            slug = _refresh_role_slug_for_job(j, str(slug).strip(), cid)
+            if not slug:
+                continue
             j["prompt"] = _role_prompt(
                 slug,
                 cid,
                 hermes_hop_tag=hermes_hop_tag,
-                profile_cli_suffix=profile_cli_suffix,
+                executive_briefing=slug in EXECUTIVE_BRIEFING_ROLES and str(slack.get(cid)).strip() in EXECUTIVE_BRIEFING_CHANNEL_SLUGS,
             )
             j["strict_delivery_envelope"] = True
             j["model"] = cron_default_model
@@ -276,7 +345,7 @@ def main() -> int:
         if updated:
             print(f"refreshed prompts on {updated} existing job(s)", file=sys.stderr)
 
-    existing_deliver = {str(j.get("deliver", "")) for j in jobs}
+    existing_names = {str(j.get("name", "")) for j in jobs}
 
     minute = args.base_minute
     planned = []
@@ -286,46 +355,51 @@ def main() -> int:
         if slug == "chief_orchestrator":
             print(f"skip chief_orchestrator channel {cid} (dedicated chief summary / operator DM jobs cover orchestration)")
             continue
-        deliver = f"slack:{cid}"
-        name = f"daily-slack-role-status-{slug}-{cid}"
-        if deliver in existing_deliver:
-            print(f"skip (exists): {deliver}")
+        if _should_skip_channel_slug(slug):
+            print(f"skip {slug} channel {cid} (handled by non-Slack status path)")
             continue
-        expr = f"{minute} {args.base_hour} * * *"
-        minute += args.stagger
-        prompt = _role_prompt(
-            slug,
-            cid,
-            hermes_hop_tag=hermes_hop_tag,
-            profile_cli_suffix=profile_cli_suffix,
-        )
-        job = {
-            "id": uuid.uuid4().hex[:12],
-            "name": name,
-            "prompt": prompt,
-            "strict_delivery_envelope": True,
-            "skills": [],
-            "skill": None,
-            "model": cron_default_model,
-            "provider": cron_default_provider,
-            "base_url": None,
-            "schedule": {"kind": "cron", "expr": expr, "display": expr},
-            "schedule_display": expr,
-            "repeat": {"times": 999999, "completed": 0},
-            "enabled": True,
-            "state": "scheduled",
-            "paused_at": None,
-            "paused_reason": None,
-            "created_at": __import__("datetime").datetime.now().astimezone().isoformat(),
-            "next_run_at": compute_next_run({"kind": "cron", "expr": expr}),
-            "last_run_at": None,
-            "last_status": None,
-            "last_error": None,
-            "deliver": deliver,
-            "origin": None,
-        }
-        planned.append(job)
-        print(f"plan: {name} {expr} -> {deliver}")
+        deliver = f"slack:{cid}"
+        expanded_roles = _expand_role_slugs(slug)
+        for expanded_role in expanded_roles:
+            name = f"daily-slack-role-status-{expanded_role}-{cid}"
+            if name in existing_names:
+                print(f"skip (exists): {name}")
+                continue
+            expr = f"{minute} {args.base_hour} * * *"
+            minute += args.stagger
+            prompt = _role_prompt(
+                expanded_role,
+                cid,
+                hermes_hop_tag=hermes_hop_tag,
+                executive_briefing=slug in EXECUTIVE_BRIEFING_CHANNEL_SLUGS,
+            )
+            job = {
+                "id": uuid.uuid4().hex[:12],
+                "name": name,
+                "prompt": prompt,
+                "strict_delivery_envelope": True,
+                "skills": [],
+                "skill": None,
+                "model": cron_default_model,
+                "provider": cron_default_provider,
+                "base_url": None,
+                "schedule": {"kind": "cron", "expr": expr, "display": expr},
+                "schedule_display": expr,
+                "repeat": {"times": 999999, "completed": 0},
+                "enabled": True,
+                "state": "scheduled",
+                "paused_at": None,
+                "paused_reason": None,
+                "created_at": __import__("datetime").datetime.now().astimezone().isoformat(),
+                "next_run_at": compute_next_run({"kind": "cron", "expr": expr}),
+                "last_run_at": None,
+                "last_status": None,
+                "last_error": None,
+                "deliver": deliver,
+                "origin": None,
+            }
+            planned.append(job)
+            print(f"plan: {name} {expr} -> {deliver}")
 
     if not args.apply:
         if args.refresh_prompts:

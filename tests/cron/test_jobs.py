@@ -195,6 +195,9 @@ class TestJobCRUD:
         assert job["prompt"] == "Check server status"
         assert job["enabled"] is True
         assert job["schedule"]["kind"] == "once"
+        assert job["model"] == "openrouter/free"
+        assert job["provider"] == "openrouter"
+        assert job["strict_delivery_envelope"] is True
 
         fetched = get_job(job["id"])
         assert fetched is not None

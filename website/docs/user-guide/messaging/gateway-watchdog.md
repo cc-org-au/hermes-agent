@@ -50,7 +50,7 @@ The repo ships `scripts/core/gateway-watchdog.sh`: a loop that:
 
 1. Runs singleton dedupe for the current `HERMES_HOME` (Python; same logic as inside `watchdog-check`), unless **`WATCHDOG_DEDUPE_EACH_TICK=0`**.
 2. Polls `watchdog-check` on a fixed interval while healthy (via `venv/bin/python -m hermes_cli.main`, with **`-p`** when `HERMES_HOME` is under `profiles/<name>`).
-3. On failure: applies **exponential backoff + jitter**, then prefers **`systemctl --user restart`** on the matching **`hermes-gateway-<name>.service`** unit when that file exists (same layout as `hermes gateway install`); otherwise runs **`hermes gateway run --replace`** in the background.
+3. On failure: applies **exponential backoff + jitter**, then prefers **`systemctl --user`** recovery on the matching **`hermes-gateway-<name>.service`** unit when that file exists (same layout as `hermes gateway install`): stop the unit, clear current-home gateway PIDs + scoped locks via the Python helpers, `reset-failed`, then `start` the unit again. Only when no unit exists does it fall back to **`hermes gateway run --replace`** in the background.
 4. If still unhealthy: runs **`hermes doctor --fix`** (append output to `$HERMES_HOME/logs/gateway-watchdog.log`), then restarts/replaces the gateway again.
 5. Enforces a **rolling cap** on recovery attempts and a **cooldown** so a broken config does not spin forever.
 
@@ -99,7 +99,7 @@ Inspect this file when diagnosing restart loops or `doctor --fix` output.
 | **Linux** | `systemd --user` **`hermes-gateway-<profile>.service`** | **`systemctl --user restart`** that unit |
 | **macOS** | **launchd** **`ai.hermes.gateway*.plist`** | **`launchctl kickstart`** for that label (see `scripts/core/gateway-watchdog.sh`) |
 
-If no unit is installed, the watchdog falls back to **`hermes gateway run --replace`** plus **`doctor --fix`** as before.
+If no unit is installed, the watchdog falls back to **`hermes gateway run --replace`** plus **`doctor --fix`** as before. When a Linux user unit exists, the watchdog now keeps recovery **systemd-owned** instead of escaping into a detached replace process.
 
 ### macOS: `hermes gateway watchdog-install`
 

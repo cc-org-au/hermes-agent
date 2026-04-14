@@ -157,7 +157,7 @@ def main() -> int:
             "risk-and-insights-director",
         ),
         (("org-registry",), "org-registry-coordinator"),
-        (("executive-briefing", "executive-briefings"), "executive-briefing-lead"),
+        (("executive-briefing", "executive-briefings"), "executive-team-briefings"),
     )
     for names, role in optional_channels:
         cid = _first_channel_id(by_name, names)

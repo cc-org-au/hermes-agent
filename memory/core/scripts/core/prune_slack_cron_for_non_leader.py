@@ -6,8 +6,9 @@ to the same Slack channels:
 
 - **Operator Mac** — ``chief-orchestrator``: keep ``messaging.slack_role_cron_leader: true`` (default)
   and the Slack role jobs created by ``sync_slack_role_cron_jobs.py --apply``.
-- **VPS** — ``chief-orchestrator-droplet``: after ``restore_slack_role_checkins.py``, this profile
-  owns Slack role jobs for **that** host's tokens and channel map.
+- **VPS** — a dedicated droplet Slack-leader profile (if you intentionally maintain one):
+  after ``restore_slack_role_checkins.py``, that profile owns Slack role jobs for **that** host's
+  tokens and channel map.
 - **VPS** — ``chief-orchestrator`` (clone left on the droplet): set
   ``messaging.slack_role_cron_leader: false`` and run this script with ``--apply`` so duplicate
   ``slack:`` cron jobs are removed (same pattern as ``isolate_droplet_orchestrator._strip_slack_cron_jobs``).

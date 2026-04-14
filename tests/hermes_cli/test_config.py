@@ -400,6 +400,34 @@ class TestConfigV13GeminiDefaultMigration:
             assert reloaded["model"]["default"] == "anthropic/claude-opus-4.6"
 
 
+class TestConfigV41CronFreeDefaultMigration:
+    """v41: replace stale paid cron default with the repo free-tier cron default."""
+
+    def test_migrates_gpt_4o_mini_cron_default_to_free(self, tmp_path):
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(
+            yaml.safe_dump(
+                {
+                    "_config_version": 40,
+                    "cron": {
+                        "default_model": "openai/gpt-4o-mini",
+                        "default_provider": "openrouter",
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        with patch.dict(os.environ, {"HERMES_HOME": str(tmp_path)}, clear=False):
+            ensure_hermes_home()
+            migrate_config(interactive=False, quiet=True)
+            reloaded = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+            assert reloaded["_config_version"] == 42
+            assert reloaded["cron"]["default_model"] == DEFAULT_CONFIG["cron"]["default_model"]
+            assert reloaded["cron"]["default_provider"] == "openrouter"
+            assert reloaded["cron"]["strict_delivery_envelope"] is True
+
+
 class TestMergeUserConfigYaml:
     def test_deep_merges_without_dropping_keys(self, tmp_path):
         cfg = tmp_path / "config.yaml"

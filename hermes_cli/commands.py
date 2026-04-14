@@ -153,12 +153,11 @@ COMMAND_REGISTRY: list[CommandDef] = [
     ),
     CommandDef(
         "autoresearch",
-        "Autoresearch (cc-org-au/autoresearch): nanochat experiments — prepare, train, files",
+        "Autoresearch runtime flow: capture program.md instructions, then launch the installed skill",
         "Tools & Skills",
-        args_hint="[help|prepare|train|files]",
-        subcommands=("help", "prepare", "train", "files"),
+        args_hint="[show|cancel|<instructions>]",
+        subcommands=("show", "cancel"),
     ),
-
     # Info
     CommandDef("commands", "Browse all commands and skills (paginated)", "Info",
                gateway_only=True, args_hint="[page]"),

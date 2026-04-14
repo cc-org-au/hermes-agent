@@ -65,6 +65,21 @@ class TestFallbackChainInit:
         assert agent._fallback_index == 0
         assert agent._fallback_model == agent._fallback_chain[0]
 
+    def test_openrouter_free_primary_disables_fallback_chain(self):
+        agent = _make_agent(
+            fallback_model=[
+                {"provider": "gemini", "model": "gemini-2.5-flash"},
+                {"provider": "openrouter", "model": "openai/gpt-5.4"},
+            ]
+        )
+        agent.model = "openrouter/free"
+        agent.provider = "openrouter"
+        agent.base_url = "https://openrouter.ai/api/v1"
+
+        agent._suppress_fallback_chain_for_strict_openrouter_free_primary()
+
+        assert agent._fallback_chain == []
+
     def test_single_dict_backwards_compat(self):
         fb = {"provider": "openai", "model": "gpt-4o"}
         agent = _make_agent(fallback_model=fb)

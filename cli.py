@@ -16,6 +16,7 @@ Usage:
 import logging
 import os
 import shutil
+import subprocess
 import sys
 import json
 import atexit
@@ -1201,6 +1202,7 @@ class HermesCLI:
         self._reasoning_stream_started = False  # True once live reasoning starts streaming
         self._reasoning_preview_buf = ""  # Coalesce tiny reasoning chunks for [thinking] output
         self._pending_edit_snapshots = {}
+        self._pending_autoresearch = None
         
         # Configuration - priority: CLI args > env vars > config file
         # Model comes from: CLI arg or config.yaml (single source of truth).
@@ -4911,18 +4913,13 @@ class HermesCLI:
             self._handle_models_command(cmd_original)
         elif canonical == "voice":
             self._handle_voice_command(cmd_original)
+        elif canonical == "autoresearch":
+            self._handle_autoresearch_command(cmd_original)
         elif canonical == "paperclip":
             from hermes_cli.integration_repos import format_paperclip_message
-            from hermes_cli.config import load_cli_config
             from rich.markdown import Markdown
 
             self.console.print(Markdown(format_paperclip_message(cmd_original, load_cli_config())))
-        elif canonical == "autoresearch":
-            from hermes_cli.integration_repos import format_autoresearch_message
-            from hermes_cli.config import load_cli_config
-            from rich.markdown import Markdown
-
-            self.console.print(Markdown(format_autoresearch_message(cmd_original, load_cli_config())))
         else:
             # Check for user-defined quick commands (bypass agent loop, no LLM call)
             base_cmd = cmd_lower.split()[0]
@@ -5053,6 +5050,141 @@ class HermesCLI:
             self._pending_input.put(msg)
         else:
             self.console.print("[bold red]Plan mode unavailable: input queue not initialized[/]")
+
+    def _handle_autoresearch_command(self, cmd: str):
+        """Handle /autoresearch — collect program.md instructions, then load the skill."""
+        from hermes_cli.autoresearch_flow import (
+            format_autoresearch_target_message,
+            format_autoresearch_capture_prompt,
+        )
+
+        parts = cmd.strip().split(maxsplit=1)
+        user_arg = parts[1].strip() if len(parts) > 1 else ""
+        lowered = user_arg.lower()
+
+        if not user_arg:
+            self._pending_autoresearch = {"started": time.time()}
+            self._print_autoresearch_notice(
+                format_autoresearch_capture_prompt(load_cli_config())
+            )
+            return
+
+        if lowered in {"cancel", "abort", "stop"}:
+            if getattr(self, "_pending_autoresearch", None):
+                self._pending_autoresearch = None
+                _cprint("  🧪 Autoresearch instruction capture cancelled.")
+            else:
+                _cprint("  No pending /autoresearch instruction capture.")
+            return
+
+        if lowered in {"show", "path"}:
+            self._print_autoresearch_notice(
+                format_autoresearch_target_message(load_cli_config())
+            )
+            return
+
+        self._launch_autoresearch_background_run(user_arg)
+
+    def _print_autoresearch_notice(self, text: str) -> None:
+        self.console.print()
+        for line in str(text or "").splitlines():
+            if line.strip():
+                _cprint(f"  {line}")
+            else:
+                _cprint("")
+
+    def _launch_autoresearch_background_run(self, user_instructions: str) -> None:
+        from hermes_cli.autoresearch_flow import (
+            prepare_autoresearch_background_run,
+            resolve_hermes_repo_root,
+        )
+
+        try:
+            prepared = prepare_autoresearch_background_run(
+                user_instructions=user_instructions,
+                task_id=self.session_id,
+                config=load_cli_config(),
+            )
+            prepared.log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_handle = prepared.log_path.open("a", encoding="utf-8")
+            env = os.environ.copy()
+            env["PYTHONUNBUFFERED"] = "1"
+            env["HERMES_AUTORESEARCH_JOB_ID"] = prepared.job_id
+            proc = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-m",
+                    "hermes_cli.autoresearch_background",
+                    "--prompt-file",
+                    str(prepared.prompt_path),
+                ],
+                cwd=str(resolve_hermes_repo_root()),
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=log_handle,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+            log_handle.close()
+        except Exception as e:
+            self._pending_autoresearch = None
+            self.console.print(f"[bold red]Autoresearch setup failed: {e}[/]")
+            return
+
+        self._pending_autoresearch = None
+        _cprint("  🧪 Autoresearch launched in the background.")
+        _cprint("  This was the only required interactive step.")
+        _cprint(f"  Job ID: {prepared.job_id}")
+        _cprint(f"  Program file updated: {prepared.program_path}")
+        _cprint(f"  Prompt file: {prepared.prompt_path}")
+        _cprint(f"  Live log: {prepared.log_path}")
+        _cprint(
+            "  You can close this device now. The remote worker is detached and will keep running."
+        )
+        _cprint(
+            "  While this session stays open, Hermes will stream the worker log here."
+        )
+        self._start_autoresearch_log_follower(prepared.log_path, proc.pid)
+
+    def _start_autoresearch_log_follower(self, log_path: Path, pid: int) -> None:
+        def _follow() -> None:
+            last_pos = 0
+            idle_polls = 0
+            while True:
+                try:
+                    if log_path.exists():
+                        with log_path.open("r", encoding="utf-8", errors="replace") as fh:
+                            fh.seek(last_pos)
+                            chunk = fh.read()
+                            last_pos = fh.tell()
+                        if chunk:
+                            idle_polls = 0
+                            for line in chunk.splitlines():
+                                text = line.rstrip()
+                                if text:
+                                    _cprint(f"  {text}")
+                        else:
+                            idle_polls += 1
+                    else:
+                        idle_polls += 1
+
+                    alive = True
+                    try:
+                        os.kill(pid, 0)
+                    except OSError:
+                        alive = False
+
+                    if not alive and idle_polls >= 3:
+                        break
+                    time.sleep(2)
+                except Exception:
+                    break
+
+        threading.Thread(
+            target=_follow,
+            daemon=True,
+            name=f"autoresearch-log-{pid}",
+        ).start()
     
     def _handle_background_command(self, cmd: str):
         """Handle /background <prompt> — run a prompt in a separate background session.
@@ -8893,6 +9025,12 @@ class HermesCLI:
                     submit_images = []
                     if isinstance(user_input, tuple):
                         user_input, submit_images = user_input
+
+                    if isinstance(user_input, str) and getattr(self, "_pending_autoresearch", None):
+                        stripped_input = user_input.strip()
+                        if stripped_input and not stripped_input.startswith("/"):
+                            self._launch_autoresearch_background_run(user_input)
+                            continue
                     
                     # Check for commands — but detect dragged/pasted file paths first.
                     # See _detect_file_drop() for details.

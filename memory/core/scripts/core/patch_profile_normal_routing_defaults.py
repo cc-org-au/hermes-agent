@@ -11,7 +11,7 @@ Sets:
 
 Run on the **droplet** (or any host) after ``git pull``:
 
-  HERMES_HOME=~/.hermes/profiles/chief-orchestrator-droplet \\
+  HERMES_HOME=~/.hermes/profiles/chief-orchestrator \\
     ./venv/bin/python scripts/core/patch_profile_normal_routing_defaults.py
 
 For a **new** cloned droplet profile, prefer ``isolate_droplet_orchestrator.py`` (includes Slack/cron).

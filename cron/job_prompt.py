@@ -18,6 +18,12 @@ _ENVELOPE_SPEC = (
     "###HERMES_CRON_DELIVERY_JSON\n"
     '{ "silent": false, "lines": ["watchdog-check: ok all_connected=whatsapp,telegram", "sev: 0"] }\n'
     "###END_HERMES_CRON_DELIVERY_JSON\n"
+    "When you raise or close an issue that this cron job owns, add an optional follow_up object:\n"
+    "###HERMES_CRON_DELIVERY_JSON\n"
+    '{ "silent": false, "lines": ["blocker: slack gateway disconnected", "next action: restarting gateway and rechecking"], '
+    '"follow_up": { "status": "open", "summary": "Repair slack gateway connectivity for this cron channel", '
+    '"requested_action": "Restart the gateway, verify connectivity, and post the resolved status here" } }\n'
+    "###END_HERMES_CRON_DELIVERY_JSON\n"
     "Rules: (1) Nothing after ###END_HERMES_CRON_DELIVERY_JSON. "
     "(2) At most 16 lines; each line under ~280 characters; total size respects delivery_max_chars. "
     "(3) Lines must be factual (states, numbers, paths, command output) — no narration, no "
@@ -28,8 +34,44 @@ _ENVELOPE_SPEC = (
     "messaging entirely. "
     "(7) When the job surfaces a blocker you can fix with available tools (config, health checks, "
     "documented service restarts), fix it in-run and add JSON lines reporting fixed status; only "
-    "escalate what remains impossible to automate safely.]\n\n"
+    "escalate what remains impossible to automate safely. "
+    "(8) You own any blocker or outstanding task you raise in this channel. If a prior run left an "
+    "open follow-up, first try to resolve that before reporting fresh issues. "
+    "(9) Use follow_up.status=open for unresolved work you still own, follow_up.status=resolved when "
+    "you fixed a previously open item, and follow_up.status=none only when there is truly no owned "
+    "follow-up left. "
+    "(10) Do not return silent while an owned follow-up remains open or when you resolved one in this "
+    "run; send the status update back to this same channel. "
+    "(11) Use delegation when a specialist agent would materially help complete the fix.]\n\n"
 )
+
+
+def _pending_follow_up_context(job: dict[str, Any]) -> str:
+    follow_up = job.get("pending_follow_up")
+    if not isinstance(follow_up, dict):
+        return ""
+    if str(follow_up.get("status") or "").strip().lower() != "open":
+        return ""
+
+    summary = str(follow_up.get("summary") or "").strip() or "(missing summary)"
+    requested_action = (
+        str(follow_up.get("requested_action") or "").strip() or "(missing requested action)"
+    )
+    first_raised_at = str(follow_up.get("first_raised_at") or "unknown").strip()
+    last_seen_at = str(follow_up.get("last_seen_at") or "unknown").strip()
+    deliver = str(job.get("deliver") or "unknown").strip()
+
+    return (
+        "[SYSTEM — OWNED FOLLOW-UP (mandatory): A previous run of this same cron job raised an "
+        "unresolved issue in this same delivery channel. Your first priority this run is to resolve "
+        "or materially advance it before reporting new issues. Do not return silent while it remains "
+        "open or when you resolve it.]\n"
+        f"- delivery_target: {deliver}\n"
+        f"- first_raised_at: {first_raised_at}\n"
+        f"- last_seen_at: {last_seen_at}\n"
+        f"- summary: {summary}\n"
+        f"- requested_action: {requested_action}\n\n"
+    )
 
 
 def build_cron_job_prompt(job: dict[str, Any]) -> str:
@@ -37,7 +79,7 @@ def build_cron_job_prompt(job: dict[str, Any]) -> str:
     prompt = job.get("prompt", "")
     skills = job.get("skills")
 
-    prompt = _ENVELOPE_SPEC + prompt
+    prompt = _ENVELOPE_SPEC + _pending_follow_up_context(job) + prompt
     if skills is None:
         legacy = job.get("skill")
         skills = [legacy] if legacy else []

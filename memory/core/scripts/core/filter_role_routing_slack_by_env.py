@@ -11,7 +11,7 @@ channels in the gateway loader).
 Does not modify Slack tokens — only routing maps. Run on **each** host for its own profile.
 
 Usage:
-  HERMES_HOME=~/.hermes/profiles/chief-orchestrator-droplet \\
+  HERMES_HOME=~/.hermes/profiles/chief-orchestrator \\
     ./venv/bin/python scripts/core/filter_role_routing_slack_by_env.py [--dry-run]
 """
 from __future__ import annotations

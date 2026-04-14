@@ -50,6 +50,14 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
   key="${line%%=*}"
   val="${line#*=}"
+  if [[ "$key" == export* ]]; then
+    key="${key#export}"
+    key="${key##[[:space:]]}"
+    key="${key%%[[:space:]]}"
+  fi
+  if [[ "$val" =~ ^\"(.*)\"$ ]]; then
+    val="${BASH_REMATCH[1]}"
+  fi
   case "$key" in
     MACMINI_SSH_USER) MACMINI_USER="${val}" ;;
     MACMINI_SSH_HOST) MACMINI_HOST="${val}" ;;
@@ -228,11 +236,30 @@ if [[ "$_n" -eq 0 ]]; then
   exit 1
 fi
 
-# Probes use BatchMode=yes by default — passphrase-protected keys need SSH_ASKPASS (env file) or
-# an interactive TTY so ssh can prompt. Otherwise every probe fails with "Permission denied
-# (publickey)" before the real connection runs.
+# Probes default to BatchMode=yes for fast failures, but passphrase-assisted auth must switch to
+# BatchMode=no so SSH_ASKPASS can unlock the key during the reachability probe.
 if [[ "$_n" -gt 1 ]]; then
-  if ! ssh-keygen -y -f "$KEY_FILE" -P "" >/dev/null 2>&1 && [[ "$_ALLOW_ENV_PASS_FROM_FILE" != "1" ]]; then
+  if [[ "$_ALLOW_ENV_PASS_FROM_FILE" == "1" && -n "${_RAW_SSH_PASSPHRASE}" ]]; then
+    _SSH_FLAGS_PROBE=(
+      -4
+      -T
+      -o BatchMode=no
+      -o IdentitiesOnly=yes
+      -o IdentityAgent=none
+      -o AddKeysToAgent=no
+      -o ControlMaster=no
+      -o ControlPath=none
+      -o StrictHostKeyChecking=accept-new
+      -o ServerAliveInterval=5
+      -o ServerAliveCountMax=2
+      -o TCPKeepAlive=yes
+      -i "$KEY_FILE"
+      -p "${MACMINI_PORT:?}"
+    )
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+      _SSH_FLAGS_PROBE+=(-o UseKeychain=no)
+    fi
+  elif ! ssh-keygen -y -f "$KEY_FILE" -P "" >/dev/null 2>&1; then
     if [[ "${HERMES_OPERATOR_SSH_NO_TTY:-0}" == "1" ]] || [[ ! -t 0 ]]; then
       echo "ssh_operator.sh: ${KEY_FILE} is passphrase-protected; multi-host probes need non-interactive unlock." >&2
       echo "  Set HERMES_OPERATOR_ALLOW_ENV_PASSPHRASE=1 (or HERMES_DROPLET_ALLOW_ENV_PASSPHRASE=1) and SSH_PASSPHRASE in ${ENV_FILE}," >&2
@@ -285,8 +312,9 @@ for ((_i = 0; _i < _n; _i++)); do
   if _op_probe_tcp "$h" "$_cto"; then
     _chosen="$h"
     break
+  else
+    last=$?
   fi
-  last=$?
 done
 
 if [[ -z "$_chosen" ]]; then

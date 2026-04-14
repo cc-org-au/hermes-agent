@@ -1129,6 +1129,14 @@ class TestNormalizeGeminiApiModelId:
             )
         assert model == "gemini-2.5-flash"
 
+    def test_resolve_provider_client_coerces_openrouter_free_for_gemini(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "gkey-test")
+        with patch("agent.auxiliary_client.OpenAI"):
+            _c, model = resolve_provider_client(
+                "gemini", model="openrouter/free", async_mode=False
+            )
+        assert model == "gemini-2.5-flash"
+
 
 class TestAuxiliaryMaxTokensParam:
     def test_codex_fallback_uses_max_tokens(self, monkeypatch):
