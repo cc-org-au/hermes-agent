@@ -69,6 +69,9 @@ fi
 echo "Wrote ${CONF}"
 echo "Listen: 127.0.0.1:${PORT} and ${TS_IP}:${PORT} | AllowUsers: ${ALLOW_USERS}"
 echo
+echo "Recommended: install the Tailscale listen refresh daemon so SSH keeps working after TS IP changes:"
+echo "  sudo bash memory/core/scripts/core/operator_mini_install_tailscale_listenaddress_watch.sh"
+echo
 echo "Next (recommended): LAN SSH uses a separate drop-in that must track DHCP — install the refresh daemon:"
 echo "  sudo bash memory/core/scripts/core/operator_mini_install_ssh_lan_resilience.sh"
 echo "(Or: operator_mini_install_lan_listenaddress_watch.sh — same effect.)"

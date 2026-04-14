@@ -61,6 +61,10 @@ echo "=== LaunchDaemon org.hermes.tailscale.sshd (Hermes sshd -D) ==="
 launchctl print system/org.hermes.tailscale.sshd 2>&1 | head -25 || echo "(not loaded — sshd may not bind custom Port/ListenAddress)"
 
 echo ""
+echo "=== LaunchDaemon org.hermes.tailscale-ssh-listen-refresh (TS ListenAddress auto-refresh) ==="
+launchctl print system/org.hermes.tailscale-ssh-listen-refresh 2>&1 | head -25 || echo "(not loaded — install with operator_mini_install_tailscale_listenaddress_watch.sh)"
+
+echo ""
 echo "=== socketfilterfw global (Application Firewall) ==="
 FW="/usr/libexec/ApplicationFirewall/socketfilterfw"
 "$FW" --getglobalstate 2>/dev/null || true
@@ -73,6 +77,7 @@ echo ""
 echo "=== FIX HINTS ==="
 echo "1) If ListenAddress TS IP ≠ tailscale ip -4: re-run macmini_apply_sshd_tailscale_only.sh (see repo) or edit drop-in to match, then kickstart sshd."
 echo "2) If nothing listens on 52822: sudo launchctl bootstrap system /Library/LaunchDaemons/org.hermes.tailscale.sshd.plist"
+echo "   If TS IP changes frequently: sudo bash memory/core/scripts/core/operator_mini_install_tailscale_listenaddress_watch.sh"
 echo "3) Firewall enabled + TCP timeout from laptop: run (from repo on mini):"
 echo "     sudo bash memory/core/scripts/core/operator_mini_fix_sshd_incoming_firewall.sh"
 echo "   Or System Settings → Network → Firewall → Options → allow incoming for sshd."
