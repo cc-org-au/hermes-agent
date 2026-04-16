@@ -167,6 +167,20 @@ def _reserved_builtin_command_keys() -> set[str]:
     return reserved
 
 
+def _reserved_builtin_command_namespaces() -> set[str]:
+    """Return built-in command keys that reserve a /command-* skill namespace."""
+    try:
+        from hermes_cli.commands import COMMAND_REGISTRY
+    except Exception:
+        return set()
+
+    reserved: set[str] = set()
+    for cmd in COMMAND_REGISTRY:
+        if cmd.reserve_skill_namespace:
+            reserved.add(f"/{cmd.name}")
+    return reserved
+
+
 def scan_skill_commands() -> Dict[str, Dict[str, Any]]:
     """Scan ~/.hermes/skills/ and return a mapping of /command -> skill info.
 
@@ -180,6 +194,7 @@ def scan_skill_commands() -> Dict[str, Dict[str, Any]]:
         from agent.skill_utils import get_external_skills_dirs
         disabled = _get_disabled_skill_names()
         reserved_commands = _reserved_builtin_command_keys()
+        reserved_namespaces = _reserved_builtin_command_namespaces()
         seen_names: set = set()
 
         # Scan local dir first, then external dirs
@@ -213,6 +228,8 @@ def scan_skill_commands() -> Dict[str, Dict[str, Any]]:
                                 break
                     cmd_key = f"/{name.lower().replace(' ', '-').replace('_', '-')}"
                     if cmd_key in reserved_commands:
+                        continue
+                    if any(cmd_key.startswith(f"{prefix}-") for prefix in reserved_namespaces):
                         continue
                     seen_names.add(name)
                     _skill_commands[cmd_key] = {

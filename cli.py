@@ -4916,10 +4916,7 @@ class HermesCLI:
         elif canonical == "autoresearch":
             self._handle_autoresearch_command(cmd_original)
         elif canonical == "paperclip":
-            from hermes_cli.integration_repos import format_paperclip_message
-            from rich.markdown import Markdown
-
-            self.console.print(Markdown(format_paperclip_message(cmd_original, load_cli_config())))
+            self._handle_paperclip_command(cmd_original)
         else:
             # Check for user-defined quick commands (bypass agent loop, no LLM call)
             base_cmd = cmd_lower.split()[0]
@@ -5064,7 +5061,7 @@ class HermesCLI:
 
         if not user_arg:
             self._pending_autoresearch = {"started": time.time()}
-            self._print_autoresearch_notice(
+            self._print_plain_notice(
                 format_autoresearch_capture_prompt(load_cli_config())
             )
             return
@@ -5078,14 +5075,49 @@ class HermesCLI:
             return
 
         if lowered in {"show", "path"}:
-            self._print_autoresearch_notice(
+            self._print_plain_notice(
                 format_autoresearch_target_message(load_cli_config())
             )
             return
 
         self._launch_autoresearch_background_run(user_arg)
 
-    def _print_autoresearch_notice(self, text: str) -> None:
+    def _handle_paperclip_command(self, cmd: str):
+        """Handle /paperclip — load the installed Paperclip skill."""
+        from hermes_cli.paperclip_flow import (
+            build_paperclip_skill_message,
+            format_paperclip_target_message,
+        )
+
+        parts = cmd.strip().split(maxsplit=1)
+        user_arg = parts[1].strip() if len(parts) > 1 else ""
+        lowered = user_arg.lower()
+
+        if lowered in {"show", "path", "help", "?"}:
+            self._print_plain_notice(
+                format_paperclip_target_message(load_cli_config())
+            )
+            return
+
+        try:
+            msg = build_paperclip_skill_message(
+                user_instruction=user_arg,
+                task_id=self.session_id,
+                config=load_cli_config(),
+            )
+        except Exception as e:
+            self._print_plain_notice(f"Paperclip setup failed: {e}")
+            return
+
+        _cprint("  Paperclip session loaded.")
+        if hasattr(self, "_pending_input"):
+            self._pending_input.put(msg)
+        else:
+            self.console.print(
+                "[bold red]Paperclip session unavailable: input queue not initialized[/]"
+            )
+
+    def _print_plain_notice(self, text: str) -> None:
         self.console.print()
         for line in str(text or "").splitlines():
             if line.strip():

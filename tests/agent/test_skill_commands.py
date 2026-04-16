@@ -108,6 +108,15 @@ class TestScanSkillCommands:
 
         assert "/autoresearch" not in result
 
+    def test_hides_skill_namespaced_under_reserved_builtin_command(self, tmp_path):
+        with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
+            _make_skill(tmp_path, "paperclip-create-agent")
+            _make_skill(tmp_path, "paperclip-create-plugin")
+            result = scan_skill_commands()
+
+        assert "/paperclip-create-agent" not in result
+        assert "/paperclip-create-plugin" not in result
+
 
 class TestBuildPreloadedSkillsPrompt:
     def test_builds_prompt_for_multiple_named_skills(self, tmp_path):
@@ -185,6 +194,16 @@ Generate some audio.
         assert msg is not None
         assert "autoresearch" in msg
         assert "do stuff" in msg
+
+    def test_explicit_loader_can_still_load_hidden_builtin_namespace_skill(self, tmp_path):
+        with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
+            skill_dir = _make_skill(tmp_path, "paperclip-create-agent")
+            scan_skill_commands()
+            msg = build_explicit_skill_invocation_message(str(skill_dir), "make a CTO")
+
+        assert msg is not None
+        assert "paperclip-create-agent" in msg
+        assert "make a CTO" in msg
 
     def test_uses_shared_skill_loader_for_secure_setup(self, tmp_path, monkeypatch):
         monkeypatch.delenv("TENOR_API_KEY", raising=False)

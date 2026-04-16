@@ -7,10 +7,12 @@
 # Usage:
 #   ./run_append_operator_authorized_key_on_mini.sh
 #       Push script if needed, then open interactive append on the mini (TTY).
+#   ./run_append_operator_authorized_key_on_mini.sh 'ssh-ed25519 AAAA...'
+#       Non-interactive: append a plain unrestricted pubkey line to operator's authorized_keys.
 #   ./run_append_operator_authorized_key_on_mini.sh 'from="100.x/32" ssh-ed25519 AAAA...'
 #       Non-interactive: append that exact line to operator's authorized_keys on the mini.
 #   ./run_append_operator_authorized_key_on_mini.sh 'ssh-ed25519 AAAA...' '100.x.x.x/32'
-#       Non-interactive: pubkey + from CIDR.
+#       Non-interactive: pubkey + optional from CIDR.
 #
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

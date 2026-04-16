@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Shared logic for operator SSH collaborator onboarding (sourced by .command / .sh).
-# Uses this machine's Tailscale IPv4 /32 for sshd "from=" so the same private key
-# does not work from another tailnet device (different 100.x source at sshd).
-# Connect to the mini using its Tailscale IP (HERMES_OPERATOR_ACCESS_HOST), not LAN IP.
+# Collaborator keys normally connect to the mini using its Tailscale IP
+# (HERMES_OPERATOR_ACCESS_HOST). A generator may optionally store a sshd from="CIDR"
+# restriction, but unrestricted pubkeys are also supported for "grant once" access.
 
 HERMES_OP_ACCESS_CONFIG="${HOME}/.ssh/.hermes_operator_access_env"
 

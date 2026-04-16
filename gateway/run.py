@@ -2162,6 +2162,28 @@ class GatewayRunner:
             except Exception as e:
                 logger.exception("Failed to prepare /plan command")
                 return f"Failed to enter plan mode: {e}"
+
+        if canonical == "paperclip":
+            try:
+                from hermes_cli.paperclip_flow import (
+                    build_paperclip_skill_message,
+                    format_paperclip_target_message,
+                )
+
+                user_instruction = event.get_command_args().strip()
+                lowered = user_instruction.lower()
+                if lowered in {"show", "path", "help", "?"}:
+                    return format_paperclip_target_message(_load_gateway_config())
+
+                event.text = build_paperclip_skill_message(
+                    user_instruction=user_instruction,
+                    task_id=_quick_key,
+                    config=_load_gateway_config(),
+                )
+                canonical = None
+            except Exception as e:
+                logger.exception("Failed to prepare /paperclip command")
+                return f"Failed to start Paperclip session: {e}"
         
         if canonical == "retry":
             return await self._handle_retry_command(event)
@@ -2213,9 +2235,6 @@ class GatewayRunner:
 
         if canonical == "voice":
             return await self._handle_voice_command(event)
-
-        if canonical == "paperclip":
-            return await self._handle_paperclip_command(event)
 
         if canonical == "autoresearch":
             return await self._handle_autoresearch_command(event)
@@ -3969,13 +3988,6 @@ class GatewayRunner:
                 if adapter:
                     self._set_adapter_auto_tts_disabled(adapter, chat_id, disabled=True)
                 return "Voice mode disabled."
-
-    async def _handle_paperclip_command(self, event: MessageEvent) -> str:
-        """Handle /paperclip — cc-org-au/paperclip quickstart hints."""
-        from hermes_cli.integration_repos import format_paperclip_message
-
-        cfg = _load_gateway_config()
-        return format_paperclip_message((event.text or "").strip(), cfg)
 
     async def _handle_autoresearch_command(self, event: MessageEvent) -> str | None:
         """Handle /autoresearch — capture program.md instructions, then load the skill."""

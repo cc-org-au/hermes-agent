@@ -4,12 +4,14 @@
 #
 # Usage:
 #   bash append_operator_authorized_key.sh
-#       Interactive: paste pubkey line, then from= CIDR (e.g. 100.109.37.89/32) or empty.
+#       Interactive: paste pubkey line, then optionally paste from= CIDR (or press Enter for no restriction).
+#   bash append_operator_authorized_key.sh 'ssh-ed25519 AAAA...comment'
+#       One argument: append a plain unrestricted pubkey line.
 #   bash append_operator_authorized_key.sh 'FULL_LINE'
-#       One argument: the exact single line the collaborator script printed (may already include
+#       One argument: append the exact single line the collaborator script printed (may already include
 #       from="100.x.x.x/32" ssh-ed25519 AAAA...).
 #   bash append_operator_authorized_key.sh 'ssh-ed25519 AAAA...comment' '100.109.37.89/32'
-#       Two arguments: pubkey line only, then CIDR for from= (no quotes in CIDR).
+#       Two arguments: pubkey line only, then CIDR for optional from= restriction (no quotes in CIDR).
 #
 set -euo pipefail
 AUTH="${HOME}/.ssh/authorized_keys"

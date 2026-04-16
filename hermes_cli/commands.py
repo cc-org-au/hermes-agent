@@ -37,6 +37,7 @@ class CommandDef:
     cli_only: bool = False             # only available in CLI
     gateway_only: bool = False         # only available in gateway/messaging
     gateway_config_gate: str | None = None  # config dotpath; when truthy, overrides cli_only for gateway
+    reserve_skill_namespace: bool = False  # hide /command-* skill descendants behind this built-in namespace
 
 
 # ---------------------------------------------------------------------------
@@ -146,10 +147,11 @@ COMMAND_REGISTRY: list[CommandDef] = [
                "Tools & Skills", cli_only=True),
     CommandDef(
         "paperclip",
-        "Paperclip (cc-org-au/paperclip): org orchestration — onboard, configure, dev",
+        "Paperclip runtime flow: load the installed Paperclip skill for this profile",
         "Tools & Skills",
-        args_hint="[help|onboard|configure|dev]",
-        subcommands=("help", "onboard", "configure", "dev"),
+        args_hint="[show|agent|plugin|<instruction>]",
+        subcommands=("show", "agent", "plugin"),
+        reserve_skill_namespace=True,
     ),
     CommandDef(
         "autoresearch",

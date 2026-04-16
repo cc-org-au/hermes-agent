@@ -47,6 +47,10 @@ class TestCommandRegistry:
         entry = next(cmd for cmd in COMMAND_REGISTRY if cmd.name == "autoresearch")
         assert entry.subcommands == ("show", "cancel")
 
+    def test_paperclip_is_a_runtime_command_with_show_escape_hatch(self):
+        entry = next(cmd for cmd in COMMAND_REGISTRY if cmd.name == "paperclip")
+        assert entry.subcommands == ("show", "agent", "plugin")
+
     def test_no_duplicate_canonical_names(self):
         names = [cmd.name for cmd in COMMAND_REGISTRY]
         assert len(names) == len(set(names)), f"Duplicate names: {[n for n in names if names.count(n) > 1]}"
