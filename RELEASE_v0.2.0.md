@@ -218,7 +218,7 @@
 - **Domain Intelligence** — Passive recon: subdomains, SSL, WHOIS, DNS ([#136](https://github.com/NousResearch/hermes-agent/pull/136)) — @FurkanL0
 - **Superpowers** — Software development skills ([#137](https://github.com/NousResearch/hermes-agent/pull/137)) — @kaos35
 - **Hermes-Atropos** — RL environment development skill ([#815](https://github.com/NousResearch/hermes-agent/pull/815))
-- Plus: arXiv search, OCR/documents, Excalidraw diagrams, YouTube transcripts, GIF search, Pokémon player, Minecraft modpack server, OpenHue (Philips Hue), Google Workspace, Notion, PowerPoint, Obsidian, find-nearby, and 40+ MLOps skills
+- Plus: arXiv search, OCR/documents, Excalidraw diagrams, YouTube transcripts, GIF search, Pokémon player, Minecraft modpack server, OpenHue (Philips Hue), Google Workspace, Notion, PowerPoint, find-nearby, and 40+ MLOps skills
 
 ---
 

@@ -223,14 +223,6 @@ Vector similarity search and embedding databases for RAG, semantic search, and A
 | `pinecone` | Managed vector database for production AI applications. Fully managed, auto-scaling, with hybrid search (dense + sparse), metadata filtering, and namespaces. Low latency (&lt;100ms p95). Use for production RAG, recommendation systems, or semantic search at scale. Best for server… | `mlops/vector-databases/pinecone` |
 | `qdrant-vector-search` | High-performance vector similarity search engine for RAG and semantic search. Use when building production RAG systems requiring fast nearest neighbor search, hybrid search with filtering, or scalable vector storage with Rust-powered performance. | `mlops/vector-databases/qdrant` |
 
-## note-taking
-
-Note taking skills, to save information, assist with research, and collab on multi-session planning and information sharing.
-
-| Skill | Description | Path |
-|-------|-------------|------|
-| `obsidian` | Read, search, and create notes in the Obsidian vault. | `note-taking/obsidian` |
-
 ## productivity
 
 Skills for document creation, presentations, spreadsheets, and other productivity workflows.

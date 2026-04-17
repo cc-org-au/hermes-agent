@@ -7,7 +7,7 @@ license: MIT
 metadata:
   hermes:
     tags: [SiYuan, Notes, Knowledge Base, PKM, API]
-    related_skills: [obsidian, notion]
+    related_skills: [notion]
     homepage: https://github.com/siyuan-note/siyuan
 prerequisites:
   env_vars: [SIYUAN_TOKEN]
