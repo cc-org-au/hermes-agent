@@ -50,6 +50,13 @@ _HERMES_CORE_TOOLS = [
     "text_to_speech",
     # Planning & memory
     "todo", "memory",
+    # Cloud memory integrations (LangSmith/LangMem/Zep/Letta)
+    "langsmith_workspace_info",
+    "langmem_semantic_memory",
+    "zep_knowledge_search",
+    "zep_user_ensure",
+    "letta_memory_turn",
+    "letta_memory_blocks",
     # Session history search
     "session_search",
     # Clarifying questions
