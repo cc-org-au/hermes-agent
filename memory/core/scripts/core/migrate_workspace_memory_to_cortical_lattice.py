@@ -212,6 +212,8 @@ def main() -> int:
 
     stamp = args.stamp.strip() or _utc_stamp()
 
+    already_migrated = (mem_root / "CORTICAL_LATTICE_MEMORY.md").is_file()
+
     # --- Pre-inventory (exact absolute paths)
     pre_inventory = []
     pre_inventory.extend(_list_files(mem_root))
@@ -220,42 +222,64 @@ def main() -> int:
     pre_inventory.extend(_list_files(hermes_home / "runtime"))
     pre_inventory = sorted(dict.fromkeys(pre_inventory))
 
-    # --- Archive legacy content (surgical + reversible)
-    archive_root = mem_root / "legacy-archive" / f"pre-cortical-{stamp}"
-    _ensure_dir(archive_root)
+    # --- Determine legacy archive root
+    legacy_archive_dir = mem_root / "legacy-archive"
+    _ensure_dir(legacy_archive_dir)
+
+    def _latest_pre_cortical() -> Path | None:
+        try:
+            cands = [p for p in legacy_archive_dir.glob("pre-cortical-*") if p.is_dir()]
+            if not cands:
+                return None
+            return sorted(cands, key=lambda p: p.name)[-1]
+        except Exception:
+            return None
+
+    archive_root: Path
+    if already_migrated:
+        # Idempotent rerun: do NOT move/overwrite current cortex tree.
+        # Use the most recent archive as the legacy source for wiring/mapping.
+        _latest = _latest_pre_cortical()
+        archive_root = _latest or (legacy_archive_dir / f"pre-cortical-{stamp}")
+        _ensure_dir(archive_root)
+    else:
+        archive_root = legacy_archive_dir / f"pre-cortical-{stamp}"
+        _ensure_dir(archive_root)
+
     mappings: list[MappingRow] = []
 
-    # Move legacy top-level dirs into archive (if present)
-    for d in LEGACY_TOP_DIRS:
-        src = mem_root / d
-        if src.exists():
-            dst = archive_root / d
-            _safe_move(src, dst)
-            mappings.append(
-                MappingRow(
-                    old_path=str(src),
-                    new_path=str(dst),
-                    layer="legacy-archive",
-                    residency="archived",
-                    note="Archived whole legacy subtree before creating Cortical layers.",
+    if not already_migrated:
+        # Move legacy top-level dirs into archive (if present)
+        for d in LEGACY_TOP_DIRS:
+            src = mem_root / d
+            if src.exists():
+                dst = archive_root / d
+                _safe_move(src, dst)
+                mappings.append(
+                    MappingRow(
+                        old_path=str(src),
+                        new_path=str(dst),
+                        layer="legacy-archive",
+                        residency="archived",
+                        note="Archived whole legacy subtree before creating Cortical layers.",
+                    )
                 )
-            )
 
-    # Move existing root anchors into archive (if present)
-    for name in ROOT_ANCHORS:
-        src = mem_root / name
-        if src.exists():
-            dst = archive_root / "root-anchors" / name
-            _safe_move(src, dst)
-            mappings.append(
-                MappingRow(
-                    old_path=str(src),
-                    new_path=str(dst),
-                    layer="legacy-archive",
-                    residency="archived",
-                    note="Archived prior root anchor before replacing with Cortical stub.",
+        # Move existing root anchors into archive (if present)
+        for name in ROOT_ANCHORS:
+            src = mem_root / name
+            if src.exists():
+                dst = archive_root / "root-anchors" / name
+                _safe_move(src, dst)
+                mappings.append(
+                    MappingRow(
+                        old_path=str(src),
+                        new_path=str(dst),
+                        layer="legacy-archive",
+                        residency="archived",
+                        note="Archived prior root anchor before replacing with Cortical stub.",
+                    )
                 )
-            )
 
     # Ensure scaffold exists by importing the scaffold script from the repo if available.
     # We load the known scaffolder script that ships next to this file.
@@ -306,17 +330,31 @@ Use `INFRASTRUCTURE.md` for the authoritative pre/post inventories and mapping t
     if not args.no_copy:
         legacy = archive_root
 
-        # Working memory: runtime/state/*
-        _safe_copytree(legacy / "runtime" / "state", mem_root / "working-memory" / "_legacy_runtime_state")
-        if (legacy / "runtime" / "state" / "current-focus.md").exists():
-            _safe_copy2(
-                legacy / "runtime" / "state" / "current-focus.md",
-                mem_root / "working-memory" / "_legacy_current-focus.md",
-            )
+        def _map_copy(old: Path, new: Path, layer: str, note: str) -> None:
             mappings.append(
                 MappingRow(
-                    old_path=str(mem_root / "runtime" / "state" / "current-focus.md"),
-                    new_path=str(mem_root / "working-memory" / "_legacy_current-focus.md"),
+                    old_path=str(old),
+                    new_path=str(new),
+                    layer=layer,
+                    residency="selective",
+                    note=note,
+                )
+            )
+
+        # Working memory: runtime/state/*
+        src = legacy / "runtime" / "state"
+        dst = mem_root / "working-memory" / "_legacy_runtime_state"
+        _safe_copytree(src, dst)
+        if src.exists():
+            _map_copy(src, dst, "working-memory", "Legacy working-state mirror (runtime/state) for selective reference.")
+        if (legacy / "runtime" / "state" / "current-focus.md").exists():
+            src_cf = legacy / "runtime" / "state" / "current-focus.md"
+            dst_cf = mem_root / "working-memory" / "_legacy_current-focus.md"
+            _safe_copy2(src_cf, dst_cf)
+            mappings.append(
+                MappingRow(
+                    old_path=str(src_cf),
+                    new_path=str(dst_cf),
                     layer="working-memory",
                     residency="selective",
                     note="Seed working memory from legacy runtime/state (kept as legacy mirror until normalized).",
@@ -324,32 +362,55 @@ Use `INFRASTRUCTURE.md` for the authoritative pre/post inventories and mapping t
             )
 
         # Skill atlas: runtime/tasks/procedures and workspace skills
-        _safe_copytree(
-            legacy / "runtime" / "tasks" / "procedures",
-            mem_root / "skill-atlas" / "references" / "legacy-procedures",
-        )
-        _safe_copytree(legacy / "skills", mem_root / "skill-atlas" / "legacy-workspace-skills")
+        src = legacy / "runtime" / "tasks" / "procedures"
+        dst = mem_root / "skill-atlas" / "references" / "legacy-procedures"
+        _safe_copytree(src, dst)
+        if src.exists():
+            _map_copy(src, dst, "skill-atlas", "Legacy procedures mirror (runtime/tasks/procedures) for future promotion into skills.")
+
+        src = legacy / "skills"
+        dst = mem_root / "skill-atlas" / "legacy-workspace-skills"
+        _safe_copytree(src, dst)
+        if src.exists():
+            _map_copy(src, dst, "skill-atlas", "Legacy workspace skills mirror (pre-migration workspace/memory/skills).")
 
         # Observability / episodic: sessions and runtime/logs are outside workspace/memory;
         # we mirror pointers only (infra inventory captures them as canonical evidence).
 
         # Social/role: actors/persona
-        _safe_copytree(legacy / "actors" / "persona", mem_root / "social-role-memory" / "persona" / "legacy-persona")
+        src = legacy / "actors" / "persona"
+        dst = mem_root / "social-role-memory" / "persona" / "legacy-persona"
+        _safe_copytree(src, dst)
+        if src.exists():
+            _map_copy(src, dst, "social-role-memory", "Legacy persona mirror (actors/persona).")
 
         # Semantic graph mirrors: knowledge/*
-        _safe_copytree(legacy / "knowledge", mem_root / "semantic-graph" / "graph-mirror" / "legacy-knowledge")
+        src = legacy / "knowledge"
+        dst = mem_root / "semantic-graph" / "graph-mirror" / "legacy-knowledge"
+        _safe_copytree(src, dst)
+        if src.exists():
+            _map_copy(src, dst, "semantic-graph", "Legacy knowledge mirror for semantic graph scaffolding and future Zep sync.")
 
         # Doctrine: governance/*
-        _safe_copytree(legacy / "governance", mem_root / "reflective-doctrine" / "legacy-governance")
+        src = legacy / "governance"
+        dst = mem_root / "reflective-doctrine" / "legacy-governance"
+        _safe_copytree(src, dst)
+        if src.exists():
+            _map_copy(src, dst, "reflective-doctrine", "Legacy governance/doctrine mirror (pre-migration governance subtree).")
 
         # Bootstrap: runtime/tasks/templates
-        _safe_copytree(
-            legacy / "runtime" / "tasks" / "templates",
-            mem_root / "bootstrap" / "templates" / "legacy-templates",
-        )
+        src = legacy / "runtime" / "tasks" / "templates"
+        dst = mem_root / "bootstrap" / "templates" / "legacy-templates"
+        _safe_copytree(src, dst)
+        if src.exists():
+            _map_copy(src, dst, "bootstrap", "Legacy templates mirror (runtime/tasks/templates).")
 
         # Core: canonical paths doc, etc.
-        _safe_copytree(legacy / "core", mem_root / "indexes" / "legacy-core")
+        src = legacy / "core"
+        dst = mem_root / "indexes" / "legacy-core"
+        _safe_copytree(src, dst)
+        if src.exists():
+            _map_copy(src, dst, "indexes", "Legacy core/index material mirror (pre-migration core subtree).")
 
     # Write/refresh INFRASTRUCTURE.md after the archive + copyback
     infra_path = mem_root / "INFRASTRUCTURE.md"
