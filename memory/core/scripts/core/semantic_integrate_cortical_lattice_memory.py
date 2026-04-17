@@ -12,6 +12,16 @@ Outputs:
 - ``workspace/memory/MIGRATION_MAP.md`` — human-readable map
 - ``workspace/memory/migration_manifest.jsonl`` — machine-readable one record per file
 - Refreshed per-layer ``MANIFEST.md`` stubs that describe *populated* layout
+
+Classification:
+- Path-based rules first; then YAML frontmatter (``memory_layer``, ``cortical_layer``, …) and
+  keyword heuristics for ``misc-import`` (see ``cortical_lattice_classify.py``).
+
+Root anchors:
+- Prior anchor bodies are embedded in full by default (``--root-anchor-max-chars 0``).
+
+Optional:
+- ``--promote-procedure-skills`` runs ``promote_procedure_skills.py`` to emit ``SKILL.md`` bundles.
 """
 
 from __future__ import annotations
@@ -21,10 +31,18 @@ import hashlib
 import json
 import shutil
 import sys
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
+
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+from cortical_lattice_classify import (  # noqa: E402
+    ClassifyResult,
+    refine_classification,
+)
 
 
 def _utc_iso() -> str:
@@ -66,14 +84,6 @@ def _strip_prefix(rel: str, prefix: str) -> Path:
     if r.lower().startswith(pfx.lower()):
         return Path(r[len(pfx) :])
     return Path(r)
-
-
-@dataclass
-class ClassifyResult:
-    layer: str
-    dest: Path
-    role: str
-    note: str = ""
 
 
 def classify_path(mem_root: Path, source_root: Path, path: Path) -> ClassifyResult:
@@ -290,14 +300,28 @@ def _provenance_header(*, source: Path, role: str, note: str) -> str:
     )
 
 
-def _merge_root_anchors(mem_root: Path, roots_dir: Path) -> None:
-    """Rebuild live root anchors from archived root-anchors/*.md (concise but substantive)."""
+def _maybe_truncate_section(s: str, max_chars: int) -> str:
+    """If ``max_chars`` is 0, return full text; otherwise cap with a visible marker."""
+    s = (s or "").strip()
+    if max_chars <= 0 or len(s) <= max_chars:
+        return s
+    return s[:max_chars] + "\n\n[... truncated: use --root-anchor-max-chars 0 for full text ...]\n"
+
+
+def _merge_root_anchors(mem_root: Path, roots_dir: Path, *, max_chars_per_section: int = 0) -> None:
+    """Rebuild live root anchors from archived root-anchors/*.md.
+
+    Default ``max_chars_per_section=0`` embeds prior-anchor bodies **in full** (no lossy excerpting).
+    """
     if not roots_dir.is_dir():
         return
 
     def load(name: str) -> str:
         p = roots_dir / name
         return _read_text(p) if p.is_file() else ""
+
+    def sec(title: str, content: str) -> str:
+        return f"## {title}\n\n{_maybe_truncate_section(content, max_chars_per_section)}\n"
 
     old_agents = load("AGENTS.md")
     old_memory = load("MEMORY.md")
@@ -307,39 +331,27 @@ def _merge_root_anchors(mem_root: Path, roots_dir: Path) -> None:
     old_compass = load("COMPASS.md")
     old_readme = load("README.md")
 
-    def clip(s: str, max_chars: int) -> str:
-        s = (s or "").strip()
-        if len(s) <= max_chars:
-            return s
-        return s[:max_chars] + "\n\n[... truncated during semantic migration ...]\n"
-
     ag = f"""# AGENTS.md (workspace/memory)
 
 ## Cortical Lattice — live routing
 
-This file was **rebuilt** from the pre-Cortical root anchors (see ``indexes/root-anchors-source/``) and now routes the agent through the lattice:
+This file was **rebuilt** from the pre-Cortical root anchors (see ``indexes/root-anchors-source/`` for byte-identical copies) and routes the agent through the lattice:
 
 - **Constitution (pinned rules):** ``constitution/CONSTITUTION.md`` + ``constitution/routing.md``
 - **Semantic knowledge:** ``semantic-graph/knowledge/`` (concepts, domains, references)
 - **Doctrine / governance:** ``reflective-doctrine/governance/``
 - **Persona / org memory:** ``social-role-memory/``
 - **Working state:** ``working-memory/``
-- **Procedures / skills:** ``skill-atlas/procedures/`` and ``skill-atlas/workspace-skills/``
+- **Procedures / skills:** ``skill-atlas/procedures/``, ``skill-atlas/promoted-skills/``, ``skill-atlas/workspace-skills/``
 - **Episodic imports:** ``episodic-ledger/imported/`` (chronological material pending promotion)
 - **Observability / registers:** ``observability/operations/``
 - **Migration map:** ``MIGRATION_MAP.md``
 
-## Prior AGENTS material (migrated excerpt)
+{sec("Prior AGENTS.md (full migrated body)", old_agents)}
 
-{clip(old_agents, 9000)}
+{sec("Prior MEMORY.md (embedded for routing continuity)", old_memory)}
 
-## Prior MEMORY routing (migrated excerpt)
-
-{clip(old_memory, 6000)}
-
-## Prior USER contract (migrated excerpt)
-
-{clip(old_user, 4000)}
+{sec("Prior USER.md (embedded)", old_user)}
 """
     _write_text(mem_root / "AGENTS.md", ag)
 
@@ -353,29 +365,23 @@ Persistent routing for **what to remember** and **where it lives** after semanti
 - Policies / standards / governance → ``reflective-doctrine/governance/``
 - Persona / roles / registers → ``social-role-memory/``
 - Live state → ``working-memory/``
-- Procedures → ``skill-atlas/procedures/``
+- Procedures → ``skill-atlas/procedures/`` and ``skill-atlas/promoted-skills/``
 - Failures / anti-patterns → ``hazard-memory/operations/`` (when applicable)
 - Open loops / queues → ``prospective-memory/operations/`` (when applicable)
 
-## Prior MEMORY.md (migrated excerpt)
-
-{clip(old_memory, 8000)}
+{sec("Prior MEMORY.md (full migrated body)", old_memory)}
 """
     _write_text(mem_root / "MEMORY.md", mem)
 
     user = f"""# USER.md (workspace/memory)
 
-## Prior USER.md (migrated excerpt)
-
-{clip(old_user, 8000)}
+{sec("Prior USER.md (full migrated body)", old_user)}
 """
     _write_text(mem_root / "USER.md", user)
 
     att = f"""# ATTENTION.md (workspace/memory)
 
-## Prior ATTENTION.md (migrated excerpt)
-
-{clip(old_attention, 8000)}
+{sec("Prior ATTENTION.md (full migrated body)", old_attention)}
 """
     _write_text(mem_root / "ATTENTION.md", att)
 
@@ -387,25 +393,19 @@ Persistent routing for **what to remember** and **where it lives** after semanti
 - **Manifest (jsonl):** ``migration_manifest.jsonl``
 - **Infrastructure snapshot:** ``INFRASTRUCTURE.md`` (may be large; use selective loading)
 
-## Prior INDEX.md (migrated excerpt)
-
-{clip(old_index, 12000)}
+{sec("Prior INDEX.md (full migrated body)", old_index)}
 """
     _write_text(mem_root / "INDEX.md", idx)
 
     comp = f"""# COMPASS.md (workspace/memory)
 
-## Prior COMPASS.md (migrated excerpt)
-
-{clip(old_compass, 6000)}
+{sec("Prior COMPASS.md (full migrated body)", old_compass)}
 """
     _write_text(mem_root / "COMPASS.md", comp)
 
-    readme = f"""# README (workspace/memory)
+    readme = f"""# README.md (workspace/memory)
 
-## Prior README.md (migrated excerpt)
-
-{clip(old_readme, 8000)}
+{sec("Prior README.md (full migrated body)", old_readme)}
 """
     _write_text(mem_root / "README.md", readme)
 
@@ -492,6 +492,22 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Also ingest duplicate mirror trees created by the first-pass migrator (usually unnecessary if archive is complete).",
     )
+    ap.add_argument(
+        "--root-anchor-max-chars",
+        type=int,
+        default=0,
+        help="Per-section cap when embedding prior root anchors (0 = full text, no truncation).",
+    )
+    ap.add_argument(
+        "--skip-content-refine",
+        action="store_true",
+        help="Disable YAML frontmatter + keyword refinement (path-only classification).",
+    )
+    ap.add_argument(
+        "--promote-procedure-skills",
+        action="store_true",
+        help="After migration, emit Cursor-style SKILL.md bundles under skill-atlas/promoted-skills/ from procedures/*.md.",
+    )
     args = ap.parse_args(argv)
 
     hermes_home = Path(args.hermes_home).expanduser().resolve()
@@ -536,6 +552,7 @@ def main(argv: list[str] | None = None) -> int:
 
     counts: dict[str, int] = {}
     seen_sources: set[str] = set()
+    promoted_skills_result: dict | None = None
 
     for src_root in extra_sources:
         for md in _iter_markdown_files(src_root):
@@ -544,10 +561,10 @@ def main(argv: list[str] | None = None) -> int:
                 continue
             seen_sources.add(src_key)
 
-            cls = classify_path(mem_root, src_root, md)
-            dest = cls.dest
-
             body = _read_text(md)
+            base_cls = classify_path(mem_root, src_root, md)
+            cls = base_cls if args.skip_content_refine else refine_classification(mem_root, src_root, md, body, base_cls)
+            dest = cls.dest
             header = _provenance_header(source=md, role=cls.role, note=cls.note)
             action = "dry-run"
             if not args.dry_run:
@@ -594,7 +611,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.dry_run:
         roots = primary_archive / "root-anchors"
-        _merge_root_anchors(mem_root, roots)
+        _merge_root_anchors(mem_root, roots, max_chars_per_section=args.root_anchor_max_chars)
         _write_constitution_snippets(mem_root, [primary_archive, mem_root / "semantic-graph" / "knowledge"])
         # Refresh CONSTITUTION.md pointer body if small file exists
         const = mem_root / "constitution" / "CONSTITUTION.md"
@@ -643,6 +660,8 @@ def main(argv: list[str] | None = None) -> int:
             "| `episodic-import` | episodic-ledger | `episodic-ledger/imported/` |",
             "| `case-record` | case-memory | `case-memory/cases/` |",
             "| `misc` | semantic-graph | `semantic-graph/misc-import/` |",
+            "| `content-frontmatter` | (declared in YAML) | `<layer>/imports/` |",
+            "| `content-keyword-*` | (heuristic) | `<layer>/content-autoclass/` |",
             "",
             "## Layer population counts (this run)",
             "",
@@ -662,6 +681,11 @@ def main(argv: list[str] | None = None) -> int:
             "",
         ]
         _write_text(mem_root / "MIGRATION_MAP.md", "\n".join(lines))
+
+        if args.promote_procedure_skills:
+            from promote_procedure_skills import promote as _promote_procedure_skills  # noqa: E402
+
+            promoted_skills_result = _promote_procedure_skills(mem_root, force=args.force, dry_run=False)
 
         bridge = mem_root / "legacy-archive" / "README-SEMANTIC-MIGRATION.md"
         _write_text(
@@ -683,6 +707,7 @@ def main(argv: list[str] | None = None) -> int:
                     "```bash",
                     "python3 memory/core/scripts/core/semantic_integrate_cortical_lattice_memory.py \\",
                     "  --hermes-home \"$HERMES_HOME\"",
+                    "# Optional: --promote-procedure-skills  --root-anchor-max-chars 50000",
                     "```",
                     "",
                     f"Primary snapshot used as source: `{primary_archive}`",
@@ -711,7 +736,10 @@ def main(argv: list[str] | None = None) -> int:
             except OSError:
                 pass
 
-    print(json.dumps({"ok": True, "dry_run": args.dry_run, "counts": counts, "primary_archive": str(primary_archive)}, indent=2))
+    out: dict = {"ok": True, "dry_run": args.dry_run, "counts": counts, "primary_archive": str(primary_archive)}
+    if promoted_skills_result is not None:
+        out["promoted_skills"] = promoted_skills_result
+    print(json.dumps(out, indent=2))
     return 0
 
 
