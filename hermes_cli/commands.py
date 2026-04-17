@@ -155,10 +155,9 @@ COMMAND_REGISTRY: list[CommandDef] = [
     ),
     CommandDef(
         "autoresearch",
-        "Autoresearch: (1) instructions, (2) total runtime (`default` or minutes), then background worker",
+        "Autoresearch: reply with instructions, then total runtime (`default` or minutes); optional first-arg show|cancel",
         "Tools & Skills",
-        args_hint="[show|cancel|<instructions>]",
-        subcommands=("show", "cancel"),
+        reserve_skill_namespace=True,
     ),
     # Info
     CommandDef("commands", "Browse all commands and skills (paginated)", "Info",

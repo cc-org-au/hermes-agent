@@ -1,9 +1,7 @@
 """
-Text helpers for /paperclip and /autoresearch slash commands.
+Text helpers for /paperclip slash commands and autoresearch repo path resolution.
 
-Upstream:
-  - https://github.com/cc-org-au/paperclip
-  - https://github.com/cc-org-au/autoresearch
+Upstream paperclip: https://github.com/cc-org-au/paperclip
 
 Repo roots are optional: ``integrations.paperclip.repo`` / ``integrations.autoresearch.repo``
 in config.yaml, or ``HERMES_PAPERCLIP_REPO`` / ``HERMES_AUTORESEARCH_REPO``.
@@ -15,7 +13,6 @@ import os
 from typing import Any, Mapping, Optional
 
 PAPERCLIP_REPO_URL = "https://github.com/cc-org-au/paperclip"
-AUTORESEARCH_REPO_URL = "https://github.com/cc-org-au/autoresearch"
 
 
 def _cfg_dict(config: Any) -> Mapping[str, Any]:
@@ -144,82 +141,4 @@ def format_paperclip_message(cmd_line: str, config: Optional[Mapping[str, Any]] 
     return (
         f"Unknown topic `{topic}`. Use: `/paperclip help|onboard|configure|dev`\n\n"
         + format_paperclip_message("/paperclip help", config)
-    )
-
-
-def format_autoresearch_message(cmd_line: str, config: Optional[Mapping[str, Any]] = None) -> str:
-    """Return help text for ``/autoresearch [help|prepare|train|files]``."""
-    topic = _first_topic(cmd_line, "autoresearch")
-    repo = resolve_autoresearch_repo(config)
-    hint = _repo_hint(repo, "autoresearch")
-
-    if topic in ("help", "h", "?"):
-        return "\n".join(
-            [
-                "**Autoresearch** — single-GPU nanochat-style training loop; agents edit `train.py`, "
-                "humans/agents tune `program.md`; `prepare.py` is fixed (data + tokenizer + eval helpers).",
-                f"Upstream: {AUTORESEARCH_REPO_URL}",
-                "",
-                "Each training run uses a **fixed ~5 minute** wall-clock budget; metric is **val_bpb** (lower is better).",
-                "",
-                "**Subcommands**",
-                "• `/autoresearch prepare` — one-time data + tokenizer (`uv run prepare.py`)",
-                "• `/autoresearch train` — one experiment (`uv run train.py`)",
-                "• `/autoresearch files` — which files matter",
-                "",
-                hint,
-            ]
-        )
-
-    if topic == "prepare":
-        lines = [
-            "**Autoresearch — prepare (one-time)**",
-            "",
-            "Requires Python 3.10+, [uv](https://github.com/astral-sh/uv) installed.",
-            "",
-            "```",
-            "uv sync",
-            "uv run prepare.py    # downloads data, trains BPE tokenizer (~minutes)",
-            "```",
-            "",
-            hint,
-        ]
-        if repo:
-            lines.extend(["", f"Example: `cd {repo} && uv sync && uv run prepare.py`"])
-        return "\n".join(lines)
-
-    if topic == "train":
-        lines = [
-            "**Autoresearch — train (one experiment)**",
-            "",
-            "```",
-            "uv run train.py",
-            "```",
-            "",
-            "After `prepare.py` completes. The agent is expected to iterate on **`train.py`** only; "
-            "**`program.md`** steers the research agent.",
-            "",
-            hint,
-        ]
-        if repo:
-            lines.extend(["", f"Example: `cd {repo} && uv run train.py`"])
-        return "\n".join(lines)
-
-    if topic in ("files", "structure", "layout"):
-        return "\n".join(
-            [
-                "**Autoresearch — key files**",
-                "",
-                "• **`prepare.py`** — constants, one-time data prep, dataloader/eval utilities (do not modify by convention).",
-                "• **`train.py`** — model + optimizer + training loop (what the coding agent edits).",
-                "• **`program.md`** — research instructions / agent context (human + agent).",
-                "• **`pyproject.toml` / `uv.lock`** — dependencies (`uv sync`).",
-                "",
-                hint,
-            ]
-        )
-
-    return (
-        f"Unknown topic `{topic}`. Use: `/autoresearch help|prepare|train|files`\n\n"
-        + format_autoresearch_message("/autoresearch help", config)
     )

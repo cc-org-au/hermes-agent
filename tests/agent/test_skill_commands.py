@@ -117,6 +117,13 @@ class TestScanSkillCommands:
         assert "/paperclip-create-agent" not in result
         assert "/paperclip-create-plugin" not in result
 
+    def test_hides_autoresearch_prefixed_skills_under_reserved_namespace(self, tmp_path):
+        with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
+            _make_skill(tmp_path, "autoresearch-extra")
+            result = scan_skill_commands()
+
+        assert "/autoresearch-extra" not in result
+
 
 class TestBuildPreloadedSkillsPrompt:
     def test_builds_prompt_for_multiple_named_skills(self, tmp_path):

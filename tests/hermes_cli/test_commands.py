@@ -43,9 +43,10 @@ class TestCommandRegistry:
         for entry in COMMAND_REGISTRY:
             assert isinstance(entry, CommandDef), f"Unexpected type: {type(entry)}"
 
-    def test_autoresearch_is_a_runtime_command_without_bootstrap_subcommand(self):
+    def test_autoresearch_is_single_builtin_with_reserved_namespace(self):
         entry = next(cmd for cmd in COMMAND_REGISTRY if cmd.name == "autoresearch")
-        assert entry.subcommands == ("show", "cancel")
+        assert entry.subcommands == ()
+        assert entry.reserve_skill_namespace is True
 
     def test_paperclip_is_a_runtime_command_with_show_escape_hatch(self):
         entry = next(cmd for cmd in COMMAND_REGISTRY if cmd.name == "paperclip")
