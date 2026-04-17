@@ -55,8 +55,13 @@ _HERMES_CORE_TOOLS = [
     "langmem_semantic_memory",
     "zep_knowledge_search",
     "zep_user_ensure",
+    "zep_session_create",
+    "zep_session_add",
+    "zep_memory_get",
     "letta_memory_turn",
     "letta_memory_blocks",
+    "letta_agent_ensure",
+    "letta_block_update",
     # Session history search
     "session_search",
     # Clarifying questions

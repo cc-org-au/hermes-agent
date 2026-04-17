@@ -427,6 +427,94 @@ def _zep_user_ensure(user_id: str = "", **kw: Any) -> str:
         return json.dumps({"success": False, "error": str(e)})
 
 
+def _zep_session_create_impl(args: Dict[str, Any]) -> Dict[str, Any]:
+    key = _zep_key()
+    if not key:
+        return {"success": False, "error": "Missing ZEP_API_KEY_* for this host."}
+    session_id = str(args.get("session_id") or "").strip()
+    if not session_id:
+        return {"success": False, "error": "session_id required"}
+    user_id = (
+        (str(args.get("user_id") or "") or os.environ.get("ZEP_DEFAULT_USER_ID") or "hermes-default")
+        .strip()
+    )
+    try:
+        from zep_cloud.client import Zep
+
+        z = Zep(api_key=key)
+        z.memory.add_session(session_id=session_id, user_id=user_id)
+        return {"success": True, "session_id": session_id, "user_id": user_id}
+    except Exception as e:
+        logger.exception("zep_session_create")
+        return {"success": False, "error": str(e)}
+
+
+def _zep_session_add_impl(args: Dict[str, Any]) -> Dict[str, Any]:
+    key = _zep_key()
+    if not key:
+        return {"success": False, "error": "Missing ZEP_API_KEY_* for this host."}
+    session_id = str(args.get("session_id") or "").strip()
+    if not session_id:
+        return {"success": False, "error": "session_id required"}
+    user_id = (
+        (str(args.get("user_id") or "") or os.environ.get("ZEP_DEFAULT_USER_ID") or "hermes-default")
+        .strip()
+    )
+    messages = args.get("messages") or []
+    if not isinstance(messages, list) or not messages:
+        return {"success": False, "error": "messages must be a non-empty list"}
+    try:
+        from zep_cloud.client import Zep
+        from zep_cloud.types import Message
+
+        z = Zep(api_key=key)
+        # Ensure session exists
+        try:
+            z.memory.add_session(session_id=session_id, user_id=user_id)
+        except Exception:
+            pass
+        zmsgs = []
+        for m in messages:
+            if not isinstance(m, dict):
+                continue
+            role_type = (m.get("role_type") or "").strip() or "user"
+            content = (m.get("content") or "").strip()
+            if not content:
+                continue
+            role = (m.get("role") or "").strip() or ("Hermes" if role_type == "assistant" else "User")
+            zmsgs.append(Message(role=role, role_type=role_type, content=content))
+        if not zmsgs:
+            return {"success": False, "error": "no valid messages"}
+        z.memory.add(session_id, messages=zmsgs)
+        return {"success": True, "session_id": session_id, "user_id": user_id, "message_count": len(zmsgs)}
+    except Exception as e:
+        logger.exception("zep_session_add")
+        return {"success": False, "error": str(e)}
+
+
+def _zep_memory_get_impl(args: Dict[str, Any]) -> Dict[str, Any]:
+    key = _zep_key()
+    if not key:
+        return {"success": False, "error": "Missing ZEP_API_KEY_* for this host."}
+    session_id = str(args.get("session_id") or "").strip()
+    if not session_id:
+        return {"success": False, "error": "session_id required"}
+    try:
+        from zep_cloud.client import Zep
+
+        z = Zep(api_key=key)
+        mem = z.memory.get(session_id=session_id)
+        ctx = getattr(mem, "context", None)
+        msgs = getattr(mem, "messages", None) or []
+        out_msgs = []
+        for m in msgs[:30]:
+            out_msgs.append({"role": getattr(m, "role", None), "content": getattr(m, "content", None)})
+        return {"success": True, "session_id": session_id, "context": ctx, "messages": out_msgs}
+    except Exception as e:
+        logger.exception("zep_memory_get")
+        return {"success": False, "error": str(e)}
+
+
 def _letta_memory_turn(message: str, agent_id: str = "", **kw: Any) -> str:
     key = _letta_key()
     if not key:
@@ -476,6 +564,41 @@ def _letta_memory_blocks(agent_id: str = "", **kw: Any) -> str:
         return json.dumps({"success": True, "agent_id": aid, "blocks": out})
     except Exception as e:
         logger.exception("letta_memory_blocks")
+        return json.dumps({"success": False, "error": str(e)})
+
+
+def _letta_agent_ensure_tool() -> str:
+    key = _letta_key()
+    if not key:
+        return json.dumps({"success": False, "error": "Missing LETTA_API_KEY_* for this host."})
+    try:
+        from letta_client import Letta
+
+        client = Letta(api_key=key)
+        aid = _read_or_create_letta_agent(client)
+        return json.dumps({"success": True, "agent_id": aid})
+    except Exception as e:
+        logger.exception("letta_agent_ensure")
+        return json.dumps({"success": False, "error": str(e)})
+
+
+def _letta_block_update_impl(args: Dict[str, Any]) -> str:
+    key = _letta_key()
+    if not key:
+        return json.dumps({"success": False, "error": "Missing LETTA_API_KEY_* for this host."})
+    label = str(args.get("block_label") or "").strip()
+    value = str(args.get("value") or "")
+    if not label:
+        return json.dumps({"success": False, "error": "block_label required"})
+    try:
+        from letta_client import Letta
+
+        client = Letta(api_key=key)
+        aid = (str(args.get("agent_id") or "").strip() or _read_or_create_letta_agent(client))
+        client.agents.blocks.update(agent_id=aid, block_label=label, value=value)
+        return json.dumps({"success": True, "agent_id": aid, "block_label": label})
+    except Exception as e:
+        logger.exception("letta_block_update")
         return json.dumps({"success": False, "error": str(e)})
 
 
@@ -604,6 +727,90 @@ registry.register(
 )
 
 registry.register(
+    name="zep_session_add",
+    toolset="memory_cloud",
+    schema={
+        "name": "zep_session_add",
+        "description": (
+            "Append messages into a Zep session (builds temporal memory + graph). "
+            "Creates the session first with zep_session_create if needed."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "session_id": {"type": "string", "description": "Session/thread id."},
+                "user_id": {"type": "string", "description": "Zep user id (default ZEP_DEFAULT_USER_ID)."},
+                "messages": {
+                    "type": "array",
+                    "description": "List of messages: {role, role_type ('user'|'assistant'), content}.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "role": {"type": "string"},
+                            "role_type": {"type": "string"},
+                            "content": {"type": "string"},
+                        },
+                        "required": ["role_type", "content"],
+                    },
+                },
+            },
+            "required": ["session_id", "messages"],
+        },
+    },
+    handler=lambda args, **kw: json.dumps(_zep_session_add_impl(args)),
+    check_fn=_check_zep,
+    requires_env=[],
+    description="Zep: add messages to a session.",
+    emoji="🧾",
+)
+
+
+registry.register(
+    name="zep_session_create",
+    toolset="memory_cloud",
+    schema={
+        "name": "zep_session_create",
+        "description": "Create a Zep session id for a user (thread container).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "session_id": {"type": "string"},
+                "user_id": {"type": "string"},
+            },
+            "required": ["session_id"],
+        },
+    },
+    handler=lambda args, **kw: json.dumps(_zep_session_create_impl(args)),
+    check_fn=_check_zep,
+    requires_env=[],
+    description="Zep: create session.",
+    emoji="🧵",
+)
+
+
+registry.register(
+    name="zep_memory_get",
+    toolset="memory_cloud",
+    schema={
+        "name": "zep_memory_get",
+        "description": "Fetch Zep memory context for a session (context string + recent messages).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "session_id": {"type": "string"},
+            },
+            "required": ["session_id"],
+        },
+    },
+    handler=lambda args, **kw: json.dumps(_zep_memory_get_impl(args)),
+    check_fn=_check_zep,
+    requires_env=[],
+    description="Zep: get memory context for session.",
+    emoji="🧠",
+)
+
+
+registry.register(
     name="zep_user_ensure",
     toolset="memory_cloud",
     schema={
@@ -622,6 +829,22 @@ registry.register(
     description="Zep user upsert.",
     emoji="👤",
 )
+
+registry.register(
+    name="letta_agent_ensure",
+    toolset="memory_cloud",
+    schema={
+        "name": "letta_agent_ensure",
+        "description": "Ensure the host-scoped Letta agent exists and return its agent_id.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    handler=lambda args, **kw: _letta_agent_ensure_tool(),
+    check_fn=_check_letta,
+    requires_env=[],
+    description="Letta: ensure memory agent exists.",
+    emoji="✅",
+)
+
 
 registry.register(
     name="letta_memory_turn",
@@ -670,4 +893,28 @@ registry.register(
     requires_env=[],
     description="Letta block snapshot.",
     emoji="📌",
+)
+
+
+registry.register(
+    name="letta_block_update",
+    toolset="memory_cloud",
+    schema={
+        "name": "letta_block_update",
+        "description": "Update a Letta memory block (pinned context) on the default agent.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "block_label": {"type": "string", "description": "e.g. 'human' or 'persona'."},
+                "value": {"type": "string", "description": "New block value."},
+                "agent_id": {"type": "string", "description": "Optional agent id override."},
+            },
+            "required": ["block_label", "value"],
+        },
+    },
+    handler=lambda args, **kw: _letta_block_update_impl(args),
+    check_fn=_check_letta,
+    requires_env=[],
+    description="Letta: update pinned memory block.",
+    emoji="✍️",
 )
