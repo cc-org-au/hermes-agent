@@ -11307,6 +11307,43 @@ class AIAgent:
                         final_msg = self._build_assistant_message(assistant_message, finish_reason)
         
                         messages.append(final_msg)
+
+                        # Autoresearch outer runtime: do not end the turn when the model returns
+                        # a "final" assistant message while wall-clock budget remains — inject a
+                        # continuation user message so the agent keeps iterating until the deadline.
+                        _wc_dead = getattr(self, "_wall_clock_deadline_monotonic", None)
+                        _ar_unbounded = (
+                            os.environ.get("HERMES_AUTORESEARCH_UNBOUNDED_ITERATIONS") == "1"
+                        )
+                        if (
+                            _wc_dead is not None
+                            and _ar_unbounded
+                            and time.monotonic() < _wc_dead
+                        ):
+                            _remain = int(_wc_dead - time.monotonic())
+                            if _remain > 10:
+                                self._emit_status(
+                                    f"[Autoresearch] ~{_remain // 60}m {_remain % 60}s wall time left — "
+                                    "continuing (no early stop while budget remains).",
+                                    "router_progress",
+                                )
+                                messages.append({
+                                    "role": "user",
+                                    "content": (
+                                        f"[Autoresearch system — outer runtime] Approximately {_remain // 60} minute(s) "
+                                        f"({_remain}s) remain before the hard wall-clock stop. "
+                                        "The autoresearch run must keep going: do not treat your last message as the "
+                                        "end of the session. Continue with the next concrete cycle from "
+                                        "`program.md` (experiments, evals, harness work, or further code changes). "
+                                        "Only stop when the wall-clock is nearly exhausted or you hit a hard "
+                                        "external blocker you cannot resolve."
+                                    ),
+                                })
+                                self._session_messages = messages
+                                self._save_session_log(messages)
+                                final_response = None
+                                _last_activity_monotonic = time.monotonic()
+                                continue
         
                         if not self.quiet_mode:
                             self._safe_print(f"🎉 Conversation completed after {api_call_count} OpenAI-compatible API call(s)")
