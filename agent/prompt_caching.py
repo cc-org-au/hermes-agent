@@ -70,3 +70,7 @@ def apply_anthropic_cache_control(
         _apply_cache_marker(messages[idx], marker, native_anthropic=native_anthropic)
 
     return messages
+
+
+# Older / partial checkouts (e.g. rsync) sometimes only exposed this name — keep alias in sync.
+apply_anthropic_cache_control_simple = apply_anthropic_cache_control

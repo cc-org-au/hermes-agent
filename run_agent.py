@@ -220,7 +220,13 @@ from agent.model_metadata import (
     save_context_length, is_local_endpoint,
 )
 from agent.context_compressor import ContextCompressor
-from agent.prompt_caching import apply_anthropic_cache_control
+try:
+    from agent.prompt_caching import apply_anthropic_cache_control
+except ImportError:
+    # Partial deploys may have only apply_anthropic_cache_control_simple (same implementation).
+    from agent.prompt_caching import (
+        apply_anthropic_cache_control_simple as apply_anthropic_cache_control,
+    )
 from agent.prompt_builder import build_skills_system_prompt, build_context_files_prompt, load_soul_md, TOOL_USE_ENFORCEMENT_GUIDANCE, TOOL_USE_ENFORCEMENT_MODELS, DEVELOPER_ROLE_MODELS, GOOGLE_MODEL_OPERATIONAL_GUIDANCE
 from agent.usage_pricing import estimate_usage_cost, normalize_usage
 from agent.provider_health import ProviderHealthTracker
