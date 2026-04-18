@@ -8761,6 +8761,49 @@ class AIAgent:
             logger.debug("turn_done_notify skipped", exc_info=True)
         return result
 
+    def _autoresearch_outer_runtime_active(self) -> bool:
+        """True when the autoresearch background worker should keep iterating until wall-clock stop."""
+        if os.environ.get("HERMES_AUTORESEARCH_UNBOUNDED_ITERATIONS") != "1":
+            return False
+        _wc = getattr(self, "_wall_clock_deadline_monotonic", None)
+        return _wc is not None and time.monotonic() < float(_wc)
+
+    def _try_autoresearch_inject_continuation(self, messages: List[Dict[str, Any]]) -> bool:
+        """
+        If outer autoresearch wall time remains, append a user nudge and persist messages
+        so the main tool loop continues instead of treating the last assistant reply as final.
+
+        Returns True when the caller should ``continue`` the main ``while`` loop.
+        """
+        if not self._autoresearch_outer_runtime_active():
+            return False
+        _wc_dead = getattr(self, "_wall_clock_deadline_monotonic", None)
+        if _wc_dead is None:
+            return False
+        _remain = int(_wc_dead - time.monotonic())
+        if _remain <= 0:
+            return False
+        self._emit_status(
+            f"[Autoresearch] ~{_remain // 60}m {_remain % 60}s wall time left — "
+            "continuing (no early stop while budget remains).",
+            "router_progress",
+        )
+        messages.append({
+            "role": "user",
+            "content": (
+                f"[Autoresearch system — outer runtime] Approximately {_remain // 60} minute(s) "
+                f"({_remain}s) remain before the hard wall-clock stop. "
+                "The autoresearch run must keep going: do not treat your last message as the "
+                "end of the session. Continue with the next concrete cycle from "
+                "`program.md` (experiments, evals, harness work, or further code changes). "
+                "Only stop when the wall-clock is nearly exhausted or you hit a hard "
+                "external blocker you cannot resolve."
+            ),
+        })
+        self._session_messages = messages
+        self._save_session_log(messages)
+        return True
+
     def run_conversation(
         self,
         user_message: str,
@@ -11163,8 +11206,18 @@ class AIAgent:
                                         break
                                 final_response = self._strip_think_blocks(fallback).strip()
                                 self._response_was_previewed = True
+                                if self._autoresearch_outer_runtime_active():
+                                    messages.append(
+                                        self._build_assistant_message(
+                                            assistant_message, finish_reason
+                                        )
+                                    )
+                                    if self._try_autoresearch_inject_continuation(messages):
+                                        _last_activity_monotonic = time.monotonic()
+                                        continue
+                                    messages.pop()
                                 break
-        
+    
                             # No fallback available — classify the empty response before
                             # blindly spending retries. Some local/custom backends surface
                             # implicit context pressure as reasoning-only output rather than
@@ -11226,6 +11279,9 @@ class AIAgent:
                                     "finish_reason": finish_reason,
                                 }
                                 messages.append(empty_msg)
+                                if self._try_autoresearch_inject_continuation(messages):
+                                    _last_activity_monotonic = time.monotonic()
+                                    continue
                                 break
         
                             if self._empty_content_retries < 3:
@@ -11255,6 +11311,9 @@ class AIAgent:
                                     # Strip <think> blocks from fallback content for user display
                                     final_response = self._strip_think_blocks(fallback).strip()
                                     self._response_was_previewed = True
+                                    if self._try_autoresearch_inject_continuation(messages):
+                                        _last_activity_monotonic = time.monotonic()
+                                        continue
                                     break
         
                                 # No fallback -- if reasoning_text exists, the model put its
@@ -11269,6 +11328,9 @@ class AIAgent:
                                         "finish_reason": finish_reason,
                                     }
                                     messages.append(empty_msg)
+                                    if self._try_autoresearch_inject_continuation(messages):
+                                        _last_activity_monotonic = time.monotonic()
+                                        continue
                                     break
         
                                 # Truly empty -- no reasoning and no content
@@ -11348,40 +11410,11 @@ class AIAgent:
                         # Autoresearch outer runtime: do not end the turn when the model returns
                         # a "final" assistant message while wall-clock budget remains — inject a
                         # continuation user message so the agent keeps iterating until the deadline.
-                        _wc_dead = getattr(self, "_wall_clock_deadline_monotonic", None)
-                        _ar_unbounded = (
-                            os.environ.get("HERMES_AUTORESEARCH_UNBOUNDED_ITERATIONS") == "1"
-                        )
-                        if (
-                            _wc_dead is not None
-                            and _ar_unbounded
-                            and time.monotonic() < _wc_dead
-                        ):
-                            _remain = int(_wc_dead - time.monotonic())
-                            if _remain > 10:
-                                self._emit_status(
-                                    f"[Autoresearch] ~{_remain // 60}m {_remain % 60}s wall time left — "
-                                    "continuing (no early stop while budget remains).",
-                                    "router_progress",
-                                )
-                                messages.append({
-                                    "role": "user",
-                                    "content": (
-                                        f"[Autoresearch system — outer runtime] Approximately {_remain // 60} minute(s) "
-                                        f"({_remain}s) remain before the hard wall-clock stop. "
-                                        "The autoresearch run must keep going: do not treat your last message as the "
-                                        "end of the session. Continue with the next concrete cycle from "
-                                        "`program.md` (experiments, evals, harness work, or further code changes). "
-                                        "Only stop when the wall-clock is nearly exhausted or you hit a hard "
-                                        "external blocker you cannot resolve."
-                                    ),
-                                })
-                                self._session_messages = messages
-                                self._save_session_log(messages)
-                                final_response = None
-                                _last_activity_monotonic = time.monotonic()
-                                continue
-        
+                        if self._try_autoresearch_inject_continuation(messages):
+                            final_response = None
+                            _last_activity_monotonic = time.monotonic()
+                            continue
+
                         if not self.quiet_mode:
                             self._safe_print(f"🎉 Conversation completed after {api_call_count} OpenAI-compatible API call(s)")
                         break
