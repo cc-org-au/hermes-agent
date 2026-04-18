@@ -5296,10 +5296,14 @@ class HermesCLI:
 
             poll_s = 6.0
             digest_every = 30.0
-            idle_heartbeat_every = 75.0
+            # Long stalls (e.g. rate limits, long model turns) produce no log bytes; avoid
+            # spamming the chat every minute — cap pings and space them out.
+            idle_heartbeat_every = 300.0
+            _max_stall_idle_pings = 2
             last_digest_at = 0.0
             last_idle_ping_at = 0.0
             last_reported_size = 0
+            stall_idle_remaining = _max_stall_idle_pings
             while True:
                 try:
                     time.sleep(poll_s)
@@ -5316,6 +5320,8 @@ class HermesCLI:
 
                     now = time.monotonic()
                     has_new_bytes = sz > last_reported_size
+                    if has_new_bytes:
+                        stall_idle_remaining = _max_stall_idle_pings
                     if (
                         alive
                         and has_new_bytes
@@ -5332,13 +5338,18 @@ class HermesCLI:
                     elif (
                         alive
                         and not has_new_bytes
+                        and stall_idle_remaining > 0
                         and (now - last_digest_at) >= idle_heartbeat_every
                         and (now - last_idle_ping_at) >= idle_heartbeat_every
                     ):
+                        stall_idle_remaining -= 1
                         last_idle_ping_at = now
                         ChatConsole().print(
-                            f"  [dim]⌁ Autoresearch worker still running (pid {pid}, log {sz} B). "
-                            f"Use tail -f for full detail.[/dim]"
+                            f"  [dim]⌁ Autoresearch · no new log bytes for "
+                            f"{int(idle_heartbeat_every)}s (pid {pid}, log {sz} B); "
+                            f"worker may be waiting on the API. "
+                            f"{stall_idle_remaining} stall hint(s) left — then silent until more log output. "
+                            f"Use tail -f on the job log for full detail.[/dim]"
                         )
 
                     if not alive:
