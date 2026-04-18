@@ -4095,18 +4095,22 @@ class GatewayRunner:
         session_key: str,
     ) -> str:
         from hermes_cli.autoresearch_flow import (
-            build_autoresearch_worker_command,
             format_autoresearch_live_log_follow_instructions,
             resolve_hermes_repo_root,
         )
         from tools.process_registry import process_registry
 
-        command = build_autoresearch_worker_command(
-            prepared.prompt_path,
-            python_executable=sys.executable,
-        )
-        proc_session = process_registry.spawn_local(
-            command=command,
+        # Direct argv (no bash -lic wrapper) so the registry tracks the Python PID and
+        # exit code reliably for gateway watchers / Telegram digests.
+        proc_session = process_registry.spawn_local_argv(
+            argv=[
+                sys.executable,
+                "-u",
+                "-m",
+                "hermes_cli.autoresearch_background",
+                "--prompt-file",
+                str(prepared.prompt_path),
+            ],
             cwd=str(resolve_hermes_repo_root()),
             task_id=prepared.job_id,
             session_key=session_key,

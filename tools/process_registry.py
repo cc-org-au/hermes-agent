@@ -234,6 +234,59 @@ class ProcessRegistry:
         self._write_checkpoint()
         return session
 
+    def spawn_local_argv(
+        self,
+        argv: List[str],
+        cwd: str = None,
+        task_id: str = "",
+        session_key: str = "",
+        env_vars: dict = None,
+    ) -> ProcessSession:
+        """
+        Spawn a background process with an explicit argv (no login shell).
+
+        Use for workers that must be direct children (reliable PID/exit handling),
+        e.g. ``python -m hermes_cli.autoresearch_background`` — avoids wrapping
+        in ``bash -lic`` which can confuse exit/watcher semantics on some hosts.
+        """
+        session = ProcessSession(
+            id=f"proc_{uuid.uuid4().hex[:12]}",
+            command=" ".join(shlex.quote(a) for a in argv),
+            task_id=task_id,
+            session_key=session_key,
+            cwd=cwd or os.getcwd(),
+            started_at=time.time(),
+        )
+        bg_env = _sanitize_subprocess_env(os.environ, env_vars)
+        bg_env["PYTHONUNBUFFERED"] = "1"
+        proc = subprocess.Popen(
+            argv,
+            text=True,
+            cwd=session.cwd,
+            env=bg_env,
+            encoding="utf-8",
+            errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            preexec_fn=None if _IS_WINDOWS else os.setsid,
+        )
+        session.process = proc
+        session.pid = proc.pid
+        reader = threading.Thread(
+            target=self._reader_loop,
+            args=(session,),
+            daemon=True,
+            name=f"proc-reader-{session.id}",
+        )
+        session._reader_thread = reader
+        reader.start()
+        with self._lock:
+            self._prune_if_needed()
+            self._running[session.id] = session
+        self._write_checkpoint()
+        return session
+
     def spawn_via_env(
         self,
         env: Any,

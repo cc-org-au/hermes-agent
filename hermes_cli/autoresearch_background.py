@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import sys
 import time
+import traceback
 
 from cli import HermesCLI, _run_cleanup
 
@@ -127,11 +128,82 @@ def run_autoresearch_prompt_file(prompt_file: str) -> int:
         _emit("[autoresearch] Iteration cap override: unbounded for this autoresearch run.")
         _emit("[autoresearch] Agent run started.")
 
-        result = cli.agent.run_conversation(
-            user_message=prompt,
-            conversation_history=cli.conversation_history,
-            task_id=job_id,
-        )
+        # One run_conversation() call should iterate until the wall-clock stop, but some paths
+        # (exceptions, edge returns) can end a segment early. Re-arm the deadline and start
+        # another segment while monotonic time remains — same wall end, shared transcript.
+        _wall_end_mono = time.monotonic() + float(_wall_sec)
+        _seg_hist = None
+        _seg_idx = 0
+        _max_segments = 256
+        result = {}
+        while _seg_idx < _max_segments:
+            if time.monotonic() >= _wall_end_mono:
+                _emit("[autoresearch][warn] Wall-clock end reached; stopping outer segment loop.")
+                if not result:
+                    result = {
+                        "final_response": None,
+                        "failed": False,
+                        "wall_clock_exhausted": True,
+                    }
+                break
+
+            cli.agent._wall_clock_deadline_monotonic = _wall_end_mono
+            cli.agent._wall_clock_budget_exhausted = False
+            cli.agent._wall_clock_deadline_logged = False
+
+            _user_seg = (
+                prompt
+                if _seg_idx == 0
+                else (
+                    "[Autoresearch — outer driver] The previous segment ended before the hard "
+                    "wall-clock stop. Continue from program.md using the transcript you already "
+                    "have; keep iterating (tools + cycles) until the wall-clock is exhausted or "
+                    "you cannot make progress."
+                )
+            )
+            try:
+                result = cli.agent.run_conversation(
+                    user_message=_user_seg,
+                    conversation_history=_seg_hist,
+                    task_id=job_id,
+                )
+            except BaseException:
+                _emit(
+                    "[autoresearch][error] run_conversation raised:\n"
+                    + traceback.format_exc()
+                )
+                result = {
+                    "final_response": None,
+                    "failed": True,
+                    "wall_clock_exhausted": False,
+                }
+                break
+
+            if not isinstance(result, dict):
+                result = {"final_response": str(result or "")}
+
+            _seg_hist = result.get("messages")
+
+            if result.get("wall_clock_exhausted"):
+                break
+
+            if time.monotonic() >= _wall_end_mono - 1:
+                break
+
+            if result.get("failed"):
+                _emit("[autoresearch][warn] Segment marked failed; stopping outer loop.")
+                break
+
+            # Inner run returned without exhausting the wall — continue if time remains.
+            if time.monotonic() >= _wall_end_mono - 2:
+                break
+
+            _seg_idx += 1
+            _emit(
+                f"[autoresearch] Starting outer segment {_seg_idx + 1} "
+                f"(wall end not reached; transcript turns={len(_seg_hist or [])})."
+            )
+
         response = (
             result.get("final_response", "")
             if isinstance(result, dict)
