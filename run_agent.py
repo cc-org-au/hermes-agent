@@ -211,6 +211,7 @@ _FALLBACK_CHAIN_META_KEYS = frozenset({
 from agent.prompt_builder import (
     DEFAULT_AGENT_IDENTITY, PLATFORM_HINTS,
     MEMORY_GUIDANCE, SESSION_SEARCH_GUIDANCE, SKILLS_GUIDANCE,
+    HERMES_OPERATING_MODEL, load_operating_model_overlay,
     build_nous_subscription_prompt,
 )
 from agent.model_metadata import (
@@ -3229,6 +3230,18 @@ class AIAgent:
                 _model_lower = (self.model or "").lower()
                 if "gemini" in _model_lower or model_id_contains_disallowed_family(self.model or ""):
                     prompt_parts.append(GOOGLE_MODEL_OPERATIONAL_GUIDANCE)
+
+        # Hermes operating model: plan-first loop, tool-call discipline, editing
+        # policy, verification, conditional observability, failure/blocker rules,
+        # non-negotiables. Profile-overlayable via
+        # ${HERMES_HOME}/workspace/memory/OPERATING_MODEL.md or
+        # ${HERMES_HOME}/operating_model.md; when present, the overlay replaces
+        # the built-in block.
+        if self.skip_context_files:
+            _operating_model_text = HERMES_OPERATING_MODEL
+        else:
+            _operating_model_text = load_operating_model_overlay() or HERMES_OPERATING_MODEL
+        prompt_parts.append(_operating_model_text)
 
         # so it can refer the user to them rather than reinventing answers.
 

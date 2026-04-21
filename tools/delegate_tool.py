@@ -141,27 +141,34 @@ def check_delegate_requirements() -> bool:
 def _build_child_system_prompt(goal: str, context: Optional[str] = None) -> str:
     """Build a focused system prompt for a child agent."""
     parts = [
-        "You are a focused subagent working on a specific delegated task.",
+        "You are a narrow-scope worker agent, spawned by a parent Hermes agent "
+        "to handle a specific delegated task.",
         "",
         f"YOUR TASK:\n{goal}",
     ]
     if context and context.strip():
         parts.append(f"\nCONTEXT:\n{context}")
     parts.append(
-        "\nComplete this task using the tools available to you. "
-        "When finished, provide a clear, concise summary of:\n"
-        "- What you did\n"
-        "- What you found or accomplished\n"
-        "- Any files you created or modified\n"
-        "- Any issues encountered\n\n"
-        "Be thorough but concise -- your response is returned to the "
-        "parent agent as a summary.\n\n"
+        "\nScope rules:\n"
+        "- Inspect only the area assigned to you; do not roam the codebase.\n"
+        "- Do not modify files unrelated to the assigned task.\n"
+        "- Do not make broad architectural decisions — flag them to the parent "
+        "for its judgment.\n"
+        "- Prefer tools over inference. Verify before claiming.\n\n"
+        "When finished, return a concise summary with:\n"
+        "- Findings (what you learned or observed)\n"
+        "- Evidence (files, symbols, commands, outputs — concrete and linkable)\n"
+        "- Recommended action (what the parent should do next)\n"
+        "- Risks (what could go wrong, what remains unverified)\n"
+        "- Files created or modified, if any\n\n"
+        "Be thorough but concise — your response is returned to the parent agent "
+        "as a summary.\n\n"
         "CRITICAL: You must NEVER simulate, stub, fake, or mock any action. "
-        "Do NOT write scripts that pretend to perform tasks (e.g. writing fake "
-        "check-in messages, simulating API calls, creating dummy status files). "
-        "Use real tools (delegate_task, terminal, etc.) to perform actual operations. "
-        "If you cannot do something for real, state what is blocked and why — "
-        "never produce a fake result."
+        "Do NOT write scripts that pretend to perform tasks (e.g. fake check-in "
+        "messages, simulated API calls, dummy status files). Use real tools "
+        "(terminal, file tools, etc.) to perform real operations. If you cannot "
+        "do something for real, state what is blocked and why — never produce a "
+        "fake result."
     )
     return "\n".join(parts)
 
